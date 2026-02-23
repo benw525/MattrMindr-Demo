@@ -129,6 +129,29 @@ const TASK_CHAINS = {
     autoEscalate: true,
     notes: "Auto-generated after Schedule Party Depositions was completed.",
   },
+  "Request Check": {
+    title: "Follow-up on Check",
+    assignedRole: "legalAssistant",
+    priority: "High",
+    dueDaysFromCompletion: 7,
+    autoEscalate: false,
+    notes: "Auto-generated after Request Check was completed.",
+  },
+};
+
+const MULTI_CHAINS = {
+  "Let Client know Case is Settled": [
+    { title: "Draft and Send Release",                assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 7,  autoEscalate: false, notes: "Auto-generated after Let Client know Case is Settled was completed." },
+    { title: "Draft Joint Stipulation of Dismissal",  assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 10, autoEscalate: false, notes: "Auto-generated after Let Client know Case is Settled was completed." },
+  ],
+  "Draft and Send Release": [
+    { title: "Follow-up on Signed Release",           assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 7,  autoEscalate: false, notes: "Auto-generated after Draft and Send Release was completed." },
+    { title: "Request Check",                         assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 3,  autoEscalate: false, notes: "Auto-generated after Draft and Send Release was completed." },
+  ],
+  "Follow-up on Check": [
+    { title: "Send Settlement Paperwork to Plaintiff", assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 3,  autoEscalate: false, notes: "Auto-generated after Follow-up on Check was completed." },
+    { title: "Send Release and Dismissal to Client",   assignedRole: "legalAssistant", priority: "Medium", dueDaysFromCompletion: 7,  autoEscalate: false, notes: "Auto-generated after Follow-up on Check was completed." },
+  ],
 };
 
 // Dual-condition chains: spawn a task only when BOTH named tasks are complete
@@ -558,6 +581,32 @@ export default function App() {
           setTasks(prev => prev.map(t => allReassigned.find(r => r.id === t.id) || t));
         }
       }
+
+      // When stage changes to "Settled", spawn the settlement trigger task
+      if (saved.stage === "Settled" && prev && prev.stage !== "Settled") {
+        const alreadyExists = tasks.some(t =>
+          t.caseId === saved.id && t.title === "Let Client know Case is Settled"
+        );
+        if (!alreadyExists) {
+          const triggerTask = {
+            caseId: saved.id,
+            title: "Let Client know Case is Settled",
+            assigned: saved.leadAttorney || 0,
+            assignedRole: "leadAttorney",
+            due: addDays(today, 7),
+            priority: "High",
+            autoEscalate: false,
+            status: "Not Started",
+            notes: "Auto-generated when case stage was set to Settled.",
+            recurring: false,
+            recurringDays: null,
+            isGenerated: true,
+            isChained: true,
+          };
+          const savedTask = await apiCreateTask(triggerTask);
+          setTasks(prev => [...prev, savedTask]);
+        }
+      }
     } catch (err) {
       alert("Failed to save case: " + err.message);
     }
@@ -642,6 +691,32 @@ export default function App() {
           recurringDays: null,
           isGenerated: true,
           isChained: true,
+        });
+      }
+
+      // Multi-chain spawn — one completion spawns multiple tasks
+      const multiChainDefs = MULTI_CHAINS[target.title.trim()];
+      if (multiChainDefs) {
+        multiChainDefs.forEach(def => {
+          const alreadyExists = updatedTasks.some(t =>
+            t.caseId === target.caseId && t.title.trim() === def.title
+          );
+          if (alreadyExists) return;
+          toSpawn.push({
+            caseId: target.caseId,
+            title: def.title,
+            assigned: resolveRole(def.assignedRole),
+            assignedRole: def.assignedRole || null,
+            due: addDays(completedDate, def.dueDaysFromCompletion),
+            priority: def.priority,
+            autoEscalate: def.autoEscalate,
+            status: "Not Started",
+            notes: def.notes || "",
+            recurring: false,
+            recurringDays: null,
+            isGenerated: true,
+            isChained: true,
+          });
         });
       }
 
@@ -1367,7 +1442,7 @@ const CORE_FIELDS = [
   { key: "judge",      label: "Judge",               type: "text",   section: "details" },
   { key: "mediator",   label: "Mediator",            type: "text",   section: "details" },
   { key: "status",     label: "Status",              type: "select", section: "details", options: ["Active", "Closed", "Pending"] },
-  { key: "stage",      label: "Stage",               type: "select", section: "details", options: ["Pleadings", "Post-Answer", "Written Discovery", "Depositions", "Expert Discovery", "Pre-Trial", "Trial Set", "Appeal", "Closed"] },
+  { key: "stage",      label: "Stage",               type: "select", section: "details", options: ["Pleadings", "Post-Answer", "Written Discovery", "Depositions", "Expert Discovery", "Pre-Trial", "Trial Set", "Appeal", "Settled", "Closed"] },
   // Dates section
   { key: "dol",          label: "Date of Loss",          type: "date", section: "dates" },
   { key: "answerFiled",  label: "Answer Filed",           type: "date", section: "dates" },
