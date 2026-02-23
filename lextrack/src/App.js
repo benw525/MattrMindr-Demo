@@ -448,7 +448,112 @@ label { font-size: 12px; color: #64748b; display: block; margin-bottom: 4px; tex
 .edit-field:hover .edit-field-actions { opacity: 1; }
 .add-field-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .overlay-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
+
+/* ── Dark Mode ─────────────────────────────────────────────────────────────── */
+.dark { color-scheme: dark; }
+body.dark-body { background: #0f172a; }
+.dark .sidebar { background: #162032; border-right-color: #2d3f55; }
+.dark .sidebar-logo { border-bottom-color: #2d3f55; }
+.dark .sidebar-logo-text { color: #60a5fa; }
+.dark .sidebar-logo-sub { color: #475569; }
+.dark .sidebar-user { border-bottom-color: #2d3f55; }
+.dark .sidebar-user-name { color: #e2e8f0; }
+.dark .sidebar-user-role { color: #64748b; }
+.dark .sidebar-nav { scrollbar-color: #334155 #162032; }
+.dark .nav-item { color: #94a3b8; }
+.dark .nav-item:hover { color: #e2e8f0; background: #1e2d42; }
+.dark .nav-item.active { color: #60a5fa; background: #1a2f50; border-left-color: #3b82f6; }
+.dark .main { background: #0f172a; }
+.dark .topbar { background: #162032; border-bottom-color: #2d3f55; }
+.dark .topbar-title { color: #f1f5f9; }
+.dark .topbar-subtitle { color: #475569; }
+.dark .content { background: #0f172a; }
+.dark .card { background: #1e293b; border-color: #2d3f55; box-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+.dark .card-header { border-bottom-color: #2d3f55; }
+.dark .card-title { color: #60a5fa; }
+.dark .stat-card { background: #1e293b; border-color: #2d3f55; box-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+.dark .stat-label { color: #64748b; }
+.dark .stat-value { color: #f1f5f9; }
+.dark .stat-sub { color: #475569; }
+.dark th { color: #64748b; border-bottom-color: #2d3f55; background: transparent; }
+.dark td { color: #cbd5e1; border-bottom-color: #1e2d42; }
+.dark tr:last-child td { border-bottom: none; }
+.dark tr:hover td { background: #1e2d42; }
+.dark .selected-row td { background: #1a2f50 !important; }
+.dark .selected-row td:first-child { border-left-color: #3b82f6; }
+.dark input:not([type=radio]):not([type=checkbox]), .dark select, .dark textarea { background: #1e2d42; border-color: #334155; color: #f1f5f9; }
+.dark input:not([type=radio]):not([type=checkbox]):focus, .dark select:focus, .dark textarea:focus { border-color: #3b82f6; }
+.dark label { color: #64748b; }
+.dark .tabs { border-bottom-color: #2d3f55; }
+.dark .tab { color: #64748b; }
+.dark .tab.active { color: #60a5fa; border-bottom-color: #3b82f6; }
+.dark .tab:hover:not(.active) { color: #e2e8f0; }
+.dark .tab-divider { background: #2d3f55; }
+.dark .detail-panel { background: #1e293b; border-left-color: #2d3f55; }
+.dark .panel-header { background: #1e293b; border-bottom-color: #2d3f55; }
+.dark .panel-section-title { color: #475569; }
+.dark .info-row { border-bottom-color: #1e2d42; }
+.dark .info-key { color: #64748b; }
+.dark .info-val { color: #e2e8f0; }
+.dark .modal { background: #1e293b; border-color: #334155; }
+.dark .modal-title { color: #f1f5f9; }
+.dark .modal-sub { color: #64748b; }
+.dark .modal-footer { border-top-color: #2d3f55; }
+.dark .btn-outline { color: #94a3b8; border-color: #334155; }
+.dark .btn-outline:hover { color: #60a5fa; border-color: #3b82f6; background: transparent; }
+.dark .deadline-item { border-bottom-color: #1e2d42; }
+.dark .dl-title { color: #e2e8f0; }
+.dark .dl-case { color: #64748b; }
+.dark .empty { color: #475569; }
+.dark .case-overlay { background: #0f172a; }
+.dark .case-overlay-header { background: #162032; border-bottom-color: #2d3f55; }
+.dark .case-overlay-tabs { background: #162032; border-bottom-color: #2d3f55; }
+.dark .case-overlay-tab { color: #64748b; }
+.dark .case-overlay-tab:hover { color: #cbd5e1; }
+.dark .case-overlay-tab.active { color: #f1f5f9; border-bottom-color: #3b82f6; }
+.dark .case-overlay-section-title { color: #475569; }
+.dark .case-overlay-body { background: #0f172a; }
+.dark .activity-entry { border-bottom-color: #1e2d42; }
+.dark .activity-action { color: #f1f5f9; }
+.dark .activity-detail { color: #94a3b8; }
+.dark .activity-meta { color: #475569; }
+.dark .activity-line { background: #2d3f55; }
+.dark .edit-field { border-bottom-color: #1e2d42; }
+.dark .edit-field-key { color: #64748b; }
+.dark .edit-field-val { color: #e2e8f0; }
+.dark .edit-field-val input, .dark .edit-field-val select { color: #e2e8f0; background: transparent; }
+.dark .edit-field-val input:hover, .dark .edit-field-val select:hover { background: #2d3f55; }
+.dark .edit-field-val input:focus, .dark .edit-field-val select:focus { background: #2d3f55; }
+.dark .note-item { border-bottom-color: #1e2d42; }
+.dark .note-item:hover { background: #1e2d42; }
+.dark .note-item.expanded { background: #1a2f50; border-left-color: #3b82f6; }
+.dark .report-card { background: #1e293b; border-color: #2d3f55; }
+.dark .report-card:hover { background: #1e2d42; border-color: #334155; }
+.dark .report-card.active { border-color: #3b82f6; background: #1e2d42; }
+.dark .report-card-title { color: #f1f5f9; }
+.dark .report-card-desc { color: #64748b; }
+.dark .report-output { background: #1e293b; border-color: #2d3f55; }
+.dark .report-output-header { border-bottom-color: #2d3f55; }
+.dark .report-output-title { color: #f1f5f9; }
+.dark .report-meta { color: #64748b; }
+.dark .calc-result { background: #1e2d42; border-color: #334155; }
+.dark .pagination { border-top-color: #2d3f55; color: #64748b; }
+.dark .page-btn { background: #1e2d42; border-color: #334155; color: #64748b; }
+.dark .page-btn:hover { border-color: #3b82f6; color: #60a5fa; }
+.dark .page-btn.active { background: #1a2f50; border-color: #3b82f6; color: #60a5fa; }
+.dark .task-inline-edit input[type="date"] { background: #1e2d42; border-color: #334155; color: #e2e8f0; }
+.dark .task-inline-edit select { background: #1e2d42; border-color: #334155; color: #e2e8f0; }
+.dark .checkbox { border-color: #334155; }
+.dark ::-webkit-scrollbar-track { background: #0f172a; }
+.dark ::-webkit-scrollbar-thumb { background: #334155; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid #e2e8f0; }
+.dark .sidebar-footer { border-top-color: #2d3f55; }
+.dark-mode-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 8px 0; background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #64748b; font-family: 'Source Sans 3', sans-serif; margin-bottom: 10px; transition: all 0.15s; }
+.dark-mode-btn:hover { border-color: #3b82f6; color: #3b82f6; }
+.dark .dark-mode-btn { border-color: #334155; color: #94a3b8; }
+.dark .dark-mode-btn:hover { border-color: #3b82f6; color: #60a5fa; }
 `;
+
 
 // ─── FollowUpPromptModal ──────────────────────────────────────────────────────
 function FollowUpPromptModal({ prompt, onDecide }) {
@@ -548,6 +653,16 @@ export default function App() {
   const [calcInputs, setCalcInputs] = useState({ ruleId: 1, fromDate: today });
   const [calcResult, setCalcResult] = useState(null);
   const [followUpPrompt, setFollowUpPrompt] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("lextrack-dark") === "1");
+
+  useEffect(() => {
+    localStorage.setItem("lextrack-dark", darkMode ? "1" : "0");
+    if (darkMode) {
+      document.body.classList.add("dark-body");
+    } else {
+      document.body.classList.remove("dark-body");
+    }
+  }, [darkMode]);
   // shape: { target, caseForTask, updatedTasksAfterComplete, pendingChainSpawns, completedDate }
 
   // Load users from API even before login (so login dropdown shows dynamic list)
@@ -936,7 +1051,7 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app${darkMode ? " dark" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="sidebar-logo-text">LexTrack</div>
@@ -967,7 +1082,10 @@ export default function App() {
             </div>
           ))}
         </nav>
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #e2e8f0" }}>
+        <div className="sidebar-footer">
+          <button className="dark-mode-btn" onClick={() => setDarkMode(d => !d)}>
+            {darkMode ? "☀️  Light Mode" : "🌙  Dark Mode"}
+          </button>
           <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>Signed in as</div>
           <div style={{ fontSize: 12, color: "#475569", marginBottom: 10 }}>{currentUser.email}</div>
           <button className="btn btn-outline" style={{ width: "100%", fontSize: 12 }} onClick={() => { apiLogout().catch(() => {}); setCurrentUser(null); setAllCases([]); setAllDeadlines([]); setTasks([]); setCaseNotes({}); setCaseLinks({}); setCaseActivity({}); setSelectedCase(null); setDeletedCases(null); }}>Sign Out</button>
