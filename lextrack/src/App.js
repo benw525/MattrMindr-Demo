@@ -3851,12 +3851,12 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 660, maxHeight: "90vh", overflowY: "auto" }}>
-        <div className="modal-header">
-          <span>Merge {contacts.length} Contacts</span>
-          <button className="modal-close" onClick={onClose}>✕</button>
+      <div onClick={e => e.stopPropagation()} style={{ width: 700, maxWidth: "calc(100vw - 40px)", maxHeight: "90vh", background: "#111624", border: "1px solid #2a3650", borderRadius: 10, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 16px", borderBottom: "1px solid #1a2235", flexShrink: 0 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "#ccd6e8" }}>Merge {contacts.length} Contacts</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#556677", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}>✕</button>
         </div>
-        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: "20px 24px", flex: 1, overflowY: "auto" }}>
 
           {/* Surviving record */}
           <div>
@@ -3958,7 +3958,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
           </div>
         </div>
 
-        <div className="modal-footer">
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 24px 20px", borderTop: "1px solid #1a2235", flexShrink: 0 }}>
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button
             onClick={handleMerge}
