@@ -16,7 +16,7 @@ async function apiFetch(path, opts = {}) {
 }
 
 // Auth
-export const apiLogin   = (userId, pin) => apiFetch("/api/auth/login",  { method: "POST", body: { userId, pin } });
+export const apiLogin   = (email, password) => apiFetch("/api/auth/login",  { method: "POST", body: { email, password } });
 export const apiLogout  = ()             => apiFetch("/api/auth/logout", { method: "POST" });
 export const apiMe      = ()             => apiFetch("/api/auth/me");
 
@@ -42,7 +42,7 @@ export const apiGetTasks             = ()                       => apiFetch("/ap
 export const apiCreateTask           = (data)                   => apiFetch("/api/tasks",                  { method: "POST", body: data });
 export const apiCreateTasks          = (arr)                    => apiFetch("/api/tasks/bulk",             { method: "POST", body: arr });
 export const apiUpdateTask           = (id, data)               => apiFetch(`/api/tasks/${id}`,            { method: "PUT",  body: data });
-export const apiCompleteTask         = (id)                     => apiFetch(`/api/tasks/${id}/complete`,   { method: "POST" });
+export const apiCompleteTask         = (id, timeLogged)         => apiFetch(`/api/tasks/${id}/complete`,   { method: "POST", body: { timeLogged: timeLogged || null } });
 export const apiReassignTasksByRole  = (caseId, role, userId)  => apiFetch("/api/tasks/reassign-by-role", { method: "PUT",  body: { caseId, role, userId } });
 
 // Deadlines

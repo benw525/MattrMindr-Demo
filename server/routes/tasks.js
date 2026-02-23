@@ -20,6 +20,7 @@ const toFrontend = (row) => ({
   isGenerated: row.is_generated,
   isChained: row.is_chained,
   completedAt: row.completed_at ? row.completed_at.toISOString().split("T")[0] : null,
+  timeLogged: row.time_logged || null,
 });
 
 const orNull = (val) => (val && String(val).trim() && String(val) !== "0") ? val : null;
@@ -162,9 +163,10 @@ router.post("/:id/complete", requireAuth, async (req, res) => {
     const task = current[0];
     const completing = task.status !== "Completed";
     const today = new Date().toISOString().split("T")[0];
+    const timeLogged = (completing && req.body && req.body.timeLogged) ? req.body.timeLogged : null;
     const { rows } = await pool.query(
-      `UPDATE tasks SET status = $1, completed_at = $2 WHERE id = $3 RETURNING *`,
-      [completing ? "Completed" : "In Progress", completing ? today : null, req.params.id]
+      `UPDATE tasks SET status = $1, completed_at = $2, time_logged = $3 WHERE id = $4 RETURNING *`,
+      [completing ? "Completed" : "In Progress", completing ? today : null, timeLogged, req.params.id]
     );
     return res.json(toFrontend(rows[0]));
   } catch (err) {

@@ -1,10 +1,9 @@
 const express = require("express");
-const bcrypt = require("bcryptjs");
 const pool = require("../db");
 
 const router = express.Router();
 
-const DEMO_PIN = "1234";
+const DEMO_PASSWORD = "1234";
 
 function userPayload(user) {
   return {
@@ -21,18 +20,21 @@ function userPayload(user) {
 }
 
 router.post("/login", async (req, res) => {
-  const { userId, pin } = req.body;
-  if (!userId || !pin) {
-    return res.status(400).json({ error: "userId and pin are required" });
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
   }
   try {
-    const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+    const { rows } = await pool.query(
+      "SELECT * FROM users WHERE LOWER(email) = LOWER($1)",
+      [email.trim()]
+    );
     if (rows.length === 0) {
-      return res.status(401).json({ error: "User not found" });
+      return res.status(401).json({ error: "No account found with that email" });
     }
     const user = rows[0];
-    if (pin !== DEMO_PIN) {
-      return res.status(401).json({ error: "Incorrect PIN" });
+    if (password !== DEMO_PASSWORD) {
+      return res.status(401).json({ error: "Incorrect password" });
     }
     req.session.userId = user.id;
     req.session.userName = user.name;

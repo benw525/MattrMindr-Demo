@@ -581,6 +581,38 @@ body.dark-body { background: #0f172a; }
 `;
 
 
+// ─── TimePromptModal ──────────────────────────────────────────────────────────
+function TimePromptModal({ pending, onSubmit }) {
+  const [time, setTime] = useState("");
+  if (!pending) return null;
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div className="modal-title" style={{ marginBottom: 6 }}>Log Time</div>
+        <p style={{ fontSize: 13, color: "var(--c-text2)", marginBottom: 16 }}>
+          How much time did this task take?
+        </p>
+        <input
+          type="text"
+          placeholder="e.g. 1.5 hours, 30 min, 2 hrs"
+          value={time}
+          onChange={e => setTime(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && onSubmit(pending.taskId, time.trim() || null)}
+          autoFocus
+        />
+        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <button className="btn btn-gold" style={{ flex: 1 }} onClick={() => onSubmit(pending.taskId, time.trim() || null)}>
+            Save
+          </button>
+          <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => onSubmit(pending.taskId, null)}>
+            Skip
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── FollowUpPromptModal ──────────────────────────────────────────────────────
 function FollowUpPromptModal({ prompt, onDecide }) {
   const [step, setStep]       = useState("question");
@@ -678,7 +710,8 @@ export default function App() {
 
   const [calcInputs, setCalcInputs] = useState({ ruleId: 1, fromDate: today });
   const [calcResult, setCalcResult] = useState(null);
-  const [followUpPrompt, setFollowUpPrompt] = useState(null);
+  const [followUpPrompt,   setFollowUpPrompt]   = useState(null);
+  const [pendingTimePrompt, setPendingTimePrompt] = useState(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("lextrack-dark") === "1");
 
   useEffect(() => {
@@ -731,7 +764,7 @@ export default function App() {
     return () => document.head.removeChild(style);
   }, []);
 
-  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} allUsers={allUsers} />;
+  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
@@ -883,12 +916,23 @@ export default function App() {
     }
   };
 
-  const handleCompleteTask = async (taskId) => {
+  const handleCompleteTask = (taskId) => {
+    const target = tasks.find(t => t.id === taskId);
+    if (!target) return;
+    if (target.status === "Completed") {
+      finishCompleteTask(taskId, null, true);
+    } else {
+      setPendingTimePrompt({ taskId });
+    }
+  };
+
+  const finishCompleteTask = async (taskId, timeLogged, isUncomplete = false) => {
+    setPendingTimePrompt(null);
     try {
       const target = tasks.find(t => t.id === taskId);
       if (!target) return;
 
-      const toggled = await apiCompleteTask(taskId);
+      const toggled = await apiCompleteTask(taskId, isUncomplete ? null : timeLogged);
       const completing = toggled.status === "Completed";
       const completedDate = today;
 
@@ -1132,24 +1176,28 @@ export default function App() {
         prompt={followUpPrompt}
         onDecide={handleFollowUpDecision}
       />
+      <TimePromptModal
+        pending={pendingTimePrompt}
+        onSubmit={(taskId, timeLogged) => finishCompleteTask(taskId, timeLogged)}
+      />
     </div>
   );
 }
 
 // ─── Login ────────────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin, allUsers }) {
-  const [sel, setSel] = useState(null);
-  const [pin, setPin] = useState("");
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
+function LoginScreen({ onLogin }) {
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [err,      setErr]      = useState("");
+  const [busy,     setBusy]     = useState(false);
 
   const doLogin = async () => {
-    if (!sel) { setErr("Select a user."); return; }
-    if (!pin) { setErr("Enter your PIN."); return; }
+    if (!email.trim()) { setErr("Enter your email address."); return; }
+    if (!password)     { setErr("Enter your password."); return; }
     setBusy(true);
     setErr("");
     try {
-      const user = await apiLogin(sel.id, pin);
+      const user = await apiLogin(email.trim(), password);
       onLogin(user);
     } catch (e) {
       setErr(e.message || "Login failed.");
@@ -1164,21 +1212,18 @@ function LoginScreen({ onLogin, allUsers }) {
         <div className="login-title">LexTrack</div>
         <div className="login-sub">Case Management System</div>
         <div className="form-group">
-          <label>Select User</label>
-          <select value={sel?.id || ""} onChange={e => { setSel(allUsers.find(u => u.id === Number(e.target.value))); setErr(""); }}>
-            <option value="">— Choose your account —</option>
-            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name} · {u.role}</option>)}
-          </select>
+          <label>Email</label>
+          <input type="email" placeholder="your.email@websterhenry.com" value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && doLogin()} />
         </div>
         <div className="form-group">
-          <label>PIN</label>
-          <input type="password" placeholder="Enter PIN (demo: 1234)" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === "Enter" && doLogin()} />
+          <label>Password</label>
+          <input type="password" placeholder="Enter your password" value={password} onChange={e => { setPassword(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && doLogin()} />
         </div>
         {err && <div style={{ color: "#e05252", fontSize: 13, marginBottom: 12 }}>{err}</div>}
         <button className="btn btn-gold" style={{ width: "100%", padding: 10 }} onClick={doLogin} disabled={busy}>
           {busy ? "Signing in…" : "Sign In"}
         </button>
-        <div style={{ marginTop: 20, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>All accounts share PIN 1234 in demo mode</div>
+        <div style={{ marginTop: 20, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>All accounts share password 1234 in demo mode</div>
       </div>
     </div>
   );
@@ -2448,7 +2493,7 @@ const noteTypeStyle = (label) => NOTE_TYPES.find(t => t.label === label) || NOTE
 function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote }) {
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
-  const [form, setForm] = useState({ type: "General", body: "" });
+  const [form, setForm] = useState({ type: "General", body: "", time: "" });
 
   const handleAdd = () => {
     if (!form.body.trim()) return;
@@ -2461,8 +2506,9 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote }) {
       authorName: currentUser.name,
       authorRole: currentUser.role,
       createdAt: new Date().toISOString(),
+      timeLogged: form.time.trim() || null,
     });
-    setForm({ type: "General", body: "" });
+    setForm({ type: "General", body: "", time: "" });
     setShowForm(false);
   };
 
@@ -2499,6 +2545,15 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote }) {
               onChange={e => setForm(p => ({ ...p, body: e.target.value }))}
               placeholder="Enter detailed note here…"
               style={{ resize: "vertical" }}
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 10 }}>
+            <label>Time Spent <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400 }}>(optional — e.g. 1.5 hours, 30 min)</span></label>
+            <input
+              type="text"
+              placeholder="e.g. 1.5 hours, 30 min"
+              value={form.time}
+              onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
             />
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -2722,7 +2777,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
               <>
                 <h2>Tasks</h2>
                 <table>
-                  <thead><tr><th>Task</th><th>Assigned To</th><th>Due</th><th>Status</th><th>Priority</th></tr></thead>
+                  <thead><tr><th>Task</th><th>Assigned To</th><th>Due</th><th>Status</th><th>Priority</th><th>Time</th></tr></thead>
                   <tbody>
                     {[...tasks].sort((a, b) => (a.due || "").localeCompare(b.due || "")).map(t => (
                       <tr key={t.id}>
@@ -2731,6 +2786,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
                         <td>{fmt(t.due)}</td>
                         <td>{t.status}</td>
                         <td>{getEffectivePriority(t)}</td>
+                        <td>{t.timeLogged || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2751,6 +2807,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
                     <span>{note.authorName} ({note.authorRole})</span>
                     <span>·</span>
                     <span>{dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                    {note.timeLogged && <><span>·</span><span style={{ fontWeight: 600 }}>⏱ {note.timeLogged}</span></>}
                   </div>
                   <div className="nb">{note.body}</div>
                 </div>
@@ -3261,7 +3318,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
 
 // ─── Tasks View ───────────────────────────────────────────────────────────────
 function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask }) {
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState("Open");
   const [showForm, setShowForm] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
   const [sortCol, setSortCol] = useState("due");
@@ -3277,10 +3334,10 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
   const [newTask, setNewTask] = useState({ ...blank });
 
   const filtered = useMemo(() => {
-    let list = tasks.filter(t => {
-      if (filter === "Mine") return t.assigned === currentUser.id;
-      if (filter === "Overdue") return t.status !== "Completed" && daysUntil(t.due) < 0;
-      if (filter === "Urgent") return ["Urgent", "High"].includes(getEffectivePriority(t)) && t.status !== "Completed";
+    let list = tasks.filter(t => t.assigned === currentUser.id).filter(t => {
+      if (filter === "Open")     return t.status !== "Completed";
+      if (filter === "Overdue")  return t.status !== "Completed" && daysUntil(t.due) < 0;
+      if (filter === "Urgent")   return ["Urgent", "High"].includes(getEffectivePriority(t)) && t.status !== "Completed";
       if (filter === "Recurring") return t.recurring;
       return true;
     });
@@ -3299,12 +3356,12 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
   return (
     <>
       <div className="topbar">
-        <div><div className="topbar-title">Tasks</div><div className="topbar-subtitle">{tasks.filter(t => t.status !== "Completed").length} open · {tasks.filter(t => t.recurring).length} recurring · {tasks.filter(t => t.status !== "Completed" && daysUntil(t.due) < 0).length} overdue</div></div>
+        <div><div className="topbar-title">Tasks</div><div className="topbar-subtitle">{tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed").length} open · {tasks.filter(t => t.assigned === currentUser.id && t.recurring).length} recurring · {tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed" && daysUntil(t.due) < 0).length} overdue</div></div>
         <button className="btn btn-gold" onClick={() => setShowForm(!showForm)}>+ New Task</button>
       </div>
       <div className="content">
         <div className="tabs">
-          {["All", "Mine", "Urgent", "Overdue", "Recurring"].map(f => <div key={f} className={`tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>{f}</div>)}
+          {["All", "Open", "Urgent", "Overdue", "Recurring"].map(f => <div key={f} className={`tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>{f}</div>)}
         </div>
 
         {showForm && (
@@ -3991,6 +4048,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
         fileNum:  cs?.fileNum || "",
         detail:   t.title,
         category: "",
+        time:     t.timeLogged || "",
       });
     });
 
@@ -4008,6 +4066,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
           fileNum:  cs?.fileNum || "",
           detail:   summary,
           category: note.type || "",
+          time:     note.timeLogged || "",
         });
       });
     });
@@ -4023,7 +4082,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
   };
 
   const exportCSV = () => {
-    const headers = ["Date", "Activity Type", "Case/Matter", "File Number", "Detail", "Note Category"];
+    const headers = ["Date", "Activity Type", "Case/Matter", "File Number", "Detail", "Note Category", "Time"];
     const escapeCell = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
     const csvRows = [
       headers.join(","),
@@ -4034,6 +4093,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
         r.fileNum,
         r.detail,
         r.category,
+        r.time || "",
       ].map(escapeCell).join(","))
     ];
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
@@ -4110,6 +4170,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
                     <th>Case/Matter</th>
                     <th>Detail</th>
                     <th>Category</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4142,6 +4203,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
                           </span>
                         )}
                       </td>
+                      <td style={{ fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>{r.time || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -4990,7 +5052,7 @@ function AddStaffModal({ onSave, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose(null)}>
       <div className="modal">
         <div className="modal-title">Add Staff Member</div>
-        <div className="modal-sub">New staff can log in immediately using PIN 1234.</div>
+        <div className="modal-sub">New staff can log in immediately using password 1234.</div>
 
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Role(s) *</div>
