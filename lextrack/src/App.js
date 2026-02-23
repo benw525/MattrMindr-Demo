@@ -5,7 +5,7 @@ import {
   apiGetCases, apiGetDeletedCases, apiCreateCase, apiUpdateCase, apiDeleteCase, apiRestoreCase,
   apiGetTasks, apiCreateTask, apiCreateTasks, apiUpdateTask, apiCompleteTask, apiReassignTasksByRole,
   apiGetDeadlines, apiCreateDeadline,
-  apiGetUsers, apiCreateUser, apiDeleteUser, apiUpdateUserOffices, apiUpdateUserRoles,
+  apiGetUsers, apiCreateUser, apiDeleteUser, apiUpdateUserOffices, apiUpdateUserRoles, apiUpdateUser,
   apiGetNotes, apiCreateNote, apiDeleteNote,
   apiGetLinks, apiCreateLink, apiDeleteLink,
   apiGetActivity, apiCreateActivity,
@@ -736,7 +736,7 @@ export default function App() {
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} />}
         {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} />}
         {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { setSelectedCase(c); setView("cases"); }} />}
-        {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} userOffices={userOffices} setUserOffices={setUserOffices} allUsers={allUsers} setAllUsers={setAllUsers} />}
+        {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} userOffices={userOffices} setUserOffices={setUserOffices} allUsers={allUsers} setAllUsers={setAllUsers} />}
       </div>
     </div>
   );
@@ -4490,6 +4490,55 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
   );
 }
 
+function EditContactModal({ user, onSave, onClose }) {
+  const [form, setForm] = useState({
+    name: user.name || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    cell: user.cell || "",
+    ext: user.ext || "",
+  });
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    setBusy(true);
+    try {
+      const saved = await onSave(user.id, { ...form, name: form.name.trim() });
+      onClose(saved);
+    } catch (err) {
+      alert("Failed to save: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose(null)}>
+      <div className="modal">
+        <div className="modal-title">Edit Contact Info</div>
+        <div className="modal-sub">{user.name} · {(user.roles && user.roles.length ? user.roles : [user.role]).join(", ")}</div>
+
+        <div className="form-group"><label>Full Name</label><input value={form.name} onChange={e => set("name", e.target.value)} autoFocus /></div>
+        <div className="form-group"><label>Email</label><input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="name@firm.com" /></div>
+        <div className="form-group"><label>Extension</label><input value={form.ext} onChange={e => set("ext", e.target.value)} placeholder="e.g. 312" /></div>
+        <div className="form-row">
+          <div className="form-group"><label>Direct Line</label><input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="(251) 278-0000" /></div>
+          <div className="form-group"><label>Cell</label><input value={form.cell} onChange={e => set("cell", e.target.value)} placeholder="(251) 404-0000" /></div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={() => onClose(null)}>Cancel</button>
+          <button className="btn btn-gold" disabled={!form.name.trim() || busy} onClick={handleSave}>
+            {busy ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddStaffModal({ onSave, onClose }) {
   const [form, setForm] = useState({ name: "", roles: ["Attorney"], email: "", phone: "", cell: "", ext: "", offices: [] });
   const [busy, setBusy] = useState(false);
@@ -4573,10 +4622,11 @@ function AddStaffModal({ onSave, onClose }) {
   );
 }
 
-function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUsers, setAllUsers }) {
+function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUserOffices, allUsers, setAllUsers }) {
   const [officeFilter, setOfficeFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
   const canAdmin = isAppAdmin(currentUser);
 
   const filteredStaff = officeFilter === "All"
@@ -4630,12 +4680,27 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
     }
   };
 
+  const handleEditStaff = async (userId, data) => {
+    const updated = await apiUpdateUser(userId, data);
+    USERS.forEach(u => { if (u.id === userId) Object.assign(u, updated); });
+    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updated } : u));
+    if (userId === currentUser.id) setCurrentUser(prev => ({ ...prev, ...updated }));
+    return updated;
+  };
+
   return (
     <>
       {showAddModal && (
         <AddStaffModal
           onSave={handleAddStaff}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+      {editingUser && (
+        <EditContactModal
+          user={editingUser}
+          onSave={handleEditStaff}
+          onClose={() => setEditingUser(null)}
         />
       )}
       <div className="topbar">
@@ -4661,16 +4726,21 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
             const isConfirming = confirmDeleteId === u.id;
             return (
               <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative" }}>
-                {canAdmin && (
-                  <div style={{ position: "absolute", top: 12, right: 14 }}>
+                {(canAdmin || currentUser.id === u.id) && (
+                  <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center" }}>
                     {isConfirming ? (
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <>
                         <span style={{ fontSize: 11, color: "#e05252" }}>Remove?</span>
                         <button onClick={() => handleDeleteStaff(u.id)} style={{ padding: "2px 8px", background: "#e05252", color: "#fff", border: "none", borderRadius: 3, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Yes</button>
                         <button onClick={() => setConfirmDeleteId(null)} style={{ padding: "2px 8px", background: "transparent", color: "#556677", border: "1px solid #2a3a5a", borderRadius: 3, fontSize: 11, cursor: "pointer" }}>No</button>
-                      </div>
+                      </>
                     ) : (
-                      <button onClick={() => setConfirmDeleteId(u.id)} title="Remove staff member" style={{ background: "transparent", border: "none", color: "#2a3a5a", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 2 }}>✕</button>
+                      <>
+                        <button onClick={() => setEditingUser(u)} title="Edit contact info" style={{ background: "transparent", border: "none", color: "#445566", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "2px 4px" }}>✎</button>
+                        {canAdmin && (
+                          <button onClick={() => setConfirmDeleteId(u.id)} title="Remove staff member" style={{ background: "transparent", border: "none", color: "#2a3a5a", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "2px 4px" }}>✕</button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

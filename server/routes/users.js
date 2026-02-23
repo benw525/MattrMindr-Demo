@@ -45,6 +45,48 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
+router.put("/:id", requireAuth, async (req, res) => {
+  const targetId = parseInt(req.params.id);
+  const requesterId = req.session.userId;
+
+  if (requesterId !== targetId) {
+    const { rows: rq } = await pool.query("SELECT roles FROM users WHERE id = $1", [requesterId]);
+    const isAdmin = rq.length > 0 && (rq[0].roles || []).includes("App Admin");
+    if (!isAdmin) return res.status(403).json({ error: "Not authorized to edit this profile" });
+  }
+
+  const { name, email, phone, cell, ext } = req.body;
+  const newName = name?.trim() || null;
+
+  const sets = [];
+  const vals = [];
+  let idx = 1;
+  if (newName) {
+    const initials = newName.split(/\s+/).filter(Boolean).map(w => w[0]).join("").slice(0, 3).toUpperCase();
+    sets.push(`name = $${idx++}`, `initials = $${idx++}`);
+    vals.push(newName, initials);
+  }
+  if (email !== undefined) { sets.push(`email = $${idx++}`); vals.push(email || ""); }
+  if (phone !== undefined) { sets.push(`phone = $${idx++}`); vals.push(phone || ""); }
+  if (cell  !== undefined) { sets.push(`cell  = $${idx++}`); vals.push(cell  || ""); }
+  if (ext   !== undefined) { sets.push(`ext   = $${idx++}`); vals.push(ext   || ""); }
+
+  if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
+
+  vals.push(targetId);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET ${sets.join(", ")} WHERE id = $${idx} RETURNING ${USER_FIELDS}`,
+      vals
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    return res.json(normalizeUser(rows[0]));
+  } catch (err) {
+    console.error("User update error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query("DELETE FROM users WHERE id = $1 RETURNING id", [req.params.id]);
