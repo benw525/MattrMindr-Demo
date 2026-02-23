@@ -68,6 +68,13 @@ const TASK_CHAINS = {
     autoEscalate: true,
     notes: "Auto-generated after Confirm Service was completed. File answer immediately.",
   },
+  "File Answer": {
+    title: "Send Discovery to Plaintiff",
+    priority: "High",
+    dueDaysFromCompletion: 0,
+    autoEscalate: true,
+    notes: "Auto-generated after File Answer was completed. Send discovery to plaintiff immediately.",
+  },
   "Send Written Discovery to Plaintiff": {
     title: "Plaintiff's Discovery Received",
     priority: "High",
@@ -1207,6 +1214,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const log = (action, detail) => {
     onLogActivity({
       id: newId(),
+      caseId: c.id,
       ts: new Date().toISOString(),
       userId: currentUser.id,
       userName: currentUser.name,
