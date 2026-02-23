@@ -219,7 +219,7 @@ const statusBadgeStyle = (status) => {
     Urgent: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
     Overdue: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
     "Trial Set": { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
-    "Post-Answer": { bg: "#dcfce7", color: "#66aa66", border: "#bbf7d0" },
+    "Pre-Answer Motions": { bg: "#dcfce7", color: "#66aa66", border: "#bbf7d0" },
     "Written Discovery": { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
     Depositions: { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
     "Expert Discovery": { bg: "#fdf4ff", color: "#cc66aa", border: "#e9d5ff" },
@@ -1483,7 +1483,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
       </div>
       <div className="content">
         <div className="tabs">
-          {["All", "Active", "Closed"].map(s => <div key={s} className={`tab ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s}</div>)}
+          {["All", "Active", "Monitoring", "Closed"].map(s => <div key={s} className={`tab ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s}</div>)}
           <div className={`tab ${statusFilter === "Deleted" ? "active" : ""}`} style={{ color: statusFilter === "Deleted" ? "#e05252" : undefined }} onClick={() => setStatusFilter("Deleted")}>Deleted</div>
           {statusFilter !== "Deleted" && <><div className="tab-divider" />{["All", "Case", "Matter"].map(t => <div key={t} className={`tab ${typeFilter === t ? "active" : ""}`} onClick={() => setTypeFilter(t)}>{t}</div>)}</>}
         </div>
@@ -1616,8 +1616,8 @@ const CORE_FIELDS = [
   { key: "claimSpec",  label: "Claim Specialist",    type: "text",   section: "details" },
   { key: "judge",      label: "Judge",               type: "text",   section: "details" },
   { key: "mediator",   label: "Mediator",            type: "text",   section: "details" },
-  { key: "status",     label: "Status",              type: "select", section: "details", options: ["Active", "Closed", "Pending"] },
-  { key: "stage",      label: "Stage",               type: "select", section: "details", options: ["Pleadings", "Post-Answer", "Written Discovery", "Depositions", "Expert Discovery", "Pre-Trial", "Trial Set", "Appeal", "Settled", "Closed"] },
+  { key: "status",     label: "Status",              type: "select", section: "details", options: ["Active", "Closed", "Monitoring"] },
+  { key: "stage",      label: "Stage",               type: "select", section: "details", options: ["Pleadings", "Pre-Answer Motions", "Written Discovery", "Depositions", "Expert Discovery", "Pre-Trial", "Trial Set", "Appeal", "Settled", "Closed"] },
   // Dates section
   { key: "dol",          label: "Date of Loss",          type: "date", section: "dates" },
   { key: "answerFiled",  label: "Answer Filed",           type: "date", section: "dates" },
