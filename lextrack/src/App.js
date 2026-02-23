@@ -1189,6 +1189,24 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const notes = selectedCase ? (caseNotes[selectedCase.id] || []) : [];
   const [showPrint, setShowPrint] = useState(false);
 
+  const officeAttorneys = useMemo(() => {
+    return USERS
+      .filter(u => {
+        if (!hasRole(u, "Attorney") && !hasRole(u, "Associate") && !hasRole(u, "Shareholder")) return false;
+        if (officeFilter === "All") return true;
+        const uOff = userOffices[u.id] || [];
+        return uOff.length === 0 || uOff.includes(officeFilter);
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [officeFilter, userOffices]);
+
+  // Reset attorney filter when the selected attorney is no longer in the office-filtered list
+  useEffect(() => {
+    if (attyFilter !== "All" && !officeAttorneys.some(u => u.id === Number(attyFilter))) {
+      setAttyFilter("All");
+    }
+  }, [officeAttorneys, attyFilter]);
+
   return (
     <>
       {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} userOffices={userOffices} />}
@@ -1207,7 +1225,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
           </select>
           <select style={{ width: 160 }} value={attyFilter} onChange={e => setAttyFilter(e.target.value)}>
             <option value="All">All Attorneys</option>
-            {USERS.filter(u => hasRole(u, "Attorney") || hasRole(u, "Associate") || hasRole(u, "Shareholder")).sort((a, b) => a.name.localeCompare(b.name)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            {officeAttorneys.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
           <input style={{ width: 200 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
           <button className="btn btn-gold" onClick={() => setShowModal(true)}>+ New Case / Matter</button>
