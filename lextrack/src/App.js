@@ -3808,19 +3808,6 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
 }
 
 function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
-  const [primaryId, setPrimaryId] = useState(contacts[0].id);
-  const [fields, setFields] = useState({ name: contacts[0].name, category: contacts[0].category, phone: contacts[0].phone, email: contacts[0].email, fax: contacts[0].fax, address: contacts[0].address });
-  const [merging, setMerging] = useState(false);
-
-  // When primary changes, reset fields to that contact's values
-  const handleSetPrimary = (id) => {
-    setPrimaryId(id);
-    const p = contacts.find(c => c.id === id);
-    setFields({ name: p.name, category: p.category, phone: p.phone, email: p.email, fax: p.fax, address: p.address });
-  };
-
-  const totalNotes = contacts.reduce((sum, c) => sum + (contactNotes[c.id] || []).length, 0);
-
   const MERGE_FIELDS = [
     { key: "name",     label: "Name" },
     { key: "category", label: "Category" },
@@ -3830,8 +3817,33 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
     { key: "address",  label: "Address" },
   ];
 
+  // choices[fieldKey] = contactId whose value to use — never ambiguous even when values match
+  const initChoices = () => {
+    const c = {};
+    MERGE_FIELDS.forEach(({ key }) => { c[key] = contacts[0].id; });
+    return c;
+  };
+
+  const [primaryId, setPrimaryId] = useState(contacts[0].id);
+  const [choices, setChoices] = useState(initChoices);
+  const [merging, setMerging] = useState(false);
+
+  const handleSetPrimary = (id) => {
+    setPrimaryId(id);
+    const c = {};
+    MERGE_FIELDS.forEach(({ key }) => { c[key] = id; });
+    setChoices(c);
+  };
+
+  const totalNotes = contacts.reduce((sum, c) => sum + (contactNotes[c.id] || []).length, 0);
+
   const handleMerge = async () => {
     setMerging(true);
+    const fields = {};
+    MERGE_FIELDS.forEach(({ key }) => {
+      const chosen = contacts.find(c => c.id === choices[key]);
+      fields[key] = chosen ? (chosen[key] || "") : "";
+    });
     try {
       await onMerge({ primaryId, mergeIds: contacts.filter(c => c.id !== primaryId).map(c => c.id), fields });
     } catch { setMerging(false); }
@@ -3839,103 +3851,118 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 720, maxHeight: "88vh", overflowY: "auto" }}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 660, maxHeight: "90vh", overflowY: "auto" }}>
         <div className="modal-header">
           <span>Merge {contacts.length} Contacts</span>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* Surviving record */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#445566", textTransform: "uppercase", marginBottom: 8 }}>Surviving Record</div>
-            <div style={{ fontSize: 12, color: "#556677", marginBottom: 10 }}>All other contacts will be permanently removed. The selected record's ID is kept.</div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#445566", textTransform: "uppercase", marginBottom: 6 }}>Surviving Record</div>
+            <div style={{ fontSize: 12, color: "#556677", marginBottom: 10 }}>Choose which contact's database record is kept. All other records are permanently removed.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {contacts.map(c => {
                 const catStyle = CONTACT_CAT_STYLE[c.category] || CONTACT_CAT_STYLE.Miscellaneous;
                 const noteCount = (contactNotes[c.id] || []).length;
+                const isPrimary = primaryId === c.id;
                 return (
-                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 4, background: primaryId === c.id ? "#1a2a3a" : "#0d1525", border: `1px solid ${primaryId === c.id ? "#2a4a6a" : "transparent"}`, transition: "all 0.15s" }}>
-                    <input type="radio" name="merge-primary" value={c.id} checked={primaryId === c.id} onChange={() => handleSetPrimary(c.id)} />
-                    <span style={{ color: "#ccd6e8", fontWeight: 500 }}>{c.name}</span>
-                    <span style={{ padding: "1px 7px", borderRadius: 3, fontSize: 10, fontWeight: 700, background: catStyle.bg, color: catStyle.color }}>{c.category}</span>
-                    {noteCount > 0 && <span style={{ fontSize: 11, color: "#7788aa" }}>{noteCount} note{noteCount !== 1 ? "s" : ""}</span>}
+                  <label key={c.id} onClick={() => handleSetPrimary(c.id)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "9px 14px", borderRadius: 5, background: isPrimary ? "#111e2e" : "#0d1525", border: `1px solid ${isPrimary ? "#2a5a8a" : "#141c2b"}`, transition: "all 0.15s" }}>
+                    <input type="radio" name="merge-primary" checked={isPrimary} onChange={() => handleSetPrimary(c.id)} onClick={e => e.stopPropagation()} style={{ flexShrink: 0 }} />
+                    <span style={{ color: isPrimary ? "#ccd6e8" : "#7788aa", fontWeight: isPrimary ? 600 : 400, flex: 1 }}>{c.name}</span>
+                    <span style={{ padding: "1px 8px", borderRadius: 3, fontSize: 10, fontWeight: 700, background: catStyle.bg, color: catStyle.color, border: `1px solid ${catStyle.border}` }}>{c.category}</span>
+                    {noteCount > 0 && <span style={{ fontSize: 11, color: "#556677" }}>{noteCount} note{noteCount !== 1 ? "s" : ""}</span>}
                   </label>
                 );
               })}
             </div>
           </div>
 
-          {/* Field chooser */}
+          {/* Field-by-field chooser */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#445566", textTransform: "uppercase", marginBottom: 8 }}>Choose Field Values</div>
-            <div style={{ fontSize: 12, color: "#556677", marginBottom: 12 }}>Select which value to keep for each field. Click a radio button to choose that contact's value.</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #1a2235" }}>
-                    <th style={{ textAlign: "left", padding: "6px 10px 8px 0", fontSize: 11, color: "#445566", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", width: 90, whiteSpace: "nowrap" }}>Field</th>
-                    {contacts.map(c => (
-                      <th key={c.id} style={{ textAlign: "left", padding: "6px 10px 8px 0", fontSize: 12, color: c.id === primaryId ? "#c9a84c" : "#7788aa", fontWeight: 600 }}>
-                        {c.name}{c.id === primaryId ? " ★" : ""}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {MERGE_FIELDS.map(({ key, label }) => {
-                    const values = contacts.map(c => c[key] || "");
-                    const uniqueValues = [...new Set(values)];
-                    const allSame = uniqueValues.length === 1;
-                    return (
-                      <tr key={key} style={{ borderBottom: "1px solid #0d1525" }}>
-                        <td style={{ padding: "10px 10px 10px 0", color: "#556677", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", verticalAlign: "top", paddingTop: 13 }}>{label}</td>
-                        {contacts.map(c => {
-                          const val = c[key] || "";
-                          const isSelected = fields[key] === val && (val !== "" || contacts.every(x => !x[key]));
-                          return (
-                            <td key={c.id} style={{ padding: "10px 10px 10px 0", verticalAlign: "top" }}>
-                              <label style={{ display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer" }}>
-                                <input
-                                  type="radio"
-                                  name={`mf-${key}`}
-                                  checked={isSelected}
-                                  onChange={() => setFields(p => ({ ...p, [key]: val }))}
-                                  style={{ marginTop: 3, flexShrink: 0 }}
-                                  disabled={allSame && c !== contacts[0]}
-                                />
-                                {val ? (
-                                  <span style={{ color: isSelected ? "#ccd6e8" : "#445566", wordBreak: "break-word", fontSize: 13 }}>{val}</span>
-                                ) : (
-                                  <span style={{ color: "#2a3a5a", fontStyle: "italic", fontSize: 12 }}>empty</span>
-                                )}
-                              </label>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#445566", textTransform: "uppercase", marginBottom: 6 }}>Choose Field Values</div>
+            <div style={{ fontSize: 12, color: "#556677", marginBottom: 14 }}>For each field, click the value you want to keep in the merged contact.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {MERGE_FIELDS.map(({ key, label }, fi) => {
+                const allSameValue = contacts.every(c => (c[key] || "") === (contacts[0][key] || ""));
+                return (
+                  <div key={key} style={{ display: "flex", alignItems: "stretch", borderTop: fi === 0 ? "1px solid #1a2235" : "none", borderBottom: "1px solid #1a2235" }}>
+                    {/* Field label */}
+                    <div style={{ width: 80, flexShrink: 0, padding: "12px 14px 12px 0", display: "flex", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#445566", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
+                    </div>
+                    {/* Options */}
+                    <div style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 0", alignItems: "center" }}>
+                      {allSameValue ? (
+                        <div style={{ padding: "6px 12px", borderRadius: 4, background: "#111e14", border: "1px solid #2a5a2a", color: "#4CAE72", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 10 }}>✓</span>
+                          <span>{contacts[0][key] || <em style={{ color: "#3a5a3a" }}>empty on all</em>}</span>
+                        </div>
+                      ) : contacts.map(c => {
+                        const val = c[key] || "";
+                        const isChosen = choices[key] === c.id;
+                        const isPrimContact = c.id === primaryId;
+                        return (
+                          <label
+                            key={c.id}
+                            onClick={() => setChoices(p => ({ ...p, [key]: c.id }))}
+                            style={{
+                              display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer",
+                              padding: "7px 12px", borderRadius: 5, transition: "all 0.12s",
+                              background: isChosen ? "#111e2e" : "#0d1525",
+                              border: `1px solid ${isChosen ? "#2a5a8a" : "#141c2b"}`,
+                              minWidth: 120, maxWidth: 280,
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name={`mfc-${key}`}
+                              checked={isChosen}
+                              onChange={() => setChoices(p => ({ ...p, [key]: c.id }))}
+                              onClick={e => e.stopPropagation()}
+                              style={{ flexShrink: 0, marginTop: 2 }}
+                            />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 10, color: isPrimContact ? "#c9a84c" : "#445566", fontWeight: 600, marginBottom: 2 }}>
+                                {c.name}{isPrimContact ? " ★" : ""}
+                              </div>
+                              {val ? (
+                                <div style={{ fontSize: 13, color: isChosen ? "#ccd6e8" : "#556677", wordBreak: "break-word", lineHeight: 1.4 }}>{val}</div>
+                              ) : (
+                                <div style={{ fontSize: 12, color: "#2a3a5a", fontStyle: "italic" }}>empty</div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Notes */}
+          {/* Notes notice */}
           {totalNotes > 0 && (
-            <div style={{ background: "#1a2a1a", border: "1px solid #2a4a2a", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#4CAE72" }}>
+            <div style={{ background: "#111e14", border: "1px solid #2a4a2a", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#4CAE72" }}>
               {totalNotes} note{totalNotes !== 1 ? "s" : ""} across all selected contacts will be automatically combined onto the surviving record.
             </div>
           )}
 
           {/* Warning */}
-          <div style={{ background: "#1f1010", border: "1px solid #4a2020", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#e05252" }}>
+          <div style={{ background: "#1c1010", border: "1px solid #4a2020", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#cc4444" }}>
             This action is permanent. Non-surviving contacts will be hard-deleted and cannot be recovered.
           </div>
         </div>
+
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button onClick={handleMerge} disabled={merging} style={{ background: "#c9a84c", color: "#0a0f1a", border: "none", borderRadius: 4, padding: "8px 18px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}>
+          <button
+            onClick={handleMerge}
+            disabled={merging}
+            style={{ background: "#c9a84c", color: "#0a0f1a", border: "none", borderRadius: 4, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}
+          >
             {merging ? "Merging…" : `Merge ${contacts.length} Contacts`}
           </button>
         </div>
