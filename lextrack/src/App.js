@@ -1805,6 +1805,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 {tasks.length === 0 && <div style={{ fontSize: 12, color: "#445566" }}>No tasks yet.</div>}
                 {tasks.map(t => {
                   const done = t.status === "Completed"; const days = daysUntil(t.due);
+                  const assignee = getUserById(t.assigned);
                   return (
                     <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: "1px solid #141c2b", opacity: done ? 0.45 : 1 }}>
                       <div className={`checkbox ${done ? "done" : ""}`} style={{ marginTop: 2 }} onClick={() => handleComplete(t.id)}>{done && "✓"}</div>
@@ -1819,6 +1820,12 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                           <span style={{ fontSize: 10, color: days < 0 && !done ? "#e05252" : "#445566" }}>
                             {fmt(t.due)}{days < 0 && !done ? ` (${Math.abs(days)}d over)` : ""}
                           </span>
+                          {assignee && (
+                            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <Avatar userId={assignee.id} size={16} />
+                              <span style={{ fontSize: 10, color: "#556677" }}>{assignee.name}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
