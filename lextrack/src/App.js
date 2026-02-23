@@ -1207,7 +1207,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
           </select>
           <select style={{ width: 160 }} value={attyFilter} onChange={e => setAttyFilter(e.target.value)}>
             <option value="All">All Attorneys</option>
-            {USERS.filter(u => u.role === "Shareholder" || u.role === "Associate").map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            {USERS.filter(u => hasRole(u, "Attorney") || hasRole(u, "Associate") || hasRole(u, "Shareholder")).sort((a, b) => a.name.localeCompare(b.name)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
           <input style={{ width: 200 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
           <button className="btn btn-gold" onClick={() => setShowModal(true)}>+ New Case / Matter</button>
@@ -1366,7 +1366,7 @@ const CORE_FIELDS = [
   { key: "legalAssistant", label: "Legal Assistant",  type: "user",   section: "team" },
 ];
 
-const isAttorney = (user) => user.role === "Shareholder" || user.role === "Associate";
+const isAttorney = (user) => hasRole(user, "Attorney") || hasRole(user, "Associate") || hasRole(user, "Shareholder");
 
 function EditField({ fieldKey, label, type, options, value, onChange, onBlur, onRemove, canRemove, isCustom, userList }) {
   const displayVal = type === "date" ? (value || "") : (value ?? "");
