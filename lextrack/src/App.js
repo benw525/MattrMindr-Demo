@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from "react";
 import { USERS } from "./firmData.js";
 import {
   apiLogin, apiLogout,
-  apiGetCases, apiCreateCase, apiUpdateCase,
+  apiGetCases, apiGetDeletedCases, apiCreateCase, apiUpdateCase, apiDeleteCase, apiRestoreCase,
   apiGetTasks, apiCreateTask, apiCreateTasks, apiUpdateTask, apiCompleteTask,
   apiGetDeadlines, apiCreateDeadline,
   apiGetNotes, apiCreateNote, apiDeleteNote,
@@ -412,6 +412,7 @@ export default function App() {
   const [caseNotes,    setCaseNotes]    = useState({});
   const [caseLinks,    setCaseLinks]    = useState({});
   const [caseActivity, setCaseActivity] = useState({});
+  const [deletedCases, setDeletedCases] = useState(null); // null = not yet loaded
 
   const [calcInputs, setCalcInputs] = useState({ ruleId: 1, fromDate: today });
   const [calcResult, setCalcResult] = useState(null);
@@ -508,6 +509,16 @@ export default function App() {
     } catch (err) {
       alert("Failed to save case: " + err.message);
     }
+  };
+
+  const handleDeleteCase = (id) => {
+    setAllCases(p => p.filter(c => c.id !== id));
+    setSelectedCase(null);
+  };
+
+  const handleRestoreCase = (restoredCase) => {
+    setDeletedCases(p => p ? p.filter(c => c.id !== restoredCase.id) : null);
+    setAllCases(p => [...p, restoredCase].sort((a, b) => (a.title || "").localeCompare(b.title || "")));
   };
 
   const handleUpdateTask = async (taskId, changes) => {
@@ -656,12 +667,12 @@ export default function App() {
         <div style={{ padding: "16px 20px", borderTop: "1px solid #1a2235" }}>
           <div style={{ fontSize: 11, color: "#445566", marginBottom: 4 }}>Signed in as</div>
           <div style={{ fontSize: 12, color: "#7788aa", marginBottom: 10 }}>{currentUser.email}</div>
-          <button className="btn btn-outline" style={{ width: "100%", fontSize: 12 }} onClick={() => { apiLogout().catch(() => {}); setCurrentUser(null); setAllCases([]); setAllDeadlines([]); setTasks([]); setCaseNotes({}); setCaseLinks({}); setCaseActivity({}); setSelectedCase(null); }}>Sign Out</button>
+          <button className="btn btn-outline" style={{ width: "100%", fontSize: 12 }} onClick={() => { apiLogout().catch(() => {}); setCurrentUser(null); setAllCases([]); setAllDeadlines([]); setTasks([]); setCaseNotes({}); setCaseLinks({}); setCaseActivity({}); setSelectedCase(null); setDeletedCases(null); }}>Sign Out</button>
         </div>
       </aside>
       <div className="main">
         {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { setSelectedCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
-        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={setSelectedCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} />}
+        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={setSelectedCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} />}
         {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} />}
         {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} />}
@@ -968,9 +979,10 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
 // ─── Cases View ───────────────────────────────────────────────────────────────
 const PAGE_SIZE = 50;
 
-function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity }) {
+function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, deletedCases, setDeletedCases, onDeleteCase, onRestoreCase }) {
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("Active");
+  const [deletedLoading, setDeletedLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [attyFilter, setAttyFilter] = useState("All");
@@ -993,11 +1005,40 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
     }).catch(err => console.error("Failed to load case data:", err));
   }, [selectedCase?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load deleted cases from API when Deleted tab is first opened
+  useEffect(() => {
+    if (statusFilter !== "Deleted" || deletedCases !== null) return;
+    setDeletedLoading(true);
+    apiGetDeletedCases()
+      .then(rows => setDeletedCases(rows))
+      .catch(err => console.error("Failed to load deleted cases:", err))
+      .finally(() => setDeletedLoading(false));
+  }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteFromOverlay = async (id) => {
+    try {
+      const deleted = await apiDeleteCase(id);
+      setDeletedCases(p => p !== null ? [deleted, ...p] : [deleted]);
+      onDeleteCase(id);
+    } catch (err) {
+      alert("Failed to delete: " + err.message);
+    }
+  };
+
+  const handleRestoreDeleted = async (id) => {
+    try {
+      const restored = await apiRestoreCase(id);
+      onRestoreCase(restored);
+    } catch (err) {
+      alert("Failed to restore: " + err.message);
+    }
+  };
+
   const handleSort = (col) => { if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("asc"); } };
 
   const filtered = useMemo(() => {
     let list = allCases.filter(c => {
-      if (statusFilter !== "All" && c.status !== statusFilter) return false;
+      if (statusFilter !== "All" && statusFilter !== "Deleted" && c.status !== statusFilter) return false;
       if (typeFilter === "Case" && !isFiled(c)) return false;
       if (typeFilter === "Matter" && isFiled(c)) return false;
       if (attyFilter !== "All" && c.leadAttorney !== Number(attyFilter) && c.secondAttorney !== Number(attyFilter)) return false;
@@ -1053,50 +1094,95 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
       <div className="content">
         <div className="tabs">
           {["All", "Active", "Closed"].map(s => <div key={s} className={`tab ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s}</div>)}
-          <div className="tab-divider" />
-          {["All", "Case", "Matter"].map(t => <div key={t} className={`tab ${typeFilter === t ? "active" : ""}`} onClick={() => setTypeFilter(t)}>{t}</div>)}
+          <div className={`tab ${statusFilter === "Deleted" ? "active" : ""}`} style={{ color: statusFilter === "Deleted" ? "#e05252" : undefined }} onClick={() => setStatusFilter("Deleted")}>Deleted</div>
+          {statusFilter !== "Deleted" && <><div className="tab-divider" />{["All", "Case", "Matter"].map(t => <div key={t} className={`tab ${typeFilter === t ? "active" : ""}`} onClick={() => setTypeFilter(t)}>{t}</div>)}</>}
         </div>
         <div className="card">
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <SortTh col="type" label="Type" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="caseNum" label="Case Number" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="title" label="Style" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <th>File #</th>
-                  <SortTh col="client" label="Client" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="stage" label="Stage" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="trialDate" label="Trial Date" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="lead" label="Lead" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map(c => (
-                  <tr key={c.id} className={`clickable-row ${selectedCase?.id === c.id ? "selected-row" : ""}`} onClick={() => setSelectedCase(selectedCase?.id === c.id ? null : c)}>
-                    <td><Badge label={recordType(c)} /></td>
-                    <td style={{ fontFamily: "monospace", fontSize: 11, color: "#c9a84c", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
-                    <td><div style={{ color: "#ccd6e8", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#445566" }}>Pltf: {c.plaintiff}</div>}</td>
-                    <td style={{ fontFamily: "monospace", fontSize: 11, color: "#7788aa" }}>{c.fileNum || "—"}</td>
-                    <td style={{ fontSize: 12, color: "#7788aa" }}>{c.client || "—"}{c.claimNum && <div style={{ fontSize: 10, color: "#445566" }}>Claim: {c.claimNum}</div>}</td>
-                    <td><Badge label={c.stage} /></td>
-                    <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#445566", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
-                    <td><Avatar userId={c.leadAttorney} size={26} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {paged.length === 0 && <div className="empty">No records match your filters.</div>}
-          </div>
-          {totalPages > 1 && (
-            <div className="pagination">
-              <span>{filtered.length} results · Page {page} of {totalPages}</span>
-              <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                <button className="page-btn" onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</button>
-                {[...Array(Math.min(totalPages, 7))].map((_, i) => { const p = page <= 4 ? i + 1 : page + i - 3; if (p < 1 || p > totalPages) return null; return <button key={p} className={`page-btn ${page === p ? "active" : ""}`} onClick={() => setPage(p)}>{p}</button>; })}
-                <button className="page-btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next →</button>
-              </div>
+          {statusFilter === "Deleted" ? (
+            <div className="table-wrap">
+              {deletedLoading ? (
+                <div className="empty">Loading deleted records…</div>
+              ) : (
+                <>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Case Number</th>
+                        <th>Style</th>
+                        <th>File #</th>
+                        <th>Deleted On</th>
+                        <th>Expires In</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(deletedCases || []).map(c => {
+                        const deletedDate = new Date(c.deletedAt);
+                        const expiresDate = new Date(deletedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+                        const daysLeft = Math.ceil((expiresDate - new Date()) / (1000 * 60 * 60 * 24));
+                        return (
+                          <tr key={c.id}>
+                            <td><Badge label={recordType(c)} /></td>
+                            <td style={{ fontFamily: "monospace", fontSize: 11, color: "#c9a84c", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
+                            <td><div style={{ color: "#ccd6e8", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#445566" }}>Pltf: {c.plaintiff}</div>}</td>
+                            <td style={{ fontFamily: "monospace", fontSize: 11, color: "#7788aa" }}>{c.fileNum || "—"}</td>
+                            <td style={{ fontSize: 12, color: "#e05252" }}>{deletedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+                            <td style={{ fontSize: 12, color: daysLeft <= 7 ? "#e05252" : "#445566" }}>{daysLeft} day{daysLeft !== 1 ? "s" : ""}</td>
+                            <td><button className="btn btn-outline btn-sm" onClick={() => handleRestoreDeleted(c.id)}>Restore</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {(deletedCases || []).length === 0 && <div className="empty">No deleted records in the last 30 days.</div>}
+                </>
+              )}
             </div>
+          ) : (
+            <>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <SortTh col="type" label="Type" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh col="caseNum" label="Case Number" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh col="title" label="Style" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <th>File #</th>
+                      <SortTh col="client" label="Client" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh col="stage" label="Stage" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh col="trialDate" label="Trial Date" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh col="lead" label="Lead" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paged.map(c => (
+                      <tr key={c.id} className={`clickable-row ${selectedCase?.id === c.id ? "selected-row" : ""}`} onClick={() => setSelectedCase(selectedCase?.id === c.id ? null : c)}>
+                        <td><Badge label={recordType(c)} /></td>
+                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "#c9a84c", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
+                        <td><div style={{ color: "#ccd6e8", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#445566" }}>Pltf: {c.plaintiff}</div>}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "#7788aa" }}>{c.fileNum || "—"}</td>
+                        <td style={{ fontSize: 12, color: "#7788aa" }}>{c.client || "—"}{c.claimNum && <div style={{ fontSize: 10, color: "#445566" }}>Claim: {c.claimNum}</div>}</td>
+                        <td><Badge label={c.stage} /></td>
+                        <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#445566", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
+                        <td><Avatar userId={c.leadAttorney} size={26} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {paged.length === 0 && <div className="empty">No records match your filters.</div>}
+              </div>
+              {totalPages > 1 && (
+                <div className="pagination">
+                  <span>{filtered.length} results · Page {page} of {totalPages}</span>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                    <button className="page-btn" onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</button>
+                    {[...Array(Math.min(totalPages, 7))].map((_, i) => { const p = page <= 4 ? i + 1 : page + i - 3; if (p < 1 || p > totalPages) return null; return <button key={p} className={`page-btn ${page === p ? "active" : ""}`} onClick={() => setPage(p)}>{p}</button>; })}
+                    <button className="page-btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next →</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1112,6 +1198,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
           activity={caseActivity[selectedCase.id] || []}
           onClose={() => setSelectedCase(null)}
           onUpdate={onUpdateCase}
+          onDeleteCase={handleDeleteFromOverlay}
           onCompleteTask={onCompleteTask}
           onAddNote={async (note) => { try { const saved = await apiCreateNote(note); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { alert("Failed to save note: " + err.message); } }}
           onDeleteNote={async (noteId) => { try { await apiDeleteNote(noteId); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(n => n.id !== noteId) })); } catch (err) { alert("Failed to delete note: " + err.message); } }}
@@ -1199,14 +1286,16 @@ function EditField({ fieldKey, label, type, options, value, onChange, onBlur, on
   );
 }
 
-function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity }) {
+function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
   const [addingField, setAddingField] = useState(false);
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [showPrint, setShowPrint] = useState(false);
   const [activeTab, setActiveTab] = useState("details"); // "details" | "activity"
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const canRemove = isAttorney(currentUser);
+  const isShareholder = currentUser.role === "Shareholder";
 
   // Track "committed" values for blur-based change detection
   const committed = useState({ ...c })[0]; // ref-like: we mutate it directly
@@ -1350,6 +1439,21 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       {showPrint && (
         <CasePrintView c={draft} notes={notes} tasks={tasks} deadlines={deadlines} links={links} onClose={() => setShowPrint(false)} />
       )}
+      {showDeleteConfirm && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
+          <div className="modal-box" style={{ maxWidth: 440 }}>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#e8d5a8", marginBottom: 10 }}>Delete {recordType(draft)}?</div>
+            <div style={{ fontSize: 13, color: "#7788aa", marginBottom: 6, lineHeight: 1.6 }}>
+              <strong style={{ color: "#ccd6e8" }}>{draft.title}</strong> will be moved to the Deleted tab and permanently removed after 30 days.
+            </div>
+            <div style={{ fontSize: 12, color: "#556677", marginBottom: 24 }}>This action can be undone within the 30-day window by restoring the record.</div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn btn-outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button className="btn" style={{ background: "#6a2a2a", color: "#e05252", border: "1px solid #8a3a3a" }} onClick={() => { setShowDeleteConfirm(false); onDeleteCase(c.id); }}>Delete {recordType(draft)}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="case-overlay">
 
         {/* Header */}
@@ -1367,6 +1471,9 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
           </div>
           <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "flex-start" }}>
             <button className="btn btn-outline btn-sm" onClick={() => setShowPrint(true)}>🖨 Print</button>
+            {isShareholder && (
+              <button className="btn btn-outline btn-sm" style={{ color: "#e05252", borderColor: "#6a2a2a" }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+            )}
             <button className="btn btn-outline btn-sm" style={{ fontSize: 16, lineHeight: 1, padding: "4px 10px" }} onClick={onClose}>✕</button>
           </div>
         </div>

@@ -24,10 +24,13 @@ export const apiMe      = ()             => apiFetch("/api/auth/me");
 export const apiGetUsers = () => apiFetch("/api/users");
 
 // Cases
-export const apiGetCases   = ()               => apiFetch("/api/cases");
-export const apiGetCase    = (id)             => apiFetch(`/api/cases/${id}`);
-export const apiCreateCase = (data)           => apiFetch("/api/cases",     { method: "POST", body: data });
-export const apiUpdateCase = (id, data)       => apiFetch(`/api/cases/${id}`, { method: "PUT",  body: data });
+export const apiGetCases        = ()         => apiFetch("/api/cases");
+export const apiGetDeletedCases = ()         => apiFetch("/api/cases?deleted=true");
+export const apiGetCase         = (id)       => apiFetch(`/api/cases/${id}`);
+export const apiCreateCase      = (data)     => apiFetch("/api/cases",           { method: "POST",   body: data });
+export const apiUpdateCase      = (id, data) => apiFetch(`/api/cases/${id}`,     { method: "PUT",    body: data });
+export const apiDeleteCase      = (id)       => apiFetch(`/api/cases/${id}`,     { method: "DELETE" });
+export const apiRestoreCase     = (id)       => apiFetch(`/api/cases/${id}/restore`, { method: "POST" });
 
 // Tasks
 export const apiGetTasks      = ()         => apiFetch("/api/tasks");

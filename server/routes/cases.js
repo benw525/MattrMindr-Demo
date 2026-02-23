@@ -31,13 +31,29 @@ const toFrontend = (row) => ({
   judge: row.judge,
   dol: row.dol ? row.dol.toISOString().split("T")[0] : "",
   _customFields: Array.isArray(row.custom_fields) ? row.custom_fields : [],
+  deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
 });
 
 const orNull = (val) => (val && String(val).trim()) ? val : null;
 
+const requireShareholder = (req, res, next) => {
+  if (req.session.userRole !== "Shareholder") {
+    return res.status(403).json({ error: "Shareholders only" });
+  }
+  next();
+};
+
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM cases ORDER BY title");
+    if (req.query.deleted === "true") {
+      const { rows } = await pool.query(
+        "SELECT * FROM cases WHERE deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC"
+      );
+      return res.json(rows.map(toFrontend));
+    }
+    const { rows } = await pool.query(
+      "SELECT * FROM cases WHERE deleted_at IS NULL ORDER BY title"
+    );
     return res.json(rows.map(toFrontend));
   } catch (err) {
     console.error("Cases fetch error:", err);
@@ -96,7 +112,7 @@ router.put("/:id", requireAuth, async (req, res) => {
         trial_date=$15, answer_filed=$16, written_disc=$17, party_depo=$18,
         expert_depo=$19, witness_depo=$20, mediation=$21, mediator=$22,
         judge=$23, dol=$24, custom_fields=$25
-       WHERE id=$26 RETURNING *`,
+       WHERE id=$26 AND deleted_at IS NULL RETURNING *`,
       [
         d.caseNum || "", d.title, d.client || "", d.insured || "",
         d.plaintiff || "", d.claimNum || "", d.fileNum || "", d.claimSpec || "",
@@ -113,6 +129,34 @@ router.put("/:id", requireAuth, async (req, res) => {
     return res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Case update error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.delete("/:id", requireAuth, requireShareholder, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "UPDATE cases SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *",
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Not found or already deleted" });
+    return res.json(toFrontend(rows[0]));
+  } catch (err) {
+    console.error("Case delete error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/:id/restore", requireAuth, requireShareholder, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "UPDATE cases SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING *",
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Not found or not deleted" });
+    return res.json(toFrontend(rows[0]));
+  } catch (err) {
+    console.error("Case restore error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 });
