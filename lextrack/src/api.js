@@ -25,6 +25,7 @@ export const apiGetUsers          = ()              => apiFetch("/api/users");
 export const apiCreateUser        = (data)          => apiFetch("/api/users",              { method: "POST",   body: data });
 export const apiDeleteUser        = (id)            => apiFetch(`/api/users/${id}`,        { method: "DELETE" });
 export const apiUpdateUserOffices = (id, offices)   => apiFetch(`/api/users/${id}/offices`, { method: "PUT",    body: { offices } });
+export const apiUpdateUserRoles   = (id, roles)     => apiFetch(`/api/users/${id}/roles`,   { method: "PUT",    body: { roles } });
 
 // Cases
 export const apiGetCases        = ()         => apiFetch("/api/cases");

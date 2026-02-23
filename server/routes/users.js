@@ -4,10 +4,20 @@ const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
+const USER_FIELDS = "id, name, role, roles, email, initials, phone, cell, ext, avatar, offices";
+
+function normalizeUser(r) {
+  return {
+    ...r,
+    roles: r.roles && r.roles.length ? r.roles : [r.role],
+    offices: r.offices || [],
+  };
+}
+
 router.get("/", async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT id, name, role, email, initials, phone, cell, ext, avatar, offices FROM users ORDER BY name");
-    return res.json(rows.map(r => ({ ...r, offices: r.offices || [] })));
+    const { rows } = await pool.query(`SELECT ${USER_FIELDS} FROM users ORDER BY name`);
+    return res.json(rows.map(normalizeUser));
   } catch (err) {
     console.error("Users fetch error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -15,18 +25,20 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", requireAuth, async (req, res) => {
-  const { name, role, email, initials, phone, cell, ext, avatar, offices } = req.body;
+  const { name, role, roles, email, initials, phone, cell, ext, avatar, offices } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: "Name is required" });
   try {
     const { rows: mx } = await pool.query("SELECT COALESCE(MAX(id), 0) AS max_id FROM users");
     const nextId = (parseInt(mx[0].max_id) || 0) + 1;
+    const primaryRole = (roles && roles.length) ? roles[0] : (role || "Attorney");
+    const rolesArr = (roles && roles.length) ? roles : [primaryRole];
     const { rows } = await pool.query(
-      `INSERT INTO users (id, name, role, email, initials, phone, cell, ext, avatar, offices)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       RETURNING id, name, role, email, initials, phone, cell, ext, avatar, offices`,
-      [nextId, name.trim(), role || "Attorney", email || "", initials || "", phone || "", cell || "", ext || "", avatar || "#4C7AC9", offices || []]
+      `INSERT INTO users (id, name, role, roles, email, initials, phone, cell, ext, avatar, offices)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING ${USER_FIELDS}`,
+      [nextId, name.trim(), primaryRole, rolesArr, email || "", initials || "", phone || "", cell || "", ext || "", avatar || "#4C7AC9", offices || []]
     );
-    return res.status(201).json({ ...rows[0], offices: rows[0].offices || [] });
+    return res.status(201).json(normalizeUser(rows[0]));
   } catch (err) {
     console.error("User create error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -49,13 +61,30 @@ router.put("/:id/offices", requireAuth, async (req, res) => {
   if (!Array.isArray(offices)) return res.status(400).json({ error: "offices must be an array" });
   try {
     const { rows } = await pool.query(
-      "UPDATE users SET offices = $1 WHERE id = $2 RETURNING id, offices",
+      `UPDATE users SET offices = $1 WHERE id = $2 RETURNING ${USER_FIELDS}`,
       [offices, req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
-    return res.json({ id: rows[0].id, offices: rows[0].offices || [] });
+    return res.json(normalizeUser(rows[0]));
   } catch (err) {
     console.error("User offices update error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.put("/:id/roles", requireAuth, async (req, res) => {
+  const { roles } = req.body;
+  if (!Array.isArray(roles) || roles.length === 0) return res.status(400).json({ error: "roles must be a non-empty array" });
+  try {
+    const primaryRole = roles[0];
+    const { rows } = await pool.query(
+      `UPDATE users SET role = $1, roles = $2 WHERE id = $3 RETURNING ${USER_FIELDS}`,
+      [primaryRole, roles, req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    return res.json(normalizeUser(rows[0]));
+  } catch (err) {
+    console.error("User roles update error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 });

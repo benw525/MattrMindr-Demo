@@ -5,7 +5,7 @@ import {
   apiGetCases, apiGetDeletedCases, apiCreateCase, apiUpdateCase, apiDeleteCase, apiRestoreCase,
   apiGetTasks, apiCreateTask, apiCreateTasks, apiUpdateTask, apiCompleteTask, apiReassignTasksByRole,
   apiGetDeadlines, apiCreateDeadline,
-  apiGetUsers, apiCreateUser, apiDeleteUser, apiUpdateUserOffices,
+  apiGetUsers, apiCreateUser, apiDeleteUser, apiUpdateUserOffices, apiUpdateUserRoles,
   apiGetNotes, apiCreateNote, apiDeleteNote,
   apiGetLinks, apiCreateLink, apiDeleteLink,
   apiGetActivity, apiCreateActivity,
@@ -17,7 +17,9 @@ const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Di
 
 const OFFICES = ["Mobile", "Birmingham", "Auburn", "Montgomery", "Demopolis"];
 
-const STAFF_ROLES = ["Attorney","Paralegal","Legal Assistant","Associate","Shareholder","Billing","Receptionist","Firm Administrator"];
+const STAFF_ROLES = ["Attorney","Paralegal","Legal Assistant","Associate","Shareholder","App Admin","Billing","Receptionist","Firm Administrator"];
+const hasRole = (user, role) => (user?.roles || (user?.role ? [user.role] : [])).includes(role);
+const isAppAdmin = (user) => hasRole(user, "App Admin");
 const AVATAR_PALETTE = ["#C9A84C","#4C7AC9","#4CAE72","#C94C4C","#9B4CC9","#4CC9C9","#C97B4C","#4C9BC9","#7BC94C","#C94C8C","#884CC9","#4CC96A","#C9C94C","#4C6AC9","#C94C6A","#4CAEC9","#6AC94C","#C9844C","#4CC9A8","#5884C9"];
 const makeInitials = n => n.trim().split(/\s+/).filter(Boolean).map(w => w[0]).join("").slice(0, 3).toUpperCase();
 const pickAvatar   = n => AVATAR_PALETTE[n.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_PALETTE.length];
@@ -699,7 +701,7 @@ export default function App() {
           <Avatar userId={currentUser.id} size={34} />
           <div>
             <div className="sidebar-user-name">{currentUser.name}</div>
-            <div className="sidebar-user-role">{currentUser.role}</div>
+            <div className="sidebar-user-role">{(currentUser.roles && currentUser.roles.length > 1) ? currentUser.roles.join(" · ") : currentUser.role}</div>
           </div>
         </div>
         <nav className="sidebar-nav">
@@ -1419,7 +1421,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [activeTab, setActiveTab] = useState("details"); // "details" | "activity"
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const canRemove = isAttorney(currentUser);
-  const isShareholder = currentUser.role === "Shareholder";
+  const canDelete = isAppAdmin(currentUser);
 
   // Track "committed" values for blur-based change detection
   const committed = useState({ ...c })[0]; // ref-like: we mutate it directly
@@ -1604,7 +1606,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
           </div>
           <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "flex-start" }}>
             <button className="btn btn-outline btn-sm" onClick={() => setShowPrint(true)}>🖨 Print</button>
-            {isShareholder && (
+            {canDelete && (
               <button className="btn btn-outline btn-sm" style={{ color: "#e05252", borderColor: "#6a2a2a" }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
             )}
             <button className="btn btn-outline btn-sm" style={{ fontSize: 16, lineHeight: 1, padding: "4px 10px" }} onClick={onClose}>✕</button>
@@ -4311,7 +4313,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
             onChange={e => setSearch(e.target.value)}
             style={{ width: 220, fontSize: 13 }}
           />
-          {currentUser.role === "Shareholder" && !isDeleted && (
+          {isAppAdmin(currentUser) && !isDeleted && (
             <button
               onClick={toggleMergeMode}
               style={{ background: mergeMode ? "#c9a84c" : "#1a2235", color: mergeMode ? "#0a0f1a" : "#7788aa", border: `1px solid ${mergeMode ? "#c9a84c" : "#2a3a5a"}`, borderRadius: 4, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
@@ -4489,19 +4491,25 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
 }
 
 function AddStaffModal({ onSave, onClose }) {
-  const [form, setForm] = useState({ name: "", role: "Attorney", email: "", phone: "", cell: "", ext: "", offices: [] });
+  const [form, setForm] = useState({ name: "", roles: ["Attorney"], email: "", phone: "", cell: "", ext: "", offices: [] });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const toggleOffice = o => { const c = form.offices; set("offices", c.includes(o) ? c.filter(x => x !== o) : [...c, o]); };
+  const toggleRole = r => {
+    const c = form.roles;
+    const next = c.includes(r) ? c.filter(x => x !== r) : [...c, r];
+    if (next.length > 0) set("roles", next);
+  };
 
   const handleSave = async () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || form.roles.length === 0) return;
     setBusy(true);
     try {
       const initials = makeInitials(form.name);
       const avatar = pickAvatar(form.name);
       const email = form.email.trim() || `${form.name.trim().toLowerCase().replace(/\s+/g, ".").replace(/[^a-z.]/g, "")}@firm.com`;
-      const saved = await onSave({ ...form, name: form.name.trim(), initials, avatar, email });
+      const role = form.roles[0];
+      const saved = await onSave({ ...form, name: form.name.trim(), role, initials, avatar, email });
       onClose(saved);
     } catch (err) {
       alert("Failed to add staff: " + err.message);
@@ -4517,7 +4525,22 @@ function AddStaffModal({ onSave, onClose }) {
         <div className="modal-sub">New staff can log in immediately using PIN 1234.</div>
 
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#445566", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Office(s)</div>
+          <div style={{ fontSize: 11, color: "#445566", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Role(s) *</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {STAFF_ROLES.map(r => {
+              const checked = form.roles.includes(r);
+              return (
+                <label key={r} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12, color: checked ? "#c9a84c" : "#556677", userSelect: "none" }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleRole(r)} />
+                  {r}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#445566", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Office(s)</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {OFFICES.map(o => {
               const checked = form.offices.includes(o);
@@ -4532,15 +4555,7 @@ function AddStaffModal({ onSave, onClose }) {
         </div>
 
         <div className="form-group"><label>Full Name *</label><input value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Jane Smith" autoFocus /></div>
-        <div className="form-row">
-          <div className="form-group">
-            <label>Role</label>
-            <select value={form.role} onChange={e => set("role", e.target.value)}>
-              {STAFF_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          <div className="form-group"><label>Extension</label><input value={form.ext} onChange={e => set("ext", e.target.value)} placeholder="e.g. 312" /></div>
-        </div>
+        <div className="form-group"><label>Extension</label><input value={form.ext} onChange={e => set("ext", e.target.value)} placeholder="e.g. 312" /></div>
         <div className="form-group"><label>Email</label><input value={form.email} onChange={e => set("email", e.target.value)} placeholder="auto-generated if blank" /></div>
         <div className="form-row">
           <div className="form-group"><label>Direct Line</label><input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="(251) 278-0000" /></div>
@@ -4549,7 +4564,7 @@ function AddStaffModal({ onSave, onClose }) {
 
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={() => onClose(null)}>Cancel</button>
-          <button className="btn btn-gold" disabled={!form.name.trim() || busy} onClick={handleSave}>
+          <button className="btn btn-gold" disabled={!form.name.trim() || form.roles.length === 0 || busy} onClick={handleSave}>
             {busy ? "Adding…" : "Add Staff Member"}
           </button>
         </div>
@@ -4562,7 +4577,7 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
   const [officeFilter, setOfficeFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const isShareholder = currentUser?.role === "Shareholder";
+  const canAdmin = isAppAdmin(currentUser);
 
   const filteredStaff = officeFilter === "All"
     ? allUsers
@@ -4600,6 +4615,21 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
     }
   };
 
+  const handleToggleRole = async (userId, role, currentRoles) => {
+    const next = currentRoles.includes(role)
+      ? currentRoles.filter(r => r !== role)
+      : [...currentRoles, role];
+    if (next.length === 0) return;
+    try {
+      const updated = await apiUpdateUserRoles(userId, next);
+      const merged = { roles: updated.roles, role: updated.role };
+      USERS.forEach(u => { if (u.id === userId) Object.assign(u, merged); });
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...merged } : u));
+    } catch (err) {
+      alert("Failed to update roles: " + err.message);
+    }
+  };
+
   return (
     <>
       {showAddModal && (
@@ -4618,7 +4648,7 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
             <option value="All">All Offices</option>
             {OFFICES.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
-          {isShareholder && (
+          {canAdmin && (
             <button className="btn btn-gold" onClick={() => setShowAddModal(true)}>+ Add Staff</button>
           )}
         </div>
@@ -4631,7 +4661,7 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
             const isConfirming = confirmDeleteId === u.id;
             return (
               <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative" }}>
-                {isShareholder && (
+                {canAdmin && (
                   <div style={{ position: "absolute", top: 12, right: 14 }}>
                     {isConfirming ? (
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -4646,7 +4676,12 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
                 )}
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                   <div style={{ width: 48, height: 48, borderRadius: "50%", background: u.avatar, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{u.initials}</div>
-                  <div><div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: "#e8d5a8", fontWeight: 600 }}>{u.name}</div><Badge label={u.role} /></div>
+                  <div>
+                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: "#e8d5a8", fontWeight: 600 }}>{u.name}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                      {(u.roles && u.roles.length ? u.roles : [u.role]).map(r => <Badge key={r} label={r} />)}
+                    </div>
+                  </div>
                 </div>
                 {[
                   ["Extension", u.ext || "—"],
@@ -4657,14 +4692,33 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
                 ].map(([k, v]) => (
                   <div key={k} className="info-row"><span className="info-key">{k}</span><span className="info-val" style={{ fontSize: 12 }}>{v}</span></div>
                 ))}
+                {canAdmin && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #1a2235" }}>
+                    <div style={{ fontSize: 11, color: "#445566", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                      Roles <span style={{ fontWeight: 400, color: "#2a3a5a" }}>— click to toggle</span>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {STAFF_ROLES.map(r => {
+                        const on = (u.roles && u.roles.length ? u.roles : [u.role]).includes(r);
+                        return (
+                          <button
+                            key={r}
+                            onClick={() => handleToggleRole(u.id, r, u.roles && u.roles.length ? u.roles : [u.role])}
+                            style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#c9a84c55" : "#1a2235"}`, background: on ? "#2a2010" : "transparent", color: on ? "#c9a84c" : "#2a3a5a", transition: "all 0.15s" }}
+                          >{r}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #1a2235" }}>
                   <div style={{ fontSize: 11, color: "#445566", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                    Offices {isShareholder && <span style={{ fontWeight: 400, color: "#2a3a5a" }}>— click to toggle</span>}
+                    Offices {canAdmin && <span style={{ fontWeight: 400, color: "#2a3a5a" }}>— click to toggle</span>}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {OFFICES.map(o => {
                       const on = offices.includes(o);
-                      return isShareholder ? (
+                      return canAdmin ? (
                         <button
                           key={o}
                           onClick={() => handleToggleOffice(u.id, o)}
@@ -4674,7 +4728,7 @@ function StaffView({ allCases, currentUser, userOffices, setUserOffices, allUser
                         <span key={o} style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, background: "#2a2010", color: "#c9a84c", border: "1px solid #c9a84c55" }}>{o}</span>
                       ) : null;
                     })}
-                    {!isShareholder && offices.length === 0 && <span style={{ fontSize: 12, color: "#2a3a5a", fontStyle: "italic" }}>None assigned</span>}
+                    {!canAdmin && offices.length === 0 && <span style={{ fontSize: 12, color: "#2a3a5a", fontStyle: "italic" }}>None assigned</span>}
                   </div>
                 </div>
               </div>

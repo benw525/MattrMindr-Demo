@@ -6,6 +6,20 @@ const router = express.Router();
 
 const DEMO_PIN = "1234";
 
+function userPayload(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    roles: user.roles || [user.role],
+    email: user.email,
+    initials: user.initials,
+    phone: user.phone,
+    cell: user.cell,
+    avatar: user.avatar,
+  };
+}
+
 router.post("/login", async (req, res) => {
   const { userId, pin } = req.body;
   if (!userId || !pin) {
@@ -23,16 +37,7 @@ router.post("/login", async (req, res) => {
     req.session.userId = user.id;
     req.session.userName = user.name;
     req.session.userRole = user.role;
-    return res.json({
-      id: user.id,
-      name: user.name,
-      role: user.role,
-      email: user.email,
-      initials: user.initials,
-      phone: user.phone,
-      cell: user.cell,
-      avatar: user.avatar,
-    });
+    return res.json(userPayload(user));
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -54,17 +59,7 @@ router.get("/me", async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [req.session.userId]);
     if (rows.length === 0) return res.status(401).json({ error: "User not found" });
-    const user = rows[0];
-    return res.json({
-      id: user.id,
-      name: user.name,
-      role: user.role,
-      email: user.email,
-      initials: user.initials,
-      phone: user.phone,
-      cell: user.cell,
-      avatar: user.avatar,
-    });
+    return res.json(userPayload(rows[0]));
   } catch (err) {
     console.error("Me error:", err);
     return res.status(500).json({ error: "Server error" });
