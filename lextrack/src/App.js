@@ -1243,7 +1243,8 @@ const CORE_FIELDS = [
   // Team section
   { key: "leadAttorney",   label: "Lead Attorney",   type: "user",   section: "team" },
   { key: "secondAttorney", label: "2nd Attorney",    type: "user",   section: "team" },
-  { key: "paralegal",      label: "Paralegal",       type: "user",   section: "team" },
+  { key: "paralegal",      label: "Paralegal 1",     type: "user",   section: "team" },
+  { key: "paralegal2",     label: "Paralegal 2",     type: "user",   section: "team" },
 ];
 
 const isAttorney = (user) => user.role === "Shareholder" || user.role === "Associate";
@@ -2041,6 +2042,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
   const lead = getUserById(c.leadAttorney);
   const second = getUserById(c.secondAttorney);
   const para = getUserById(c.paralegal);
+  const para2 = getUserById(c.paralegal2);
   const now = new Date().toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 
   return (
@@ -2091,7 +2093,8 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
                 ["Mediator", c.mediator],
                 ["Lead Attorney", lead?.name],
                 ["2nd Attorney", second?.name],
-                ["Paralegal", para?.name],
+                ["Paralegal 1", para?.name],
+                ["Paralegal 2", para2?.name],
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} className="ip"><span className="ik">{k}</span><span className="iv">{v}</span></div>
               ))}
@@ -4316,7 +4319,7 @@ function StaffView({ allCases }) {
       <div className="content">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 16 }}>
           {USERS.map(u => {
-            const mine = allCases.filter(c => c.leadAttorney === u.id || c.secondAttorney === u.id || c.paralegal === u.id);
+            const mine = allCases.filter(c => c.leadAttorney === u.id || c.secondAttorney === u.id || c.paralegal === u.id || c.paralegal2 === u.id);
             return (
               <div key={u.id} className="card" style={{ padding: "20px 22px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>

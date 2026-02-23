@@ -20,6 +20,7 @@ const toFrontend = (row) => ({
   leadAttorney: row.lead_attorney || 0,
   secondAttorney: row.second_attorney || 0,
   paralegal: row.paralegal || 0,
+  paralegal2: row.paralegal2 || 0,
   trialDate: row.trial_date ? row.trial_date.toISOString().split("T")[0] : "",
   answerFiled: row.answer_filed ? row.answer_filed.toISOString().split("T")[0] : "",
   writtenDisc: row.written_disc ? row.written_disc.toISOString().split("T")[0] : "",
@@ -78,16 +79,16 @@ router.post("/", requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO cases
         (case_num, title, client, insured, plaintiff, claim_num, file_num, claim_spec,
-         type, status, stage, lead_attorney, second_attorney, paralegal,
+         type, status, stage, lead_attorney, second_attorney, paralegal, paralegal2,
          trial_date, answer_filed, written_disc, party_depo, expert_depo,
          witness_depo, mediation, mediator, judge, dol, custom_fields)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
        RETURNING *`,
       [
         d.caseNum || "", d.title, d.client || "", d.insured || "",
         d.plaintiff || "", d.claimNum || "", d.fileNum || "", d.claimSpec || "",
         d.type || "Civil Litigation", d.status || "Active", d.stage || "Pleadings",
-        orNull(d.leadAttorney), orNull(d.secondAttorney), orNull(d.paralegal),
+        orNull(d.leadAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.paralegal2),
         orNull(d.trialDate), orNull(d.answerFiled), orNull(d.writtenDisc),
         orNull(d.partyDepo), orNull(d.expertDepo), orNull(d.witnessDepo),
         orNull(d.mediation), d.mediator || "", d.judge || "",
@@ -108,16 +109,16 @@ router.put("/:id", requireAuth, async (req, res) => {
       `UPDATE cases SET
         case_num=$1, title=$2, client=$3, insured=$4, plaintiff=$5,
         claim_num=$6, file_num=$7, claim_spec=$8, type=$9, status=$10,
-        stage=$11, lead_attorney=$12, second_attorney=$13, paralegal=$14,
-        trial_date=$15, answer_filed=$16, written_disc=$17, party_depo=$18,
-        expert_depo=$19, witness_depo=$20, mediation=$21, mediator=$22,
-        judge=$23, dol=$24, custom_fields=$25
-       WHERE id=$26 AND deleted_at IS NULL RETURNING *`,
+        stage=$11, lead_attorney=$12, second_attorney=$13, paralegal=$14, paralegal2=$15,
+        trial_date=$16, answer_filed=$17, written_disc=$18, party_depo=$19,
+        expert_depo=$20, witness_depo=$21, mediation=$22, mediator=$23,
+        judge=$24, dol=$25, custom_fields=$26
+       WHERE id=$27 AND deleted_at IS NULL RETURNING *`,
       [
         d.caseNum || "", d.title, d.client || "", d.insured || "",
         d.plaintiff || "", d.claimNum || "", d.fileNum || "", d.claimSpec || "",
         d.type || "Civil Litigation", d.status || "Active", d.stage || "Pleadings",
-        orNull(d.leadAttorney), orNull(d.secondAttorney), orNull(d.paralegal),
+        orNull(d.leadAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.paralegal2),
         orNull(d.trialDate), orNull(d.answerFiled), orNull(d.writtenDisc),
         orNull(d.partyDepo), orNull(d.expertDepo), orNull(d.witnessDepo),
         orNull(d.mediation), d.mediator || "", d.judge || "",
