@@ -215,7 +215,7 @@ const statusBadgeStyle = (status) => {
     Case: { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
     Matter: { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
     Active: { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
-    Closed: { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0" },
+    Closed: { bg: "var(--c-bg)", color: "var(--c-text2)", border: "var(--c-border)" },
     Urgent: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
     Overdue: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
     "Trial Set": { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
@@ -223,17 +223,17 @@ const statusBadgeStyle = (status) => {
     "Written Discovery": { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
     Depositions: { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
     "Expert Discovery": { bg: "#fdf4ff", color: "#cc66aa", border: "#e9d5ff" },
-    Pleadings: { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0" },
+    Pleadings: { bg: "var(--c-bg)", color: "var(--c-text2)", border: "var(--c-border)" },
     Mediation: { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
     "In Progress": { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
-    "Not Started": { bg: "#ffffff", color: "#94a3b8", border: "#e2e8f0" },
+    "Not Started": { bg: "var(--c-card)", color: "#94a3b8", border: "var(--c-border)" },
     Completed: { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
     Waiting: { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
     High: { bg: "#fef3c7", color: "#e07a30", border: "#fde68a" },
     Medium: { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
     Low: { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
   };
-  return map[status] || { bg: "#ffffff", color: "#94a3b8", border: "#e2e8f0" };
+  return map[status] || { bg: "var(--c-card)", color: "#94a3b8", border: "var(--c-border)" };
 };
 
 const Badge = ({ label }) => {
@@ -276,8 +276,21 @@ const COURT_RULES = [
 
 const CSS = `
 ${FONTS}
+:root {
+  --c-text:    #1e293b;
+  --c-text-h:  #0f172a;
+  --c-text2:   #475569;
+  --c-text3:   #64748b;
+  --c-text4:   #94a3b8;
+  --c-bg:      #f1f5f9;
+  --c-card:    #ffffff;
+  --c-hover:   #f8fafc;
+  --c-border:  #e2e8f0;
+  --c-border2: #f0f4f8;
+  --c-border3: #cbd5e1;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #f1f5f9; color: #1e293b; font-family: 'Source Sans 3', sans-serif; }
+body { background: var(--c-bg); color: var(--c-text); font-family: 'Source Sans 3', sans-serif; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #f1f5f9; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -450,7 +463,20 @@ label { font-size: 12px; color: #64748b; display: block; margin-bottom: 4px; tex
 .overlay-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
 
 /* ── Dark Mode ─────────────────────────────────────────────────────────────── */
-.dark { color-scheme: dark; }
+.dark {
+  color-scheme: dark;
+  --c-text:    #e2e8f0;
+  --c-text-h:  #f1f5f9;
+  --c-text2:   #94a3b8;
+  --c-text3:   #64748b;
+  --c-text4:   #475569;
+  --c-bg:      #0f172a;
+  --c-card:    #1e293b;
+  --c-hover:   #1e2d42;
+  --c-border:  #2d3f55;
+  --c-border2: #1e2d42;
+  --c-border3: #334155;
+}
 body.dark-body { background: #0f172a; }
 .dark .sidebar { background: #162032; border-right-color: #2d3f55; }
 .dark .sidebar-logo { border-bottom-color: #2d3f55; }
@@ -580,7 +606,7 @@ function FollowUpPromptModal({ prompt, onDecide }) {
 
         {step === "question" ? (
           <>
-            <p style={{ fontSize: 14, color: "#1e293b", marginBottom: 24, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: "var(--c-text)", marginBottom: 24, lineHeight: 1.6 }}>
               Would you like to schedule another follow-up task?
             </p>
             <div className="modal-footer">
@@ -604,19 +630,19 @@ function FollowUpPromptModal({ prompt, onDecide }) {
                 max={365}
                 value={days}
                 onChange={e => setDays(Math.max(1, Number(e.target.value)))}
-                style={{ width: "100%", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, color: "#1e293b", background: "#fff" }}
+                style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--c-border)", borderRadius: 6, fontSize: 13, color: "var(--c-text)", background: "var(--c-card)" }}
               />
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "var(--c-hover)", borderRadius: 8, border: "1px solid var(--c-border)" }}>
               <Toggle on={escalate} onChange={() => setEscalate(p => !p)} />
               <div>
-                <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>Auto-Escalate Priority</div>
+                <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>Auto-Escalate Priority</div>
                 <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Priority rises automatically as due date approaches</div>
               </div>
             </div>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
-              Priority: <strong style={{ color: "#1e293b" }}>{target.priority}</strong>
-              {" · "}Assigned to: <strong style={{ color: "#1e293b" }}>{target.assignedRole || "same staff"}</strong>
+              Priority: <strong style={{ color: "var(--c-text)" }}>{target.priority}</strong>
+              {" · "}Assigned to: <strong style={{ color: "var(--c-text)" }}>{target.assignedRole || "same staff"}</strong>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setStep("question")}>Back</button>
@@ -708,14 +734,14 @@ export default function App() {
   if (!currentUser) return <LoginScreen onLogin={setCurrentUser} allUsers={allUsers} />;
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+    <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
       <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>LexTrack</div>
       <div style={{ fontSize: 13, color: "#94a3b8" }}>Loading case data…</div>
     </div>
   );
 
   if (dataError) return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+    <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
       <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>LexTrack</div>
       <div style={{ fontSize: 13, color: "#e05252" }}>Failed to load data: {dataError}</div>
       <button className="btn btn-outline" onClick={() => setCurrentUser(null)}>Return to Login</button>
@@ -1087,7 +1113,7 @@ export default function App() {
             {darkMode ? "☀️  Light Mode" : "🌙  Dark Mode"}
           </button>
           <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>Signed in as</div>
-          <div style={{ fontSize: 12, color: "#475569", marginBottom: 10 }}>{currentUser.email}</div>
+          <div style={{ fontSize: 12, color: "var(--c-text2)", marginBottom: 10 }}>{currentUser.email}</div>
           <button className="btn btn-outline" style={{ width: "100%", fontSize: 12 }} onClick={() => { apiLogout().catch(() => {}); setCurrentUser(null); setAllCases([]); setAllDeadlines([]); setTasks([]); setCaseNotes({}); setCaseLinks({}); setCaseActivity({}); setSelectedCase(null); setDeletedCases(null); }}>Sign Out</button>
         </div>
       </aside>
@@ -1275,10 +1301,10 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
           <div className="form-group" />
         </div>
 
-        <div style={{ background: autoTasks ? "#eff6ff" : "#f1f5f9", border: `1px solid ${autoTasks ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
+        <div style={{ background: autoTasks ? "#eff6ff" : "var(--c-bg)", border: `1px solid ${autoTasks ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
-              <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>✅ Auto-generate opening tasks</div>
+              <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>✅ Auto-generate opening tasks</div>
               <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Open file, ack. letter, calendar answer deadline, subpoena police file, send written discovery, investigate scene, written discovery, medical record summary, ILP, claim specialist call (recurring)</div>
             </div>
             <Toggle on={autoTasks} onChange={() => setAutoTasks(p => !p)} />
@@ -1299,9 +1325,9 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
 // ─── Auto-escalate preview box ────────────────────────────────────────────────
 function EscalateBox({ on, onChange, basePriority }) {
   return (
-    <div style={{ background: on ? "#eff6ff" : "#f1f5f9", border: `1px solid ${on ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", transition: "all 0.2s" }}>
+    <div style={{ background: on ? "#eff6ff" : "var(--c-bg)", border: `1px solid ${on ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", transition: "all 0.2s" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: on ? 10 : 0 }}>
-        <div><div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>🔺 Auto-Escalate Priority</div><div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Priority rises automatically as the due date approaches</div></div>
+        <div><div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>🔺 Auto-Escalate Priority</div><div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Priority rises automatically as the due date approaches</div></div>
         <Toggle on={on} onChange={onChange} />
       </div>
       {on && (
@@ -1314,7 +1340,7 @@ function EscalateBox({ on, onChange, basePriority }) {
           ].map(({ label, result, note }) => {
             const s = statusBadgeStyle(result);
             return (
-              <div key={label} style={{ background: "#f1f5f9", border: `1px solid ${s.border}`, borderRadius: 5, padding: "7px 8px", textAlign: "center" }}>
+              <div key={label} style={{ background: "var(--c-bg)", border: `1px solid ${s.border}`, borderRadius: 5, padding: "7px 8px", textAlign: "center" }}>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>{label}</div>
                 <div style={{ background: s.bg, color: s.color, fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 3, display: "inline-block" }}>{result}</div>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 3 }}>{note}</div>
@@ -1355,17 +1381,17 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
           </div>
           <div className="stat-card">
             <div className="stat-label">Upcoming Deadlines</div>
-            <div className="stat-value" style={{ color: upcomingDl.length > 5 ? "#e07a30" : "#0f172a" }}>{upcomingDl.length}</div>
+            <div className="stat-value" style={{ color: upcomingDl.length > 5 ? "#e07a30" : "var(--c-text-h)" }}>{upcomingDl.length}</div>
             <div className="stat-sub">Next 30 days</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">My Open Tasks</div>
-            <div className="stat-value" style={{ color: myTasks.filter(t => daysUntil(t.due) < 0).length > 0 ? "#e05252" : "#0f172a" }}>{myTasks.length}</div>
+            <div className="stat-value" style={{ color: myTasks.filter(t => daysUntil(t.due) < 0).length > 0 ? "#e05252" : "var(--c-text-h)" }}>{myTasks.length}</div>
             <div className="stat-sub">{myTasks.filter(t => daysUntil(t.due) < 0).length} overdue</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Trials in 90 Days</div>
-            <div className="stat-value" style={{ color: trialSoon.length > 0 ? "#2563eb" : "#0f172a" }}>{trialSoon.length}</div>
+            <div className="stat-value" style={{ color: trialSoon.length > 0 ? "#2563eb" : "var(--c-text-h)" }}>{trialSoon.length}</div>
             <div className="stat-sub">{allCases.filter(c => c.trialDate).length} with trial dates</div>
           </div>
         </div>
@@ -1633,8 +1659,8 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                           <tr key={c.id}>
                             <td><Badge label={recordType(c)} /></td>
                             <td style={{ fontFamily: "monospace", fontSize: 11, color: "#2563eb", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
-                            <td><div style={{ color: "#1e293b", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#94a3b8" }}>Pltf: {c.plaintiff}</div>}</td>
-                            <td style={{ fontFamily: "monospace", fontSize: 11, color: "#475569" }}>{c.fileNum || "—"}</td>
+                            <td><div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#94a3b8" }}>Pltf: {c.plaintiff}</div>}</td>
+                            <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
                             <td style={{ fontSize: 12, color: "#e05252" }}>{deletedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                             <td style={{ fontSize: 12, color: daysLeft <= 7 ? "#e05252" : "#94a3b8" }}>{daysLeft} day{daysLeft !== 1 ? "s" : ""}</td>
                             <td><button className="btn btn-outline btn-sm" onClick={() => handleRestoreDeleted(c.id)}>Restore</button></td>
@@ -1668,9 +1694,9 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                       <tr key={c.id} className={`clickable-row ${selectedCase?.id === c.id ? "selected-row" : ""}`} onClick={() => setSelectedCase(selectedCase?.id === c.id ? null : c)}>
                         <td><Badge label={recordType(c)} /></td>
                         <td style={{ fontFamily: "monospace", fontSize: 11, color: "#2563eb", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
-                        <td><div style={{ color: "#1e293b", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#94a3b8" }}>Pltf: {c.plaintiff}</div>}</td>
-                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "#475569" }}>{c.fileNum || "—"}</td>
-                        <td style={{ fontSize: 12, color: "#475569" }}>{c.client || "—"}{c.claimNum && <div style={{ fontSize: 10, color: "#94a3b8" }}>Claim: {c.claimNum}</div>}</td>
+                        <td><div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#94a3b8" }}>Pltf: {c.plaintiff}</div>}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
+                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.client || "—"}{c.claimNum && <div style={{ fontSize: 10, color: "#94a3b8" }}>Claim: {c.claimNum}</div>}</td>
                         <td><Badge label={c.stage} /></td>
                         <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#94a3b8", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
                         <td><Avatar userId={c.leadAttorney} size={26} /></td>
@@ -1963,9 +1989,9 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       {showDeleteConfirm && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
           <div className="modal-box" style={{ maxWidth: 440 }}>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#0f172a", marginBottom: 10 }}>Delete {recordType(draft)}?</div>
-            <div style={{ fontSize: 13, color: "#475569", marginBottom: 6, lineHeight: 1.6 }}>
-              <strong style={{ color: "#1e293b" }}>{draft.title}</strong> will be moved to the Deleted tab and permanently removed after 30 days.
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 10 }}>Delete {recordType(draft)}?</div>
+            <div style={{ fontSize: 13, color: "var(--c-text2)", marginBottom: 6, lineHeight: 1.6 }}>
+              <strong style={{ color: "var(--c-text)" }}>{draft.title}</strong> will be moved to the Deleted tab and permanently removed after 30 days.
             </div>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 24 }}>This action can be undone within the 30-day window by restoring the record.</div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -1986,7 +2012,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               {draft.caseNum && <span style={{ fontSize: 11, color: "#2563eb", fontFamily: "monospace" }}>{draft.caseNum}</span>}
               <span style={{ fontSize: 11, color: "#94a3b8" }}>Auto-saving</span>
             </div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: "#0f172a", fontWeight: 600, lineHeight: 1.2 }}>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: "var(--c-text-h)", fontWeight: 600, lineHeight: 1.2 }}>
               {draft.title || "Untitled"}
             </div>
           </div>
@@ -2065,7 +2091,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 {OFFICES.map(o => {
                   const checked = (draft.offices || []).includes(o);
                   return (
-                    <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#2563eb" : "#475569", userSelect: "none" }}>
+                    <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#2563eb" : "var(--c-text2)", userSelect: "none" }}>
                       <input
                         type="checkbox"
                         checked={checked}
@@ -2143,7 +2169,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               ))}
             </div>
 
-            <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0 32px" }} />
+            <div style={{ borderTop: "1px solid var(--c-border)", margin: "8px 0 32px" }} />
 
             {/* Three-column: Deadlines | Tasks | Notes */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.4fr", gap: "0 32px" }}>
@@ -2153,10 +2179,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 {[...deadlines].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map(d => {
                   const days = daysUntil(d.date); const col = urgencyColor(days);
                   return (
-                    <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #f0f4f8" }}>
+                    <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--c-border2)" }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, color: "#1e293b" }}>{d.title}</div>
+                        <div style={{ fontSize: 13, color: "var(--c-text)" }}>{d.title}</div>
                         {d.type && <div style={{ fontSize: 10, color: "#94a3b8" }}>{d.type}</div>}
                       </div>
                       <div style={{ fontSize: 12, color: col, whiteSpace: "nowrap", textAlign: "right" }}>
@@ -2175,10 +2201,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   const done = t.status === "Completed"; const days = daysUntil(t.due);
                   const assignee = getUserById(t.assigned);
                   return (
-                    <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: "1px solid #f0f4f8", opacity: done ? 0.45 : 1 }}>
+                    <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--c-border2)", opacity: done ? 0.45 : 1 }}>
                       <div className={`checkbox ${done ? "done" : ""}`} style={{ marginTop: 2 }} onClick={() => handleComplete(t.id)}>{done && "✓"}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, color: "#1e293b", textDecoration: done ? "line-through" : "none", lineHeight: 1.3 }}>
+                        <div style={{ fontSize: 13, color: "var(--c-text)", textDecoration: done ? "line-through" : "none", lineHeight: 1.3 }}>
                           {t.title}
                           {t.recurring && <span className="rec-badge">🔁</span>}
                           {t.isChained && <span className="chain-badge">⛓</span>}
@@ -2207,7 +2233,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             </div>
 
             {/* File Links */}
-            <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 8, paddingTop: 28 }}>
+            <div style={{ borderTop: "1px solid var(--c-border)", marginTop: 8, paddingTop: 28 }}>
               <CaseFileLinks
                 caseId={c.id}
                 links={links}
@@ -2244,10 +2270,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                       <span style={{
                         fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
-                        background: "#f8fafc", border: `1px solid ${actionColor(entry.action)}44`,
+                        background: "var(--c-hover)", border: `1px solid ${actionColor(entry.action)}44`,
                         color: actionColor(entry.action),
                       }}>{entry.action}</span>
-                      <span style={{ fontSize: 12, color: "#1e293b", fontWeight: 500 }}>{entry.userName}</span>
+                      <span style={{ fontSize: 12, color: "var(--c-text)", fontWeight: 500 }}>{entry.userName}</span>
                       <span style={{ fontSize: 11, color: "#94a3b8" }}>{entry.userRole}</span>
                     </div>
                     <div style={{ fontSize: 13, color: "#334155", marginBottom: 4, lineHeight: 1.5 }}>{entry.detail}</div>
@@ -2320,7 +2346,7 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
       </div>
 
       {showForm && (
-        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "14px 16px", marginBottom: 14 }}>
+        <div style={{ background: "var(--c-hover)", border: "1px solid var(--c-border)", borderRadius: 7, padding: "14px 16px", marginBottom: 14 }}>
           <div style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4 }}>File Path *</label>
             <input
@@ -2364,10 +2390,10 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
       )}
 
       {links.length > 0 && (
-        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden" }}>
+        <div style={{ background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: 6, overflow: "hidden" }}>
           {links.map((link, i) => (
-            <div key={link.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: i < links.length - 1 ? "1px solid #f0f4f8" : "none", transition: "background 0.12s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+            <div key={link.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: i < links.length - 1 ? "1px solid var(--c-border2)" : "none", transition: "background 0.12s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--c-hover)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
               <div style={{ fontSize: 18, flexShrink: 0, width: 26, textAlign: "center" }}>{linkIcon(link.path)}</div>
@@ -2375,15 +2401,15 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
                 <div
                   onClick={() => openLink(link.path)}
                   title={link.path}
-                  style={{ fontSize: 13, color: "#1e293b", fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                  style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   onMouseEnter={e => { e.currentTarget.style.color = "#2563eb"; e.currentTarget.style.textDecoration = "underline"; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = "#1e293b"; e.currentTarget.style.textDecoration = "none"; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = "var(--c-text)"; e.currentTarget.style.textDecoration = "none"; }}
                 >
                   {link.label}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 10, color: "#94a3b8", background: "#e2e8f0", border: "1px solid #cbd5e1", borderRadius: 3, padding: "1px 5px" }}>{link.category}</span>
-                  <span style={{ fontSize: 10, color: "#475569", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }} title={link.path}>{link.path}</span>
+                  <span style={{ fontSize: 10, color: "#94a3b8", background: "var(--c-border)", border: "1px solid var(--c-border3)", borderRadius: 3, padding: "1px 5px" }}>{link.category}</span>
+                  <span style={{ fontSize: 10, color: "var(--c-text2)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }} title={link.path}>{link.path}</span>
                 </div>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Added by {link.addedBy} · {new Date(link.addedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
               </div>
@@ -2404,7 +2430,7 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
 
 // ─── Note type config ─────────────────────────────────────────────────────────
 const NOTE_TYPES = [
-  { label: "General",          color: "#475569", bg: "#ffffff" },
+  { label: "General",          color: "var(--c-text2)", bg: "var(--c-card)" },
   { label: "Attorney Note",    color: "#2563eb", bg: "#fef3c7" },
   { label: "Client Contact",   color: "#5599cc", bg: "#dbeafe" },
   { label: "Claim Specialist", color: "#44bbaa", bg: "#ccfbf1" },
@@ -2413,7 +2439,7 @@ const NOTE_TYPES = [
   { label: "Investigation",    color: "#4CAE72", bg: "#dcfce7" },
   { label: "Medical",          color: "#e05252", bg: "#fef2f2" },
   { label: "Settlement",       color: "#1d4ed8", bg: "#fefce8" },
-  { label: "Internal",         color: "#64748b", bg: "#f1f5f9" },
+  { label: "Internal",         color: "#64748b", bg: "var(--c-bg)" },
 ];
 
 const noteTypeStyle = (label) => NOTE_TYPES.find(t => t.label === label) || NOTE_TYPES[0];
@@ -2458,7 +2484,7 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote }) {
 
       {/* Add form */}
       {showForm && (
-        <div style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 7, padding: 14, marginBottom: 12 }}>
+        <div style={{ background: "var(--c-bg)", border: "1px solid var(--c-border3)", borderRadius: 7, padding: 14, marginBottom: 12 }}>
           <div className="form-group" style={{ marginBottom: 10 }}>
             <label>Note Type</label>
             <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
@@ -2491,7 +2517,7 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote }) {
         <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>No notes yet. Click "+ Add Note" to create the first one.</div>
       )}
       {notes.length > 0 && (
-        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden" }}>
+        <div style={{ background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: 6, overflow: "hidden" }}>
           {notes.map((note, i) => {
             const ts = noteTypeStyle(note.type);
             const dt = new Date(note.createdAt);
@@ -2532,7 +2558,7 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote }) {
                       <span>👤 {note.authorName} ({note.authorRole})</span>
                       <span>🕐 {dateStr} at {timeStr}</span>
                     </div>
-                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "#f8fafc", padding: "10px 12px", borderRadius: 5, border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: 13, color: "var(--c-text)", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "var(--c-hover)", padding: "10px 12px", borderRadius: 5, border: "1px solid var(--c-border)" }}>
                       {note.body}
                     </div>
                     <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
@@ -2602,7 +2628,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
       <div style={{ width: "100%", maxWidth: 860 }}>
         {/* Toolbar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, padding: "0 4px" }}>
-          <div style={{ color: "#1e293b", fontSize: 14, fontWeight: 600 }}>📄 Case File Preview — {c.title}</div>
+          <div style={{ color: "var(--c-text)", fontSize: 14, fontWeight: 600 }}>📄 Case File Preview — {c.title}</div>
           <div style={{ display: "flex", gap: 10 }}>
             <button className="btn btn-gold" onClick={handlePrint}>🖨 Print / Save as PDF</button>
             <button className="btn btn-outline" onClick={onClose}>✕ Close</button>
@@ -2837,9 +2863,9 @@ function CalendarGrid({ deadlines, allCases, externalEvents }) {
       {/* Calendar */}
       <div className="card" style={{ flex: 1, minWidth: 0 }}>
         {/* Month nav */}
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <button className="btn btn-outline btn-sm" onClick={prevMonth}>← Prev</button>
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: "#0f172a", fontWeight: 600 }}>{monthName}</div>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: "var(--c-text-h)", fontWeight: 600 }}>{monthName}</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button className="btn btn-outline btn-sm" onClick={() => { setCalMonth(now.getMonth()); setCalYear(now.getFullYear()); setSelected(todayStr); }}>Today</button>
             <button className="btn btn-outline btn-sm" onClick={nextMonth}>Next →</button>
@@ -2847,7 +2873,7 @@ function CalendarGrid({ deadlines, allCases, externalEvents }) {
         </div>
 
         {/* Legend */}
-        <div style={{ padding: "8px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ padding: "8px 18px", borderBottom: "1px solid var(--c-border)", display: "flex", gap: 16, flexWrap: "wrap" }}>
           {[["#e05252","Overdue"],["#e07a30","≤7 days"],["#2563eb","≤21 days"],["#4CAE72","Upcoming"],["#5588cc","External Cal"]].map(([col,lbl]) => (
             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: col, flexShrink: 0 }} />
@@ -2857,22 +2883,22 @@ function CalendarGrid({ deadlines, allCases, externalEvents }) {
         </div>
 
         {/* Day headers */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", borderBottom: "1px solid #e2e8f0" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", borderBottom: "1px solid var(--c-border)" }}>
           {DOW.map(d => <div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>{d}</div>)}
         </div>
 
         {/* Day cells */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)" }}>
           {cells.map((dateStr, i) => {
-            if (!dateStr) return <div key={i} style={{ minHeight: 80, borderRight: "1px solid #f0f4f8", borderBottom: "1px solid #f0f4f8", background: "#ffffff" }} />;
+            if (!dateStr) return <div key={i} style={{ minHeight: 80, borderRight: "1px solid var(--c-border2)", borderBottom: "1px solid var(--c-border2)", background: "var(--c-card)" }} />;
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selected;
             const events = eventsByDate[dateStr] || [];
             const dayNum = Number(dateStr.split("-")[2]);
-            const borderR = (i + 1) % 7 !== 0 ? "1px solid #f0f4f8" : "none";
+            const borderR = (i + 1) % 7 !== 0 ? "1px solid var(--c-border2)" : "none";
             return (
               <div key={dateStr} onClick={() => setSelected(isSelected ? null : dateStr)}
-                style={{ minHeight: 80, borderRight: borderR, borderBottom: "1px solid #f0f4f8", padding: "6px 7px", cursor: events.length ? "pointer" : "default", background: isSelected ? "#eff6ff" : isToday ? "#dbeafe" : "transparent", transition: "background 0.1s", position: "relative" }}>
+                style={{ minHeight: 80, borderRight: borderR, borderBottom: "1px solid var(--c-border2)", padding: "6px 7px", cursor: events.length ? "pointer" : "default", background: isSelected ? "#eff6ff" : isToday ? "#dbeafe" : "transparent", transition: "background 0.1s", position: "relative" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? "#2563eb" : "#64748b", width: 22, height: 22, borderRadius: "50%", background: isToday ? "#2563eb12" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{dayNum}</span>
                 </div>
@@ -2902,11 +2928,11 @@ function CalendarGrid({ deadlines, allCases, externalEvents }) {
           const col = chipColor(ev);
           const cs = ev.caseId ? allCases.find(c => c.id === ev.caseId) : null;
           return (
-            <div key={i} style={{ padding: "12px 16px", borderBottom: "1px solid #f0f4f8" }}>
+            <div key={i} style={{ padding: "12px 16px", borderBottom: "1px solid var(--c-border2)" }}>
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: col, flexShrink: 0, marginTop: 3 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, marginBottom: 3 }}>{ev.title}</div>
+                  <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600, marginBottom: 3 }}>{ev.title}</div>
                   {ev.kind === "deadline" && cs && <div style={{ fontSize: 11, color: "#64748b" }}>{cs.title?.slice(0, 45)}</div>}
                   {ev.kind === "deadline" && ev.type && <Badge label={ev.type} />}
                   {ev.kind === "external" && <div style={{ fontSize: 11, color: "#5588cc", marginTop: 2 }}>📅 {ev.source}</div>}
@@ -2973,13 +2999,13 @@ function ICalManager({ externalEvents, setExternalEvents }) {
           <span style={{ fontSize: 12, color: "#64748b" }}>{feeds.length} feed{feeds.length !== 1 ? "s" : ""} · {externalEvents.length} events imported</span>
         </div>
         <div style={{ padding: 20 }}>
-          <div style={{ fontSize: 13, color: "#475569", marginBottom: 16, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 13, color: "var(--c-text2)", marginBottom: 16, lineHeight: 1.6 }}>
             Add any iCal/webcal feed URL to overlay external events on the calendar — court dockets, Google Calendar, Outlook, bar association deadlines, etc.
             <br /><span style={{ fontSize: 11, color: "#94a3b8" }}>Tip: In Google Calendar, go to the calendar's settings → "Integrate calendar" → copy the public iCal address. In Outlook, use File → Account Settings → Internet Calendars.</span>
           </div>
 
           {/* Add feed form */}
-          <div style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 7, padding: 16, marginBottom: feeds.length ? 16 : 0 }}>
+          <div style={{ background: "var(--c-bg)", border: "1px solid var(--c-border3)", borderRadius: 7, padding: 16, marginBottom: feeds.length ? 16 : 0 }}>
             <div style={{ fontSize: 12, color: "#2563eb", fontWeight: 600, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>Add New Calendar Feed</div>
             <div className="form-row" style={{ marginBottom: 10 }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -3004,10 +3030,10 @@ function ICalManager({ externalEvents, setExternalEvents }) {
 
           {/* Feed list */}
           {feeds.map(feed => (
-            <div key={feed.id} style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 7, padding: "12px 14px", marginTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
+            <div key={feed.id} style={{ background: "var(--c-bg)", border: "1px solid var(--c-border3)", borderRadius: 7, padding: "12px 14px", marginTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                  <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>{feed.name}</div>
+                  <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>{feed.name}</div>
                   {feed.status === "ok" && <span style={{ fontSize: 10, background: "#dcfce7", color: "#4CAE72", border: "1px solid #bbf7d0", padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>✓ {feed.count} events</span>}
                   {feed.status === "error" && <span style={{ fontSize: 10, background: "#fee2e2", color: "#e05252", border: "1px solid #fca5a5", padding: "1px 6px", borderRadius: 3, fontWeight: 600 }}>✗ Error</span>}
                   {feed.status === "pending" && <span style={{ fontSize: 10, color: "#64748b" }}>Importing…</span>}
@@ -3044,9 +3070,9 @@ function ICalManager({ externalEvents, setExternalEvents }) {
             ["Court Dockets (PACER/Odyssey)", "Check your court's website for a published calendar feed, or use a third-party court-alert service that provides iCal export"],
             ["Bar Association Calendars", "Most state bar websites publish a CLE/events calendar — look for an iCal or .ics download link"],
           ].map(([src, tip]) => (
-            <div key={src} style={{ display: "flex", gap: 12, padding: "9px 0", borderBottom: "1px solid #f0f4f8" }}>
+            <div key={src} style={{ display: "flex", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--c-border2)" }}>
               <div style={{ fontSize: 13, color: "#2563eb", fontWeight: 600, width: 180, flexShrink: 0 }}>{src}</div>
-              <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.5 }}>{tip}</div>
+              <div style={{ fontSize: 12, color: "var(--c-text2)", lineHeight: 1.5 }}>{tip}</div>
             </div>
           ))}
         </div>
@@ -3108,7 +3134,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
 
         {tab === "list" && (
           <div className="card">
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: 10 }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--c-border)", display: "flex", gap: 10 }}>
               <select style={{ width: 160 }} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>{types.map(t => <option key={t}>{t}</option>)}</select>
               <input placeholder="Search deadlines or cases…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
@@ -3131,8 +3157,8 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
                     return (
                       <tr key={d.id}>
                         <td><div style={{ width: 10, height: 10, borderRadius: "50%", background: col }} /></td>
-                        <td><div style={{ color: "#1e293b", fontWeight: 600 }}>{d.title}</div>{d.rule && <div style={{ fontSize: 11, color: "#2563eb", fontFamily: "monospace" }}>{d.rule}</div>}</td>
-                        <td style={{ fontSize: 12, color: "#475569" }}>{cs?.title?.slice(0, 40) || `#${d.caseId}`}<div style={{ fontSize: 10, color: "#94a3b8" }}>{cs?.caseNum}</div></td>
+                        <td><div style={{ color: "var(--c-text)", fontWeight: 600 }}>{d.title}</div>{d.rule && <div style={{ fontSize: 11, color: "#2563eb", fontFamily: "monospace" }}>{d.rule}</div>}</td>
+                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{cs?.title?.slice(0, 40) || `#${d.caseId}`}<div style={{ fontSize: 10, color: "#94a3b8" }}>{cs?.caseNum}</div></td>
                         <td><Badge label={d.type} /></td>
                         <td style={{ color: col, fontSize: 13, whiteSpace: "nowrap" }}>{fmt(d.date)}</td>
                         <td style={{ color: col, fontWeight: 700 }}>{days < 0 ? <span style={{ color: "#e05252" }}>{Math.abs(days)}d over</span> : days === 0 ? "Today" : `${days}d`}</td>
@@ -3210,8 +3236,8 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
                 {calcResult && (
                   <div className="calc-result">
                     <div style={{ fontSize: 11, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Result</div>
-                    <div style={{ fontSize: 24, fontFamily: "'Playfair Display',serif", color: "#0f172a", marginBottom: 8 }}>{fmt(calcResult.result)}</div>
-                    <div style={{ fontSize: 13, color: "#475569" }}><strong style={{ color: "#2563eb" }}>{calcResult.rule.name}</strong><br />{calcResult.rule.days} days from {fmt(calcResult.from)} · <span style={{ fontFamily: "monospace", fontSize: 12 }}>{calcResult.rule.rule}</span></div>
+                    <div style={{ fontSize: 24, fontFamily: "'Playfair Display',serif", color: "var(--c-text-h)", marginBottom: 8 }}>{fmt(calcResult.result)}</div>
+                    <div style={{ fontSize: 13, color: "var(--c-text2)" }}><strong style={{ color: "#2563eb" }}>{calcResult.rule.name}</strong><br />{calcResult.rule.days} days from {fmt(calcResult.from)} · <span style={{ fontFamily: "monospace", fontSize: 12 }}>{calcResult.rule.rule}</span></div>
                     <div style={{ marginTop: 10, fontSize: 12, color: "#e07a30", fontStyle: "italic" }}>⚠ Always verify against court orders and local rules.</div>
                   </div>
                 )}
@@ -3222,7 +3248,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>Action</th><th>Days</th><th>From</th><th>Rule</th></tr></thead>
-                  <tbody>{COURT_RULES.map(r => <tr key={r.id}><td style={{ color: "#1e293b" }}>{r.name}</td><td style={{ color: "#2563eb", fontWeight: 700 }}>{r.days}</td><td style={{ fontSize: 12, color: "#475569" }}>{r.from}</td><td style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>{r.rule}</td></tr>)}</tbody>
+                  <tbody>{COURT_RULES.map(r => <tr key={r.id}><td style={{ color: "var(--c-text)" }}>{r.name}</td><td style={{ color: "#2563eb", fontWeight: 700 }}>{r.days}</td><td style={{ fontSize: 12, color: "var(--c-text2)" }}>{r.from}</td><td style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>{r.rule}</td></tr>)}</tbody>
                 </table>
               </div>
             </div>
@@ -3316,16 +3342,16 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
 
               {/* Recurring toggle */}
               <div className="form-group">
-                <div style={{ background: newTask.recurring ? "#f0fdf4" : "#f1f5f9", border: `1px solid ${newTask.recurring ? "#44bbaa55" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 8, transition: "all 0.2s" }}>
+                <div style={{ background: newTask.recurring ? "#f0fdf4" : "var(--c-bg)", border: `1px solid ${newTask.recurring ? "#44bbaa55" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 8, transition: "all 0.2s" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: newTask.recurring ? 12 : 0 }}>
-                    <div><div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>🔁 Recurring Task</div><div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>A new task is auto-generated when this one is checked off</div></div>
+                    <div><div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>🔁 Recurring Task</div><div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>A new task is auto-generated when this one is checked off</div></div>
                     <Toggle on={newTask.recurring} onChange={() => setNewTask(p => ({ ...p, recurring: !p.recurring }))} color="#44bbaa" />
                   </div>
                   {newTask.recurring && (
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 13, color: "#475569", whiteSpace: "nowrap" }}>Repeat every</span>
+                      <span style={{ fontSize: 13, color: "var(--c-text2)", whiteSpace: "nowrap" }}>Repeat every</span>
                       <input type="number" min={1} max={365} value={newTask.recurringDays} onChange={e => setNewTask(p => ({ ...p, recurringDays: Number(e.target.value) }))} style={{ width: 80 }} />
-                      <span style={{ fontSize: 13, color: "#475569" }}>days</span>
+                      <span style={{ fontSize: 13, color: "var(--c-text2)" }}>days</span>
                       <span style={{ fontSize: 12, color: "#94a3b8" }}>→ Next: {fmt(addDays(newTask.due, newTask.recurringDays))}</span>
                     </div>
                   )}
@@ -3374,13 +3400,13 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
                       <tr style={{ opacity: done ? 0.5 : 1 }}>
                         <td><div className={`checkbox ${done ? "done" : ""}`} onClick={() => onCompleteTask(t.id)}>{done && "✓"}</div></td>
                         <td>
-                          <div style={{ color: "#1e293b", fontWeight: 600, textDecoration: done ? "line-through" : "none" }}>
+                          <div style={{ color: "var(--c-text)", fontWeight: 600, textDecoration: done ? "line-through" : "none" }}>
                             {t.title}{t.recurring && <span className="rec-badge">🔁 {t.recurringDays}d</span>}{t.isChained && <span className="chain-badge">⛓ auto</span>}
                           </div>
                           {t.notes && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{t.notes}</div>}
                         </td>
-                        <td style={{ fontSize: 12, color: "#475569", maxWidth: 200 }}>{cs?.title?.slice(0, 40) || `#${t.caseId}`}<div style={{ fontSize: 10, color: "#94a3b8" }}>{cs?.caseNum}</div></td>
-                        <td><div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar userId={t.assigned} size={24} /><span style={{ fontSize: 12, color: "#475569" }}>{getUserById(t.assigned)?.name.split(" ")[0]}</span></div></td>
+                        <td style={{ fontSize: 12, color: "var(--c-text2)", maxWidth: 200 }}>{cs?.title?.slice(0, 40) || `#${t.caseId}`}<div style={{ fontSize: 10, color: "#94a3b8" }}>{cs?.caseNum}</div></td>
+                        <td><div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar userId={t.assigned} size={24} /><span style={{ fontSize: 12, color: "var(--c-text2)" }}>{getUserById(t.assigned)?.name.split(" ")[0]}</span></div></td>
                         <td style={{ color: urgencyColor(days), fontSize: 13, whiteSpace: "nowrap" }}>{fmt(t.due)}{days < 0 && !done && <div style={{ fontSize: 11, color: "#e05252" }}>{Math.abs(days)}d over</div>}</td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -3399,7 +3425,7 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr key={`${t.id}-edit`} style={{ background: "#f8fafc" }}>
+                        <tr key={`${t.id}-edit`} style={{ background: "var(--c-hover)" }}>
                           <td />
                           <td colSpan={7} style={{ paddingBottom: 12, paddingTop: 4 }}>
                             <div className="task-inline-edit">
@@ -3770,7 +3796,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser }) {
           <div className="card" style={{ marginBottom: 20, padding: 20 }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: "#0f172a", marginBottom: 4 }}>{def?.icon} {def?.title}</div>
+                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: "var(--c-text-h)", marginBottom: 4 }}>{def?.icon} {def?.title}</div>
                 <div style={{ fontSize: 12, color: "#64748b" }}>{def?.desc}</div>
               </div>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginLeft: "auto" }}>
@@ -3864,7 +3890,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser }) {
                           return (
                             <td key={ci} style={{ color: color || undefined }}>
                               {isStatus && cell && cell !== "—" ? <Badge label={cell} /> : (
-                                <span style={{ fontWeight: ci === 1 ? 600 : 400, color: color || (ci === 1 ? "#1e293b" : undefined), fontFamily: ci === 0 ? "monospace" : undefined, fontSize: ci === 0 ? 11 : undefined }}>{cell || "—"}</span>
+                                <span style={{ fontWeight: ci === 1 ? 600 : 400, color: color || (ci === 1 ? "var(--c-text)" : undefined), fontFamily: ci === 0 ? "monospace" : undefined, fontSize: ci === 0 ? 11 : undefined }}>{cell || "—"}</span>
                               )}
                             </td>
                           );
@@ -3877,7 +3903,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser }) {
             )}
 
             {/* Summary footer */}
-            <div style={{ padding: "12px 20px", borderTop: "1px solid #e2e8f0", display: "flex", gap: 20, flexWrap: "wrap" }}>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--c-border)", display: "flex", gap: 20, flexWrap: "wrap" }}>
               <div style={{ fontSize: 12, color: "#94a3b8" }}>
                 <strong style={{ color: "#2563eb" }}>{generated.count}</strong> total records
               </div>
@@ -4089,7 +4115,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
                 <tbody>
                   {rows.map((r, i) => (
                     <tr key={i}>
-                      <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "#475569" }}>{fmtDateTime(r.date)}</td>
+                      <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--c-text2)" }}>{fmtDateTime(r.date)}</td>
                       <td>
                         <span style={{
                           display: "inline-block",
@@ -4103,7 +4129,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
                         }}>{r.type}</span>
                       </td>
                       <td>
-                        <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 500 }}>{r.caseTitle}</div>
+                        <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 500 }}>{r.caseTitle}</div>
                         {r.fileNum && <div style={{ fontSize: 10, color: "#94a3b8", fontFamily: "monospace" }}>File # {r.fileNum}</div>}
                       </td>
                       <td style={{ fontSize: 12, color: "#334155", maxWidth: 380 }}>
@@ -4135,11 +4161,11 @@ const CONTACT_CAT_STYLE = {
   Attorney:      { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
   Court:         { bg: "#f3e8ff", color: "#9966cc", border: "#f3e8ff" },
   Expert:        { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
-  Miscellaneous: { bg: "#f8fafc", color: "#94a3b8", border: "#e2e8f0" },
+  Miscellaneous: { bg: "var(--c-hover)", color: "#94a3b8", border: "var(--c-border)" },
 };
 
 const CONTACT_NOTE_TYPES = [
-  { label: "General",    bg: "#e2e8f0", color: "#475569" },
+  { label: "General",    bg: "var(--c-border)", color: "var(--c-text2)" },
   { label: "Call Log",   bg: "#dcfce7", color: "#4CAE72" },
   { label: "Email Log",  bg: "#dbeafe", color: "#5599cc" },
   { label: "Meeting",    bg: "#fef9c3", color: "#2563eb" },
@@ -4254,7 +4280,7 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
               value={draft.name}
               onChange={e => set("name", e.target.value)}
               onBlur={handleBlur}
-              style={{ background: "transparent", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#1e293b", fontFamily: "inherit", width: "100%", padding: 0 }}
+              style={{ background: "transparent", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "var(--c-text)", fontFamily: "inherit", width: "100%", padding: 0 }}
             />
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
@@ -4267,7 +4293,7 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: "#e05252" }}>Delete this contact?</span>
                 <button onClick={() => onDelete(contact.id)} style={{ background: "#e05252", border: "none", color: "#fff", borderRadius: 4, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>Confirm</button>
-                <button onClick={() => setShowDelete(false)} style={{ background: "#e2e8f0", border: "1px solid #e2e8f0", color: "#475569", borderRadius: 4, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>Cancel</button>
+                <button onClick={() => setShowDelete(false)} style={{ background: "var(--c-border)", border: "1px solid var(--c-border)", color: "var(--c-text2)", borderRadius: 4, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>Cancel</button>
               </div>
             )}
             <button className="overlay-close" onClick={onClose}>✕</button>
@@ -4277,7 +4303,7 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
         <div className="case-overlay-body" style={{ padding: "20px 28px", overflowY: "auto" }}>
           {/* Contact Information */}
           <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid #e2e8f0" }}>Contact Information</div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid var(--c-border)" }}>Contact Information</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <div>
                 <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 4 }}>Phone</label>
@@ -4301,7 +4327,7 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
           {/* Associated Cases */}
           {(contact.category === "Client" || contact.category === "Attorney" || contact.category === "Court") && (
             <div style={{ marginBottom: 28 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid var(--c-border)" }}>
                 Associated Cases <span style={{ fontSize: 11, fontWeight: 400, color: "#64748b", textTransform: "none", letterSpacing: 0 }}>({assocCases.length})</span>
               </div>
               {assocCases.length === 0 ? (
@@ -4319,8 +4345,8 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
                     {assocCases.slice(0, 20).map(c => (
                       <tr key={c.id} style={{ borderTop: "1px solid #f1f5f9" }}>
                         <td style={{ padding: "7px 8px 7px 0", color: "#5599cc", fontFamily: "monospace", fontSize: 11 }}>{c.caseNum}</td>
-                        <td style={{ padding: "7px 8px 7px 0", color: "#1e293b" }}>{c.title}</td>
-                        <td style={{ padding: "7px 0", color: c.status === "Active" ? "#4CAE72" : "#475569", fontWeight: 600 }}>{c.status}</td>
+                        <td style={{ padding: "7px 8px 7px 0", color: "var(--c-text)" }}>{c.title}</td>
+                        <td style={{ padding: "7px 0", color: c.status === "Active" ? "#4CAE72" : "var(--c-text2)", fontWeight: 600 }}>{c.status}</td>
                       </tr>
                     ))}
                     {assocCases.length > 20 && <tr><td colSpan={3} style={{ padding: "6px 0", color: "#94a3b8", fontSize: 11 }}>+ {assocCases.length - 20} more cases</td></tr>}
@@ -4332,7 +4358,7 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
 
           {/* Notes */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid #e2e8f0" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid var(--c-border)" }}>
               Notes <span style={{ fontSize: 11, fontWeight: 400, color: "#64748b", textTransform: "none", letterSpacing: 0 }}>({(notes || []).length})</span>
             </div>
             <div style={{ marginBottom: 16 }}>
@@ -4370,7 +4396,7 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
                       <span>{note.createdAt ? new Date(note.createdAt).toLocaleString() : ""}</span>
                       <span style={{ marginLeft: "auto", cursor: "pointer", color: "#94a3b8", fontSize: 11 }} onClick={() => onDeleteNote(note.id, contact.id)}>Delete</span>
                     </div>
-                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{note.body}</div>
+                    <div style={{ fontSize: 13, color: "var(--c-text)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{note.body}</div>
                   </div>
                 );
               })
@@ -4426,9 +4452,9 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 700, maxWidth: "calc(100vw - 40px)", maxHeight: "90vh", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 10, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 16px", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>Merge {contacts.length} Contacts</span>
+      <div onClick={e => e.stopPropagation()} style={{ width: 700, maxWidth: "calc(100vw - 40px)", maxHeight: "90vh", background: "var(--c-card)", border: "1px solid var(--c-border3)", borderRadius: 10, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 16px", borderBottom: "1px solid var(--c-border)", flexShrink: 0 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--c-text)" }}>Merge {contacts.length} Contacts</span>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}>✕</button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: "20px 24px", flex: 1, overflowY: "auto" }}>
@@ -4443,9 +4469,9 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
                 const noteCount = (contactNotes[c.id] || []).length;
                 const isPrimary = primaryId === c.id;
                 return (
-                  <div key={c.id} onClick={() => handleSetPrimary(c.id)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "9px 14px", borderRadius: 5, background: isPrimary ? "#eff6ff" : "#ffffff", border: `1px solid ${isPrimary ? "#bfdbfe" : "#f0f4f8"}`, transition: "all 0.15s" }}>
+                  <div key={c.id} onClick={() => handleSetPrimary(c.id)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "9px 14px", borderRadius: 5, background: isPrimary ? "#eff6ff" : "var(--c-card)", border: `1px solid ${isPrimary ? "#bfdbfe" : "#f0f4f8"}`, transition: "all 0.15s" }}>
                     <input type="radio" name="merge-primary" checked={isPrimary} onChange={() => handleSetPrimary(c.id)} onClick={e => e.stopPropagation()} style={{ flexShrink: 0, cursor: "pointer", width: "auto", padding: 0, border: "none", background: "none" }} />
-                    <span style={{ color: isPrimary ? "#1e293b" : "#475569", fontWeight: isPrimary ? 600 : 400, flex: 1, fontSize: 14 }}>{c.name}</span>
+                    <span style={{ color: isPrimary ? "var(--c-text)" : "var(--c-text2)", fontWeight: isPrimary ? 600 : 400, flex: 1, fontSize: 14 }}>{c.name}</span>
                     <span style={{ padding: "1px 8px", borderRadius: 3, fontSize: 10, fontWeight: 700, background: catStyle.bg, color: catStyle.color, border: `1px solid ${catStyle.border}` }}>{c.category}</span>
                     {noteCount > 0 && <span style={{ fontSize: 11, color: "#64748b" }}>{noteCount} note{noteCount !== 1 ? "s" : ""}</span>}
                   </div>
@@ -4458,12 +4484,12 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Choose Field Values</div>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>Click a cell to choose that contact's value for each field.</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #e2e8f0", borderRadius: 5, overflow: "hidden", tableLayout: "fixed" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid var(--c-border)", borderRadius: 5, overflow: "hidden", tableLayout: "fixed" }}>
               <thead>
-                <tr style={{ background: "#ffffff", borderBottom: "2px solid #e2e8f0" }}>
+                <tr style={{ background: "var(--c-card)", borderBottom: "2px solid #e2e8f0" }}>
                   <th style={{ width: 90, padding: "9px 10px", textAlign: "left", fontWeight: 400 }}></th>
                   {contacts.map(c => (
-                    <th key={c.id} style={{ padding: "9px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: c.id === primaryId ? "#2563eb" : "#475569", borderLeft: "1px solid #e2e8f0", wordBreak: "break-word", letterSpacing: "normal", textTransform: "none" }}>
+                    <th key={c.id} style={{ padding: "9px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: c.id === primaryId ? "#2563eb" : "var(--c-text2)", borderLeft: "1px solid var(--c-border)", wordBreak: "break-word", letterSpacing: "normal", textTransform: "none" }}>
                       {c.name}{c.id === primaryId ? " ★" : ""}
                     </th>
                   ))}
@@ -4474,7 +4500,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
                   const allSame = contacts.every(c => (c[key] || "") === (contacts[0][key] || ""));
                   return (
                     <tr key={key} style={{ borderBottom: "1px solid #ffffff" }}>
-                      <td style={{ padding: "11px 10px", background: "#f8fafc", borderRight: "1px solid #e2e8f0", fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                      <td style={{ padding: "11px 10px", background: "var(--c-hover)", borderRight: "1px solid var(--c-border)", fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                         {fLabel}
                       </td>
                       {allSame ? (
@@ -4505,9 +4531,9 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
                                 style={{ marginTop: 2, flexShrink: 0, cursor: "pointer", width: "auto", padding: 0, border: "none", background: "none" }}
                               />
                               {val ? (
-                                <span style={{ color: isChosen ? "#1e293b" : "#475569", fontSize: 13, wordBreak: "break-word", lineHeight: 1.5, fontWeight: 400, letterSpacing: "normal", textTransform: "none" }}>{val}</span>
+                                <span style={{ color: isChosen ? "var(--c-text)" : "var(--c-text2)", fontSize: 13, wordBreak: "break-word", lineHeight: 1.5, fontWeight: 400, letterSpacing: "normal", textTransform: "none" }}>{val}</span>
                               ) : (
-                                <span style={{ color: "#e2e8f0", fontSize: 12, fontStyle: "italic", fontWeight: 400, letterSpacing: "normal", textTransform: "none" }}>empty</span>
+                                <span style={{ color: "var(--c-border)", fontSize: 12, fontStyle: "italic", fontWeight: 400, letterSpacing: "normal", textTransform: "none" }}>empty</span>
                               )}
                             </div>
                           </td>
@@ -4533,12 +4559,12 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
           </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 24px 20px", borderTop: "1px solid #e2e8f0", flexShrink: 0 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 24px 20px", borderTop: "1px solid var(--c-border)", flexShrink: 0 }}>
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button
             onClick={handleMerge}
             disabled={merging}
-            style={{ background: "#2563eb", color: "#ffffff", border: "none", borderRadius: 4, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}
+            style={{ background: "#2563eb", color: "var(--c-card)", border: "none", borderRadius: 4, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}
           >
             {merging ? "Merging…" : `Merge ${contacts.length} Contacts`}
           </button>
@@ -4709,7 +4735,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
           {isAppAdmin(currentUser) && !isDeleted && (
             <button
               onClick={toggleMergeMode}
-              style={{ background: mergeMode ? "#2563eb" : "#e2e8f0", color: mergeMode ? "#ffffff" : "#475569", border: `1px solid ${mergeMode ? "#2563eb" : "#e2e8f0"}`, borderRadius: 4, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+              style={{ background: mergeMode ? "#2563eb" : "var(--c-border)", color: mergeMode ? "var(--c-card)" : "var(--c-text2)", border: `1px solid ${mergeMode ? "#2563eb" : "var(--c-border)"}`, borderRadius: 4, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
             >
               {mergeMode ? "Cancel Merge" : "Merge Contacts"}
             </button>
@@ -4720,7 +4746,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
 
       <div className="content" style={{ paddingTop: 0 }}>
         {/* Category tabs */}
-        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e2e8f0", marginBottom: 20, overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--c-border)", marginBottom: 20, overflowX: "auto" }}>
           {tabs.map(t => (
             <div
               key={t.id}
@@ -4741,7 +4767,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
         {isDeleted && (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>
+              <tr style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--c-border)" }}>
                 <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Category</th>
                 <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Name</th>
                 <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Deleted</th>
@@ -4762,9 +4788,9 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                     <td style={{ padding: "10px 12px 10px 0" }}>
                       <span style={{ padding: "2px 8px", borderRadius: 3, fontSize: 10, fontWeight: 700, background: catStyle.bg, color: catStyle.color }}>{c.category}</span>
                     </td>
-                    <td style={{ padding: "10px 12px 10px 0", color: "#1e293b" }}>{c.name}</td>
+                    <td style={{ padding: "10px 12px 10px 0", color: "var(--c-text)" }}>{c.name}</td>
                     <td style={{ padding: "10px 12px 10px 0", color: "#94a3b8" }}>{c.deletedAt ? new Date(c.deletedAt).toLocaleDateString() : ""}</td>
-                    <td style={{ padding: "10px 12px 10px 0", color: days <= 7 ? "#e05252" : "#475569", fontWeight: days <= 7 ? 700 : 400 }}>{days} days</td>
+                    <td style={{ padding: "10px 12px 10px 0", color: days <= 7 ? "#e05252" : "var(--c-text2)", fontWeight: days <= 7 ? 700 : 400 }}>{days} days</td>
                     <td style={{ padding: "10px 0", textAlign: "right" }}>
                       <button onClick={() => handleRestoreContact(c.id)} style={{ background: "#dcfce7", border: "1px solid #bbf7d0", color: "#4CAE72", borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>Restore</button>
                     </td>
@@ -4791,7 +4817,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                       }
                       setShowMergeModal(true);
                     }}
-                    style={{ background: "#2563eb", color: "#ffffff", border: "none", borderRadius: 4, padding: "6px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                    style={{ background: "#2563eb", color: "var(--c-card)", border: "none", borderRadius: 4, padding: "6px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
                   >
                     Merge Selected ({mergeSelected.size})
                   </button>
@@ -4802,12 +4828,12 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {mergeMode && <th style={{ width: 32, padding: "6px 8px 6px 0", position: "sticky", top: mergeMode ? 44 : 0, background: "#f1f5f9", zIndex: 11, borderBottom: "1px solid #e2e8f0" }}></th>}
-                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "#f1f5f9", zIndex: 11, borderBottom: "1px solid #e2e8f0" }}>Category</th>
-                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "#f1f5f9", zIndex: 11, borderBottom: "1px solid #e2e8f0" }}>Name</th>
-                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "#f1f5f9", zIndex: 11, borderBottom: "1px solid #e2e8f0" }}>Phone</th>
-                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "#f1f5f9", zIndex: 11, borderBottom: "1px solid #e2e8f0" }}>Email</th>
-                  <th style={{ textAlign: "left", padding: "6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "#f1f5f9", zIndex: 11, borderBottom: "1px solid #e2e8f0" }}>Cases</th>
+                  {mergeMode && <th style={{ width: 32, padding: "6px 8px 6px 0", position: "sticky", top: mergeMode ? 44 : 0, background: "var(--c-bg)", zIndex: 11, borderBottom: "1px solid var(--c-border)" }}></th>}
+                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "var(--c-bg)", zIndex: 11, borderBottom: "1px solid var(--c-border)" }}>Category</th>
+                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "var(--c-bg)", zIndex: 11, borderBottom: "1px solid var(--c-border)" }}>Name</th>
+                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "var(--c-bg)", zIndex: 11, borderBottom: "1px solid var(--c-border)" }}>Phone</th>
+                  <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "var(--c-bg)", zIndex: 11, borderBottom: "1px solid var(--c-border)" }}>Email</th>
+                  <th style={{ textAlign: "left", padding: "6px 0", fontWeight: 600, position: "sticky", top: mergeMode ? 44 : 0, background: "var(--c-bg)", zIndex: 11, borderBottom: "1px solid var(--c-border)" }}>Cases</th>
                 </tr>
               </thead>
               <tbody>
@@ -4829,7 +4855,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                       key={c.id}
                       onClick={() => mergeMode ? toggleMergeSelect(c.id) : handleSelectContact(c)}
                       style={{ borderBottom: "1px solid #ffffff", cursor: "pointer", transition: "background 0.1s", background: isChecked ? "#eff6ff" : "" }}
-                      onMouseEnter={e => { if (!isChecked) e.currentTarget.style.background = "#ffffff"; }}
+                      onMouseEnter={e => { if (!isChecked) e.currentTarget.style.background = "var(--c-card)"; }}
                       onMouseLeave={e => { if (!isChecked) e.currentTarget.style.background = ""; }}
                     >
                       {mergeMode && (
@@ -4842,10 +4868,10 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                           {c.category}
                         </span>
                       </td>
-                      <td style={{ padding: "10px 12px 10px 0", color: "#1e293b", fontWeight: 500 }}>{c.name}</td>
-                      <td style={{ padding: "10px 12px 10px 0", color: "#475569", fontFamily: "monospace", fontSize: 12 }}>{c.phone || <span style={{ color: "#e2e8f0" }}>—</span>}</td>
-                      <td style={{ padding: "10px 12px 10px 0", color: "#5599cc", fontSize: 12 }}>{c.email || <span style={{ color: "#e2e8f0" }}>—</span>}</td>
-                      <td style={{ padding: "10px 0", color: caseCount > 0 ? "#2563eb" : "#e2e8f0", fontWeight: caseCount > 0 ? 600 : 400 }}>
+                      <td style={{ padding: "10px 12px 10px 0", color: "var(--c-text)", fontWeight: 500 }}>{c.name}</td>
+                      <td style={{ padding: "10px 12px 10px 0", color: "var(--c-text2)", fontFamily: "monospace", fontSize: 12 }}>{c.phone || <span style={{ color: "var(--c-border)" }}>—</span>}</td>
+                      <td style={{ padding: "10px 12px 10px 0", color: "#5599cc", fontSize: 12 }}>{c.email || <span style={{ color: "var(--c-border)" }}>—</span>}</td>
+                      <td style={{ padding: "10px 0", color: caseCount > 0 ? "#2563eb" : "var(--c-border)", fontWeight: caseCount > 0 ? 600 : 400 }}>
                         {caseCount > 0 ? caseCount : "—"}
                       </td>
                     </tr>
@@ -5125,13 +5151,13 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                       <>
                         <span style={{ fontSize: 11, color: "#e05252" }}>Remove?</span>
                         <button onClick={() => handleDeleteStaff(u.id)} style={{ padding: "2px 8px", background: "#e05252", color: "#fff", border: "none", borderRadius: 3, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Yes</button>
-                        <button onClick={() => setConfirmDeleteId(null)} style={{ padding: "2px 8px", background: "transparent", color: "#64748b", border: "1px solid #e2e8f0", borderRadius: 3, fontSize: 11, cursor: "pointer" }}>No</button>
+                        <button onClick={() => setConfirmDeleteId(null)} style={{ padding: "2px 8px", background: "transparent", color: "#64748b", border: "1px solid var(--c-border)", borderRadius: 3, fontSize: 11, cursor: "pointer" }}>No</button>
                       </>
                     ) : (
                       <>
                         <button onClick={() => setEditingUser(u)} title="Edit contact info" style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "2px 4px" }}>✎</button>
                         {canAdmin && (
-                          <button onClick={() => setConfirmDeleteId(u.id)} title="Remove staff member" style={{ background: "transparent", border: "none", color: "#e2e8f0", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "2px 4px" }}>✕</button>
+                          <button onClick={() => setConfirmDeleteId(u.id)} title="Remove staff member" style={{ background: "transparent", border: "none", color: "var(--c-border)", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "2px 4px" }}>✕</button>
                         )}
                       </>
                     )}
@@ -5140,7 +5166,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                   <div style={{ width: 48, height: 48, borderRadius: "50%", background: u.avatar, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{u.initials}</div>
                   <div>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: "#0f172a", fontWeight: 600 }}>{u.name}</div>
+                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: "var(--c-text-h)", fontWeight: 600 }}>{u.name}</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
                       {(u.roles && u.roles.length ? u.roles : [u.role]).map(r => <Badge key={r} label={r} />)}
                     </div>
@@ -5156,9 +5182,9 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                   <div key={k} className="info-row"><span className="info-key">{k}</span><span className="info-val" style={{ fontSize: 12 }}>{v}</span></div>
                 ))}
                 {canAdmin && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
                     <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                      Roles <span style={{ fontWeight: 400, color: "#e2e8f0" }}>— click to toggle</span>
+                      Roles <span style={{ fontWeight: 400, color: "var(--c-border)" }}>— click to toggle</span>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {STAFF_ROLES.map(r => {
@@ -5167,16 +5193,16 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                           <button
                             key={r}
                             onClick={() => handleToggleRole(u.id, r, u.roles && u.roles.length ? u.roles : [u.role])}
-                            style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#2563eb22" : "#e2e8f0"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#2563eb" : "#e2e8f0", transition: "all 0.15s" }}
+                            style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#2563eb22" : "var(--c-border)"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#2563eb" : "var(--c-border)", transition: "all 0.15s" }}
                           >{r}</button>
                         );
                       })}
                     </div>
                   </div>
                 )}
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
                   <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                    Offices {canAdmin && <span style={{ fontWeight: 400, color: "#e2e8f0" }}>— click to toggle</span>}
+                    Offices {canAdmin && <span style={{ fontWeight: 400, color: "var(--c-border)" }}>— click to toggle</span>}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {OFFICES.map(o => {
@@ -5185,13 +5211,13 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                         <button
                           key={o}
                           onClick={() => handleToggleOffice(u.id, o)}
-                          style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#2563eb22" : "#e2e8f0"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#2563eb" : "#e2e8f0", transition: "all 0.15s" }}
+                          style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#2563eb22" : "var(--c-border)"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#2563eb" : "var(--c-border)", transition: "all 0.15s" }}
                         >{o}</button>
                       ) : on ? (
                         <span key={o} style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, background: "#fef3c7", color: "#2563eb", border: "1px solid #2563eb22" }}>{o}</span>
                       ) : null;
                     })}
-                    {!canAdmin && offices.length === 0 && <span style={{ fontSize: 12, color: "#e2e8f0", fontStyle: "italic" }}>None assigned</span>}
+                    {!canAdmin && offices.length === 0 && <span style={{ fontSize: 12, color: "var(--c-border)", fontStyle: "italic" }}>None assigned</span>}
                   </div>
                 </div>
               </div>
