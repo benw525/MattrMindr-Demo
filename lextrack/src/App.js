@@ -711,7 +711,7 @@ export default function App() {
         </div>
       </aside>
       <div className="main">
-        {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { setSelectedCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
+        {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { setSelectedCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} userOffices={userOffices} />}
         {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={setSelectedCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} userOffices={userOffices} />}
         {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} />}
         {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
@@ -782,11 +782,24 @@ function Toggle({ on, onChange, color = "#c9a84c" }) {
 }
 
 // ─── New Case/Matter Modal ────────────────────────────────────────────────────
-function NewCaseModal({ onSave, onClose }) {
-  const [form, setForm] = useState({ caseNum: "", title: "", client: "", insured: "", plaintiff: "", claimNum: "", fileNum: "", claimSpec: "", stage: "Pleadings", leadAttorney: 0, secondAttorney: 0, answerFiled: "", dol: "", mediator: "", notes: "" });
+function NewCaseModal({ onSave, onClose, userOffices }) {
+  const [form, setForm] = useState({ caseNum: "", title: "", client: "", insured: "", plaintiff: "", claimNum: "", fileNum: "", claimSpec: "", stage: "Pleadings", leadAttorney: 0, secondAttorney: 0, paralegal: 0, paralegal2: 0, legalAssistant: 0, offices: [], answerFiled: "", dol: "", mediator: "", notes: "" });
   const [autoTasks, setAutoTasks] = useState(true);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const isMatter = !form.caseNum.trim();
+
+  const filteredUsers = useMemo(() => {
+    if (!form.offices.length) return USERS;
+    return USERS.filter(u => {
+      const uOff = (userOffices || {})[u.id] || [];
+      return uOff.length === 0 || uOff.some(o => form.offices.includes(o));
+    });
+  }, [form.offices, userOffices]);
+
+  const toggleOffice = (o) => {
+    const curr = form.offices;
+    set("offices", curr.includes(o) ? curr.filter(x => x !== o) : [...curr, o]);
+  };
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -795,9 +808,30 @@ function NewCaseModal({ onSave, onClose }) {
         <div className="modal-sub">
           {isMatter ? "No case number entered — this will be tracked as a Matter (unfiled)." : "Case number entered — this will be tracked as a filed Case."}
         </div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
           <Badge label={isMatter ? "Matter" : "Case"} />
           <Badge label="Active" />
+        </div>
+
+        {/* Office assignment */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 11, color: "#445566", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Office(s)</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {OFFICES.map(o => {
+              const checked = form.offices.includes(o);
+              return (
+                <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#c9a84c" : "#556677", userSelect: "none" }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleOffice(o)} />
+                  {o}
+                </label>
+              );
+            })}
+          </div>
+          {form.offices.length > 0 && filteredUsers.length < USERS.length && (
+            <div style={{ fontSize: 11, color: "#c9a84c", marginTop: 6, fontStyle: "italic" }}>
+              Team dropdowns showing {filteredUsers.length} staff in selected office(s)
+            </div>
+          )}
         </div>
 
         <div className="form-row">
@@ -821,15 +855,38 @@ function NewCaseModal({ onSave, onClose }) {
           <div className="form-group"><label>Lead Attorney</label>
             <select value={form.leadAttorney} onChange={e => set("leadAttorney", Number(e.target.value))}>
               <option value={0}>— Select —</option>
-              {USERS.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+              {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
             </select>
           </div>
           <div className="form-group"><label>2nd Attorney</label>
             <select value={form.secondAttorney} onChange={e => set("secondAttorney", Number(e.target.value))}>
               <option value={0}>— None —</option>
-              {USERS.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group"><label>Paralegal</label>
+            <select value={form.paralegal} onChange={e => set("paralegal", Number(e.target.value))}>
+              <option value={0}>— None —</option>
+              {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+          <div className="form-group"><label>Paralegal 2</label>
+            <select value={form.paralegal2} onChange={e => set("paralegal2", Number(e.target.value))}>
+              <option value={0}>— None —</option>
+              {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group"><label>Legal Assistant</label>
+            <select value={form.legalAssistant} onChange={e => set("legalAssistant", Number(e.target.value))}>
+              <option value={0}>— None —</option>
+              {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+          <div className="form-group" />
         </div>
 
         <div style={{ background: autoTasks ? "#0f1e2e" : "#0d1117", border: `1px solid ${autoTasks ? "#c9a84c55" : "#2a3650"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
@@ -885,7 +942,7 @@ function EscalateBox({ on, onChange, basePriority }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAddRecord, onCompleteTask, onUpdateTask }) {
+function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAddRecord, onCompleteTask, onUpdateTask, userOffices }) {
   const [showModal, setShowModal] = useState(false);
   const [expandedTask, setExpandedTask] = useState(null);
   const activeCases = allCases.filter(c => c.status === "Active");
@@ -895,7 +952,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
 
   return (
     <>
-      {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} />}
+      {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} userOffices={userOffices} />}
       <div className="topbar">
         <div>
           <div className="topbar-title">Good morning, {currentUser.name.split(" ")[0]}</div>
@@ -1116,7 +1173,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
 
   return (
     <>
-      {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} />}
+      {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} userOffices={userOffices} />}
       {showPrint && selectedCase && (
         <CasePrintView c={selectedCase} notes={notes} tasks={caseTasks} deadlines={caseDeadlines} links={caseLinks[selectedCase.id] || []} onClose={() => setShowPrint(false)} />
       )}
