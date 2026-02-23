@@ -1195,7 +1195,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
         if (!hasRole(u, "Attorney") && !hasRole(u, "Associate") && !hasRole(u, "Shareholder")) return false;
         if (officeFilter === "All") return true;
         const uOff = userOffices[u.id] || [];
-        return uOff.length === 0 || uOff.includes(officeFilter);
+        return uOff.includes(officeFilter);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [officeFilter, userOffices]);
