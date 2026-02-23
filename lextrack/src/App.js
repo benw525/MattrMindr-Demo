@@ -47,7 +47,7 @@ const daysUntil = (dateStr) => {
 };
 
 const urgencyColor = (days) => {
-  if (days === null) return "#8899aa";
+  if (days === null) return "#94a3b8";
   if (days < 0) return "#e05252";
   if (days <= 7) return "#e07a30";
   if (days <= 21) return "#2563eb";
@@ -184,25 +184,25 @@ const statusBadgeStyle = (status) => {
     Case: { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
     Matter: { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
     Active: { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
-    Closed: { bg: "#1a1a2a", color: "#475569", border: "#2a2a4a" },
+    Closed: { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0" },
     Urgent: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
     Overdue: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
     "Trial Set": { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
-    "Post-Answer": { bg: "#1a2a1a", color: "#66aa66", border: "#bbf7d0" },
+    "Post-Answer": { bg: "#dcfce7", color: "#66aa66", border: "#bbf7d0" },
     "Written Discovery": { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
     Depositions: { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
-    "Expert Discovery": { bg: "#2a1a2a", color: "#cc66aa", border: "#4a1a4a" },
-    Pleadings: { bg: "#1a1a2a", color: "#475569", border: "#2a2a4a" },
+    "Expert Discovery": { bg: "#fdf4ff", color: "#cc66aa", border: "#e9d5ff" },
+    Pleadings: { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0" },
     Mediation: { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
     "In Progress": { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
-    "Not Started": { bg: "#ffffff", color: "#8899bb", border: "#2a2d45" },
+    "Not Started": { bg: "#ffffff", color: "#94a3b8", border: "#e2e8f0" },
     Completed: { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
     Waiting: { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
     High: { bg: "#fef3c7", color: "#e07a30", border: "#fde68a" },
     Medium: { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
     Low: { bg: "#dbeafe", color: "#5599cc", border: "#dbeafe" },
   };
-  return map[status] || { bg: "#ffffff", color: "#8899bb", border: "#2a2d45" };
+  return map[status] || { bg: "#ffffff", color: "#94a3b8", border: "#e2e8f0" };
 };
 
 const Badge = ({ label }) => {
@@ -388,7 +388,7 @@ label { font-size: 12px; color: #64748b; display: block; margin-bottom: 4px; tex
 .print-doc th { text-align: left; padding: 6px 10px; background: #f5f5f5; border-bottom: 1px solid #ccc; font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
 .print-doc td { padding: 6px 10px; border-bottom: 1px solid #eee; color: #222; }
 .print-doc .footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10px; color: #999; display: flex; justify-content: space-between; }
-.case-overlay { position: fixed; top: 0; left: 220px; right: 0; bottom: 0; background: #0a0e18; z-index: 600; display: flex; flex-direction: column; overflow: hidden; }
+.case-overlay { position: fixed; top: 0; left: 220px; right: 0; bottom: 0; background: #ffffff; z-index: 600; display: flex; flex-direction: column; overflow: hidden; }
 .case-overlay-header { flex-shrink: 0; background: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 18px 32px; display: flex; align-items: flex-start; justify-content: space-between; z-index: 10; gap: 16px; }
 .case-overlay-tabs { flex-shrink: 0; display: flex; gap: 0; border-bottom: 1px solid #e2e8f0; padding: 0 32px; background: #ffffff; }
 .case-overlay-tab { padding: 12px 20px; font-size: 13px; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; font-weight: 500; }
@@ -907,7 +907,7 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
           <div className="form-group" />
         </div>
 
-        <div style={{ background: autoTasks ? "#0f1e2e" : "#f1f5f9", border: `1px solid ${autoTasks ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
+        <div style={{ background: autoTasks ? "#eff6ff" : "#f1f5f9", border: `1px solid ${autoTasks ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>✅ Auto-generate opening tasks</div>
@@ -931,7 +931,7 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
 // ─── Auto-escalate preview box ────────────────────────────────────────────────
 function EscalateBox({ on, onChange, basePriority }) {
   return (
-    <div style={{ background: on ? "#0f1e2e" : "#f1f5f9", border: `1px solid ${on ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", transition: "all 0.2s" }}>
+    <div style={{ background: on ? "#eff6ff" : "#f1f5f9", border: `1px solid ${on ? "#2563eb22" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", transition: "all 0.2s" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: on ? 10 : 0 }}>
         <div><div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>🔺 Auto-Escalate Priority</div><div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Priority rises automatically as the due date approaches</div></div>
         <Toggle on={on} onChange={onChange} />
@@ -1876,7 +1876,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                       <span style={{
                         fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
-                        background: "#111a2c", border: `1px solid ${actionColor(entry.action)}44`,
+                        background: "#f8fafc", border: `1px solid ${actionColor(entry.action)}44`,
                         color: actionColor(entry.action),
                       }}>{entry.action}</span>
                       <span style={{ fontSize: 12, color: "#1e293b", fontWeight: 500 }}>{entry.userName}</span>
@@ -1952,7 +1952,7 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
       </div>
 
       {showForm && (
-        <div style={{ background: "#0d1520", border: "1px solid #e2e8f0", borderRadius: 7, padding: "14px 16px", marginBottom: 14 }}>
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 7, padding: "14px 16px", marginBottom: 14 }}>
           <div style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4 }}>File Path *</label>
             <input
@@ -1999,7 +1999,7 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
         <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 6, overflow: "hidden" }}>
           {links.map((link, i) => (
             <div key={link.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: i < links.length - 1 ? "1px solid #f0f4f8" : "none", transition: "background 0.12s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#111a2c"}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
               <div style={{ fontSize: 18, flexShrink: 0, width: 26, textAlign: "center" }}>{linkIcon(link.path)}</div>
@@ -2015,7 +2015,7 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ fontSize: 10, color: "#94a3b8", background: "#e2e8f0", border: "1px solid #cbd5e1", borderRadius: 3, padding: "1px 5px" }}>{link.category}</span>
-                  <span style={{ fontSize: 10, color: "#334455", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }} title={link.path}>{link.path}</span>
+                  <span style={{ fontSize: 10, color: "#475569", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }} title={link.path}>{link.path}</span>
                 </div>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Added by {link.addedBy} · {new Date(link.addedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
               </div>
@@ -2038,14 +2038,14 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
 const NOTE_TYPES = [
   { label: "General",          color: "#475569", bg: "#ffffff" },
   { label: "Attorney Note",    color: "#2563eb", bg: "#fef3c7" },
-  { label: "Client Contact",   color: "#5599cc", bg: "#102030" },
-  { label: "Claim Specialist", color: "#44bbaa", bg: "#102020" },
-  { label: "Mediation",        color: "#a066cc", bg: "#201030" },
-  { label: "Court / Hearing",  color: "#e07a30", bg: "#2a1800" },
-  { label: "Investigation",    color: "#4CAE72", bg: "#0f2a18" },
-  { label: "Medical",          color: "#e05252", bg: "#2a0f0f" },
-  { label: "Settlement",       color: "#1d4ed8", bg: "#241e08" },
-  { label: "Internal",         color: "#64748b", bg: "#111820" },
+  { label: "Client Contact",   color: "#5599cc", bg: "#dbeafe" },
+  { label: "Claim Specialist", color: "#44bbaa", bg: "#ccfbf1" },
+  { label: "Mediation",        color: "#a066cc", bg: "#fdf4ff" },
+  { label: "Court / Hearing",  color: "#e07a30", bg: "#fff7ed" },
+  { label: "Investigation",    color: "#4CAE72", bg: "#dcfce7" },
+  { label: "Medical",          color: "#e05252", bg: "#fef2f2" },
+  { label: "Settlement",       color: "#1d4ed8", bg: "#fefce8" },
+  { label: "Internal",         color: "#64748b", bg: "#f1f5f9" },
 ];
 
 const noteTypeStyle = (label) => NOTE_TYPES.find(t => t.label === label) || NOTE_TYPES[0];
@@ -2164,7 +2164,7 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote }) {
                       <span>👤 {note.authorName} ({note.authorRole})</span>
                       <span>🕐 {dateStr} at {timeStr}</span>
                     </div>
-                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "#060a10", padding: "10px 12px", borderRadius: 5, border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "#f8fafc", padding: "10px 12px", borderRadius: 5, border: "1px solid #e2e8f0" }}>
                       {note.body}
                     </div>
                     <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
@@ -2504,7 +2504,7 @@ function CalendarGrid({ deadlines, allCases, externalEvents }) {
             const borderR = (i + 1) % 7 !== 0 ? "1px solid #f0f4f8" : "none";
             return (
               <div key={dateStr} onClick={() => setSelected(isSelected ? null : dateStr)}
-                style={{ minHeight: 80, borderRight: borderR, borderBottom: "1px solid #f0f4f8", padding: "6px 7px", cursor: events.length ? "pointer" : "default", background: isSelected ? "#eff6ff" : isToday ? "#121c2c" : "transparent", transition: "background 0.1s", position: "relative" }}>
+                style={{ minHeight: 80, borderRight: borderR, borderBottom: "1px solid #f0f4f8", padding: "6px 7px", cursor: events.length ? "pointer" : "default", background: isSelected ? "#eff6ff" : isToday ? "#dbeafe" : "transparent", transition: "background 0.1s", position: "relative" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? "#2563eb" : "#64748b", width: 22, height: 22, borderRadius: "50%", background: isToday ? "#2563eb12" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{dayNum}</span>
                 </div>
@@ -2629,7 +2629,7 @@ function ICalManager({ externalEvents, setExternalEvents }) {
           </div>
 
           {error && (
-            <div style={{ background: "#2a1010", border: "1px solid #5a2020", borderRadius: 6, padding: "10px 14px", marginTop: 12, fontSize: 12, color: "#cc8888", lineHeight: 1.5 }}>
+            <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 6, padding: "10px 14px", marginTop: 12, fontSize: 12, color: "#cc8888", lineHeight: 1.5 }}>
               ⚠ {error}
             </div>
           )}
@@ -2645,7 +2645,7 @@ function ICalManager({ externalEvents, setExternalEvents }) {
                   {feed.status === "pending" && <span style={{ fontSize: 10, color: "#64748b" }}>Importing…</span>}
                 </div>
                 <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{feed.url}</div>
-                {feed.lastSync && <div style={{ fontSize: 10, color: "#2a4a3a", marginTop: 2 }}>Last synced: {feed.lastSync}</div>}
+                {feed.lastSync && <div style={{ fontSize: 10, color: "#059669", marginTop: 2 }}>Last synced: {feed.lastSync}</div>}
                 {feed.status === "error" && feed.error && <div style={{ fontSize: 11, color: "#994444", marginTop: 3 }}>{feed.error}</div>}
               </div>
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -2948,7 +2948,7 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
 
               {/* Recurring toggle */}
               <div className="form-group">
-                <div style={{ background: newTask.recurring ? "#0f201e" : "#f1f5f9", border: `1px solid ${newTask.recurring ? "#44bbaa55" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 8, transition: "all 0.2s" }}>
+                <div style={{ background: newTask.recurring ? "#f0fdf4" : "#f1f5f9", border: `1px solid ${newTask.recurring ? "#44bbaa55" : "#cbd5e1"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 8, transition: "all 0.2s" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: newTask.recurring ? 12 : 0 }}>
                     <div><div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600 }}>🔁 Recurring Task</div><div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>A new task is auto-generated when this one is checked off</div></div>
                     <Toggle on={newTask.recurring} onChange={() => setNewTask(p => ({ ...p, recurring: !p.recurring }))} color="#44bbaa" />
@@ -3031,7 +3031,7 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr key={`${t.id}-edit`} style={{ background: "#0d1520" }}>
+                        <tr key={`${t.id}-edit`} style={{ background: "#f8fafc" }}>
                           <td />
                           <td colSpan={7} style={{ paddingBottom: 12, paddingTop: 4 }}>
                             <div className="task-inline-edit">
@@ -3743,7 +3743,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
                       </td>
                       <td>
                         {r.category && (
-                          <span style={{ fontSize: 11, color: "#2563eb", background: "#2a1800", border: "1px solid #4a3000", padding: "2px 7px", borderRadius: 4 }}>
+                          <span style={{ fontSize: 11, color: "#2563eb", background: "#fff7ed", border: "1px solid #fed7aa", padding: "2px 7px", borderRadius: 4 }}>
                             {r.category}
                           </span>
                         )}
@@ -3763,11 +3763,11 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
 const CONTACT_CATEGORIES = ["Client", "Attorney", "Court", "Expert", "Miscellaneous"];
 
 const CONTACT_CAT_STYLE = {
-  Client:        { bg: "#dbeafe", color: "#5599cc", border: "#2a4a6a" },
+  Client:        { bg: "#dbeafe", color: "#5599cc", border: "#bfdbfe" },
   Attorney:      { bg: "#fef9c3", color: "#2563eb", border: "#fef9c3" },
   Court:         { bg: "#f3e8ff", color: "#9966cc", border: "#f3e8ff" },
   Expert:        { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
-  Miscellaneous: { bg: "#2a2a2a", color: "#8899aa", border: "#3a3a3a" },
+  Miscellaneous: { bg: "#f8fafc", color: "#94a3b8", border: "#e2e8f0" },
 };
 
 const CONTACT_NOTE_TYPES = [
@@ -4075,7 +4075,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
                 const noteCount = (contactNotes[c.id] || []).length;
                 const isPrimary = primaryId === c.id;
                 return (
-                  <div key={c.id} onClick={() => handleSetPrimary(c.id)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "9px 14px", borderRadius: 5, background: isPrimary ? "#111e2e" : "#ffffff", border: `1px solid ${isPrimary ? "#2a5a8a" : "#f0f4f8"}`, transition: "all 0.15s" }}>
+                  <div key={c.id} onClick={() => handleSetPrimary(c.id)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "9px 14px", borderRadius: 5, background: isPrimary ? "#eff6ff" : "#ffffff", border: `1px solid ${isPrimary ? "#bfdbfe" : "#f0f4f8"}`, transition: "all 0.15s" }}>
                     <input type="radio" name="merge-primary" checked={isPrimary} onChange={() => handleSetPrimary(c.id)} onClick={e => e.stopPropagation()} style={{ flexShrink: 0, cursor: "pointer", width: "auto", padding: 0, border: "none", background: "none" }} />
                     <span style={{ color: isPrimary ? "#1e293b" : "#475569", fontWeight: isPrimary ? 600 : 400, flex: 1, fontSize: 14 }}>{c.name}</span>
                     <span style={{ padding: "1px 8px", borderRadius: 3, fontSize: 10, fontWeight: 700, background: catStyle.bg, color: catStyle.color, border: `1px solid ${catStyle.border}` }}>{c.category}</span>
@@ -4106,15 +4106,15 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
                   const allSame = contacts.every(c => (c[key] || "") === (contacts[0][key] || ""));
                   return (
                     <tr key={key} style={{ borderBottom: "1px solid #ffffff" }}>
-                      <td style={{ padding: "11px 10px", background: "#090d18", borderRight: "1px solid #e2e8f0", fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                      <td style={{ padding: "11px 10px", background: "#f8fafc", borderRight: "1px solid #e2e8f0", fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                         {fLabel}
                       </td>
                       {allSame ? (
                         <td colSpan={contacts.length} style={{ padding: "11px 14px", verticalAlign: "middle" }}>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 4, background: "#0e1c10", border: "1px solid #bbf7d0", color: "#4CAE72", fontSize: 13 }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 4, background: "#dcfce7", border: "1px solid #bbf7d0", color: "#4CAE72", fontSize: 13 }}>
                             <span>✓</span>
                             <span style={{ fontWeight: 400, letterSpacing: "normal", textTransform: "none" }}>
-                              {contacts[0][key] || <em style={{ color: "#3a5a3a", fontStyle: "italic" }}>empty on all</em>}
+                              {contacts[0][key] || <em style={{ color: "#94a3b8", fontStyle: "italic" }}>empty on all</em>}
                             </span>
                           </div>
                         </td>
@@ -4125,7 +4125,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
                           <td
                             key={c.id}
                             onClick={() => setChoices(p => ({ ...p, [key]: c.id }))}
-                            style={{ padding: "11px 14px", borderLeft: "1px solid #f1f5f9", cursor: "pointer", background: isChosen ? "#0e1e32" : "transparent", verticalAlign: "middle", transition: "background 0.1s" }}
+                            style={{ padding: "11px 14px", borderLeft: "1px solid #f1f5f9", cursor: "pointer", background: isChosen ? "#eff6ff" : "transparent", verticalAlign: "middle", transition: "background 0.1s" }}
                           >
                             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                               <input
@@ -4154,13 +4154,13 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
 
           {/* Notes notice */}
           {totalNotes > 0 && (
-            <div style={{ background: "#111e14", border: "1px solid #bbf7d0", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#4CAE72" }}>
+            <div style={{ background: "#dcfce7", border: "1px solid #bbf7d0", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#4CAE72" }}>
               {totalNotes} note{totalNotes !== 1 ? "s" : ""} across all selected contacts will be automatically combined onto the surviving record.
             </div>
           )}
 
           {/* Warning */}
-          <div style={{ background: "#1c1010", border: "1px solid #4a2020", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#cc4444" }}>
+          <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 4, padding: "10px 14px", fontSize: 12, color: "#cc4444" }}>
             This action is permanent. Non-surviving contacts will be hard-deleted and cannot be recovered.
           </div>
         </div>
@@ -4170,7 +4170,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
           <button
             onClick={handleMerge}
             disabled={merging}
-            style={{ background: "#2563eb", color: "#0a0f1a", border: "none", borderRadius: 4, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}
+            style={{ background: "#2563eb", color: "#ffffff", border: "none", borderRadius: 4, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}
           >
             {merging ? "Merging…" : `Merge ${contacts.length} Contacts`}
           </button>
@@ -4341,7 +4341,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
           {isAppAdmin(currentUser) && !isDeleted && (
             <button
               onClick={toggleMergeMode}
-              style={{ background: mergeMode ? "#2563eb" : "#e2e8f0", color: mergeMode ? "#0a0f1a" : "#475569", border: `1px solid ${mergeMode ? "#2563eb" : "#e2e8f0"}`, borderRadius: 4, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+              style={{ background: mergeMode ? "#2563eb" : "#e2e8f0", color: mergeMode ? "#ffffff" : "#475569", border: `1px solid ${mergeMode ? "#2563eb" : "#e2e8f0"}`, borderRadius: 4, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
             >
               {mergeMode ? "Cancel Merge" : "Merge Contacts"}
             </button>
@@ -4411,7 +4411,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
         {!isDeleted && (
           <>
             {mergeMode && (
-              <div style={{ position: "sticky", top: 0, zIndex: 12, marginBottom: 0, padding: "10px 14px", background: "#131d13", border: "1px solid #bbf7d0", borderBottom: "none", borderRadius: "4px 4px 0 0", display: "flex", alignItems: "center", gap: 14, fontSize: 13 }}>
+              <div style={{ position: "sticky", top: 0, zIndex: 12, marginBottom: 0, padding: "10px 14px", background: "#dcfce7", border: "1px solid #bbf7d0", borderBottom: "none", borderRadius: "4px 4px 0 0", display: "flex", alignItems: "center", gap: 14, fontSize: 13 }}>
                 <span style={{ color: "#4CAE72" }}>Select 2 or more contacts to merge.</span>
                 {mergeSelected.size >= 2 && (
                   <button
@@ -4423,7 +4423,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                       }
                       setShowMergeModal(true);
                     }}
-                    style={{ background: "#2563eb", color: "#0a0f1a", border: "none", borderRadius: 4, padding: "6px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                    style={{ background: "#2563eb", color: "#ffffff", border: "none", borderRadius: 4, padding: "6px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
                   >
                     Merge Selected ({mergeSelected.size})
                   </button>
@@ -4460,7 +4460,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                     <tr
                       key={c.id}
                       onClick={() => mergeMode ? toggleMergeSelect(c.id) : handleSelectContact(c)}
-                      style={{ borderBottom: "1px solid #ffffff", cursor: "pointer", transition: "background 0.1s", background: isChecked ? "#111e10" : "" }}
+                      style={{ borderBottom: "1px solid #ffffff", cursor: "pointer", transition: "background 0.1s", background: isChecked ? "#eff6ff" : "" }}
                       onMouseEnter={e => { if (!isChecked) e.currentTarget.style.background = "#ffffff"; }}
                       onMouseLeave={e => { if (!isChecked) e.currentTarget.style.background = ""; }}
                     >
