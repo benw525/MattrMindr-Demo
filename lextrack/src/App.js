@@ -8,6 +8,8 @@ import {
   apiGetNotes, apiCreateNote, apiDeleteNote,
   apiGetLinks, apiCreateLink, apiDeleteLink,
   apiGetActivity, apiCreateActivity,
+  apiGetContacts, apiGetDeletedContacts, apiCreateContact, apiUpdateContact, apiDeleteContact, apiRestoreContact,
+  apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
 } from "./api.js";
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+3:wght@300;400;500;600&display=swap');`;
@@ -655,6 +657,7 @@ export default function App() {
             { id: "tasks", icon: "✅", label: "Tasks", badge: overdueBadge || null },
             { id: "timelog", icon: "🕐", label: "Time Log" },
             { id: "reports", icon: "📊", label: "Reports" },
+            { id: "contacts", icon: "📇", label: "Contacts" },
             { id: "staff", icon: "👥", label: "Staff" },
           ].map(item => (
             <div key={item.id} className={`nav-item ${view === item.id ? "active" : ""}`} onClick={() => { setView(item.id); if (item.id !== "cases") setSelectedCase(null); }}>
@@ -677,6 +680,7 @@ export default function App() {
         {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} />}
         {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} />}
+        {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { setSelectedCase(c); setView("cases"); }} />}
         {view === "staff" && <StaffView allCases={allCases} />}
       </div>
     </div>
@@ -3545,6 +3549,513 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
           )}
         </div>
       </div>
+    </>
+  );
+}
+
+const CONTACT_CATEGORIES = ["Client", "Attorney", "Court", "Expert", "Miscellaneous"];
+
+const CONTACT_CAT_STYLE = {
+  Client:        { bg: "#1a2a3a", color: "#5599cc", border: "#2a4a6a" },
+  Attorney:      { bg: "#2a2a1a", color: "#c9a84c", border: "#4a4a1a" },
+  Court:         { bg: "#2a1a3a", color: "#9966cc", border: "#4a2a6a" },
+  Expert:        { bg: "#1a3a2a", color: "#4CAE72", border: "#2a5a3a" },
+  Miscellaneous: { bg: "#2a2a2a", color: "#8899aa", border: "#3a3a3a" },
+};
+
+const CONTACT_NOTE_TYPES = [
+  { label: "General",    bg: "#1a2235", color: "#7788aa" },
+  { label: "Call Log",   bg: "#1a3a2a", color: "#4CAE72" },
+  { label: "Email Log",  bg: "#1a2a3a", color: "#5599cc" },
+  { label: "Meeting",    bg: "#2a2a1a", color: "#c9a84c" },
+  { label: "Follow-up",  bg: "#3a1a1a", color: "#e05252" },
+];
+
+function NewContactModal({ onSave, onClose }) {
+  const [form, setForm] = useState({ name: "", category: "Client", phone: "", email: "", fax: "", address: "" });
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 500 }}>
+        <div className="modal-header"><span>New Contact</span><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label className="field-label">Name *</label>
+            <input className="field-input" value={form.name} onChange={e => set("name", e.target.value)} placeholder="Full name or organization" autoFocus />
+          </div>
+          <div>
+            <label className="field-label">Category *</label>
+            <select className="field-input" value={form.category} onChange={e => set("category", e.target.value)}>
+              {CONTACT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label className="field-label">Phone</label>
+              <input className="field-input" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="(555) 555-5555" />
+            </div>
+            <div>
+              <label className="field-label">Fax</label>
+              <input className="field-input" value={form.fax} onChange={e => set("fax", e.target.value)} placeholder="(555) 555-5555" />
+            </div>
+          </div>
+          <div>
+            <label className="field-label">Email</label>
+            <input className="field-input" value={form.email} onChange={e => set("email", e.target.value)} placeholder="email@example.com" />
+          </div>
+          <div>
+            <label className="field-label">Address</label>
+            <textarea className="field-input" rows={2} value={form.address} onChange={e => set("address", e.target.value)} placeholder="Street, City, State ZIP" />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={!form.name.trim()} onClick={() => onSave(form)}>Create Contact</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, onUpdate, onDelete, onAddNote, onDeleteNote }) {
+  const [draft, setDraft] = useState({ ...contact });
+  const [saving, setSaving] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [newNoteBody, setNewNoteBody] = useState("");
+  const [newNoteType, setNewNoteType] = useState("General");
+  const [addingNote, setAddingNote] = useState(false);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setDraft({ ...contact }); setShowDelete(false); }, [contact.id]);
+
+  const set = (k, v) => setDraft(p => ({ ...p, [k]: v }));
+
+  const save = async (updated) => {
+    setSaving(true);
+    try { await onUpdate(updated); } catch {}
+    setSaving(false);
+  };
+
+  const handleBlur = () => save(draft);
+
+  const assocCases = useMemo(() => {
+    if (!allCases) return [];
+    if (contact.category === "Client")   return allCases.filter(c => c.client === contact.name && !c.deletedAt);
+    if (contact.category === "Attorney") return allCases.filter(c => c.plaintiff === contact.name && !c.deletedAt);
+    if (contact.category === "Court")    return allCases.filter(c => c.judge === contact.name && !c.deletedAt);
+    return [];
+  }, [contact, allCases]);
+
+  const catStyle = CONTACT_CAT_STYLE[contact.category] || CONTACT_CAT_STYLE.Miscellaneous;
+
+  const noteTypeStyle = (label) => CONTACT_NOTE_TYPES.find(t => t.label === label) || CONTACT_NOTE_TYPES[0];
+
+  const submitNote = async () => {
+    if (!newNoteBody.trim()) return;
+    setAddingNote(true);
+    try {
+      await onAddNote(contact.id, {
+        type: newNoteType, body: newNoteBody.trim(),
+        authorId: currentUser.id, authorName: currentUser.name, authorRole: currentUser.role,
+        createdAt: new Date().toISOString(),
+      });
+      setNewNoteBody("");
+    } catch {}
+    setAddingNote(false);
+  };
+
+  return (
+    <div className="case-overlay" onClick={onClose}>
+      <div className="case-overlay-panel" onClick={e => e.stopPropagation()} style={{ width: 640 }}>
+        <div className="case-overlay-header" style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <span style={{ padding: "2px 10px", borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", background: catStyle.bg, color: catStyle.color, border: `1px solid ${catStyle.border}` }}>
+                {contact.category.toUpperCase()}
+              </span>
+              {saving && <span style={{ fontSize: 11, color: "#445566" }}>Saving…</span>}
+            </div>
+            <input
+              value={draft.name}
+              onChange={e => set("name", e.target.value)}
+              onBlur={handleBlur}
+              style={{ background: "transparent", border: "none", outline: "none", fontSize: 20, fontWeight: 700, color: "#ccd6e8", fontFamily: "inherit", width: "100%", padding: 0 }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+            {!showDelete && (
+              <button onClick={() => setShowDelete(true)} style={{ background: "#3a1a1a", border: "1px solid #5a2a2a", color: "#e05252", borderRadius: 4, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                Delete
+              </button>
+            )}
+            {showDelete && (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "#e05252" }}>Delete this contact?</span>
+                <button onClick={() => onDelete(contact.id)} style={{ background: "#e05252", border: "none", color: "#fff", borderRadius: 4, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>Confirm</button>
+                <button onClick={() => setShowDelete(false)} style={{ background: "#1a2235", border: "1px solid #2a3a5a", color: "#7788aa", borderRadius: 4, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>Cancel</button>
+              </div>
+            )}
+            <button className="overlay-close" onClick={onClose}>✕</button>
+          </div>
+        </div>
+
+        <div className="case-overlay-body" style={{ padding: "20px 28px", overflowY: "auto" }}>
+          {/* Contact Information */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#445566", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid #1a2235" }}>Contact Information</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11, color: "#556677", marginBottom: 4 }}>Phone</label>
+                <input className="field-input" value={draft.phone} onChange={e => set("phone", e.target.value)} onBlur={handleBlur} placeholder="(555) 555-5555" />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11, color: "#556677", marginBottom: 4 }}>Fax</label>
+                <input className="field-input" value={draft.fax} onChange={e => set("fax", e.target.value)} onBlur={handleBlur} placeholder="(555) 555-5555" />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ display: "block", fontSize: 11, color: "#556677", marginBottom: 4 }}>Email</label>
+                <input className="field-input" value={draft.email} onChange={e => set("email", e.target.value)} onBlur={handleBlur} placeholder="email@example.com" />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ display: "block", fontSize: 11, color: "#556677", marginBottom: 4 }}>Address</label>
+                <textarea className="field-input" rows={2} value={draft.address} onChange={e => set("address", e.target.value)} onBlur={handleBlur} placeholder="Street, City, State ZIP" style={{ resize: "vertical" }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Associated Cases */}
+          {(contact.category === "Client" || contact.category === "Attorney" || contact.category === "Court") && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#445566", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid #1a2235" }}>
+                Associated Cases <span style={{ fontSize: 11, fontWeight: 400, color: "#556677", textTransform: "none", letterSpacing: 0 }}>({assocCases.length})</span>
+              </div>
+              {assocCases.length === 0 ? (
+                <div style={{ fontSize: 13, color: "#445566", fontStyle: "italic" }}>No associated cases found.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ color: "#445566", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <th style={{ textAlign: "left", padding: "4px 8px 8px 0" }}>Case Number</th>
+                      <th style={{ textAlign: "left", padding: "4px 8px 8px 0" }}>Style</th>
+                      <th style={{ textAlign: "left", padding: "4px 8px 8px 0" }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assocCases.slice(0, 20).map(c => (
+                      <tr key={c.id} style={{ borderTop: "1px solid #111827" }}>
+                        <td style={{ padding: "7px 8px 7px 0", color: "#5599cc", fontFamily: "monospace", fontSize: 11 }}>{c.caseNum}</td>
+                        <td style={{ padding: "7px 8px 7px 0", color: "#ccd6e8" }}>{c.title}</td>
+                        <td style={{ padding: "7px 0", color: c.status === "Active" ? "#4CAE72" : "#7788aa", fontWeight: 600 }}>{c.status}</td>
+                      </tr>
+                    ))}
+                    {assocCases.length > 20 && <tr><td colSpan={3} style={{ padding: "6px 0", color: "#445566", fontSize: 11 }}>+ {assocCases.length - 20} more cases</td></tr>}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#445566", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid #1a2235" }}>
+              Notes <span style={{ fontSize: 11, fontWeight: 400, color: "#556677", textTransform: "none", letterSpacing: 0 }}>({(notes || []).length})</span>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <select value={newNoteType} onChange={e => setNewNoteType(e.target.value)} className="field-input" style={{ width: "auto", flexShrink: 0 }}>
+                  {CONTACT_NOTE_TYPES.map(t => <option key={t.label} value={t.label}>{t.label}</option>)}
+                </select>
+              </div>
+              <textarea
+                className="field-input"
+                rows={3}
+                value={newNoteBody}
+                onChange={e => setNewNoteBody(e.target.value)}
+                placeholder="Add a note…"
+                style={{ resize: "vertical", width: "100%" }}
+                onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submitNote(); }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                <button className="btn btn-primary" disabled={!newNoteBody.trim() || addingNote} onClick={submitNote} style={{ fontSize: 12 }}>
+                  {addingNote ? "Adding…" : "Add Note"}
+                </button>
+              </div>
+            </div>
+            {(notes || []).length === 0 ? (
+              <div style={{ fontSize: 13, color: "#445566", fontStyle: "italic" }}>No notes yet.</div>
+            ) : (
+              (notes || []).map(note => {
+                const ts = noteTypeStyle(note.type);
+                return (
+                  <div key={note.id} className="note-block">
+                    <div className="note-head">
+                      <span style={{ background: ts.bg, color: ts.color, padding: "1px 7px", borderRadius: 3, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em" }}>{note.type}</span>
+                      <span>{note.authorName}</span>
+                      <span>{note.authorRole}</span>
+                      <span>{note.createdAt ? new Date(note.createdAt).toLocaleString() : ""}</span>
+                      <span style={{ marginLeft: "auto", cursor: "pointer", color: "#445566", fontSize: 11 }} onClick={() => onDeleteNote(note.id, contact.id)}>Delete</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: "#ccd6e8", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{note.body}</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactsView({ currentUser, allCases, onOpenCase }) {
+  const [contacts, setContacts] = useState(null);
+  const [deletedContacts, setDeletedContacts] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [selectedContact, setSelectedContact] = useState(null);
+  const [contactNotes, setContactNotes] = useState({});
+  const [showNew, setShowNew] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiGetContacts().then(data => { setContacts(data); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (categoryFilter !== "Deleted") return;
+    if (deletedContacts !== null) return;
+    apiGetDeletedContacts().then(setDeletedContacts).catch(console.error);
+  }, [categoryFilter]);
+
+  const handleSelectContact = async (c) => {
+    setSelectedContact(c);
+    if (!contactNotes[c.id]) {
+      try {
+        const notes = await apiGetContactNotes(c.id);
+        setContactNotes(p => ({ ...p, [c.id]: notes }));
+      } catch {}
+    }
+  };
+
+  const handleUpdateContact = async (updated) => {
+    try {
+      const saved = await apiUpdateContact(updated.id, updated);
+      setContacts(p => p ? p.map(c => c.id === saved.id ? saved : c) : p);
+      setSelectedContact(saved);
+    } catch (err) { alert("Failed to save: " + err.message); }
+  };
+
+  const handleDeleteContact = async (id) => {
+    try {
+      const deleted = await apiDeleteContact(id);
+      setContacts(p => p ? p.filter(c => c.id !== id) : p);
+      setDeletedContacts(p => p ? [deleted, ...p] : [deleted]);
+      setSelectedContact(null);
+    } catch (err) { alert("Failed to delete: " + err.message); }
+  };
+
+  const handleRestoreContact = async (id) => {
+    try {
+      const restored = await apiRestoreContact(id);
+      setDeletedContacts(p => p ? p.filter(c => c.id !== id) : null);
+      setContacts(p => p ? [...p, restored].sort((a, b) => a.name.localeCompare(b.name)) : [restored]);
+    } catch (err) { alert("Failed to restore: " + err.message); }
+  };
+
+  const handleCreateContact = async (data) => {
+    try {
+      const saved = await apiCreateContact(data);
+      setContacts(p => [...(p || []), saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setShowNew(false);
+      handleSelectContact(saved);
+    } catch (err) { alert("Failed to create contact: " + err.message); }
+  };
+
+  const handleAddNote = async (contactId, noteData) => {
+    const saved = await apiCreateContactNote({ ...noteData, contactId });
+    setContactNotes(p => ({ ...p, [contactId]: [saved, ...(p[contactId] || [])] }));
+  };
+
+  const handleDeleteNote = async (noteId, contactId) => {
+    try {
+      await apiDeleteContactNote(noteId);
+      setContactNotes(p => ({ ...p, [contactId]: (p[contactId] || []).filter(n => n.id !== noteId) }));
+    } catch (err) { alert("Failed to delete note: " + err.message); }
+  };
+
+  const isDeleted = categoryFilter === "Deleted";
+  const list = isDeleted ? (deletedContacts || []) : (contacts || []);
+
+  const filtered = list.filter(c => {
+    if (!isDeleted && categoryFilter !== "All" && c.category !== categoryFilter) return false;
+    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) &&
+        !c.phone.toLowerCase().includes(search.toLowerCase()) &&
+        !c.email.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const counts = {};
+  (contacts || []).forEach(c => { counts[c.category] = (counts[c.category] || 0) + 1; });
+
+  const daysLeft = (deletedAt) => {
+    if (!deletedAt) return null;
+    const diff = 30 - Math.floor((Date.now() - new Date(deletedAt)) / 86400000);
+    return Math.max(0, diff);
+  };
+
+  const tabs = [
+    { id: "All",           label: `All (${(contacts || []).length})` },
+    { id: "Client",        label: `Clients (${counts.Client || 0})` },
+    { id: "Attorney",      label: `Attorneys (${counts.Attorney || 0})` },
+    { id: "Court",         label: `Courts (${counts.Court || 0})` },
+    { id: "Expert",        label: `Experts (${counts.Expert || 0})` },
+    { id: "Miscellaneous", label: `Miscellaneous (${counts.Miscellaneous || 0})` },
+    { id: "Deleted",       label: `Deleted (${(deletedContacts || []).length})`, red: true },
+  ];
+
+  return (
+    <>
+      <div className="topbar">
+        <div>
+          <div className="topbar-title">Contacts</div>
+          <div className="topbar-subtitle">{loading ? "Loading…" : `${(contacts || []).length} contacts across ${CONTACT_CATEGORIES.length} categories`}</div>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <input
+            className="field-input"
+            placeholder="Search contacts…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ width: 220, fontSize: 13 }}
+          />
+          <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ New Contact</button>
+        </div>
+      </div>
+
+      <div className="content" style={{ paddingTop: 0 }}>
+        {/* Category tabs */}
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #1a2235", marginBottom: 20, overflowX: "auto" }}>
+          {tabs.map(t => (
+            <div
+              key={t.id}
+              onClick={() => setCategoryFilter(t.id)}
+              style={{
+                padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                borderBottom: categoryFilter === t.id ? `2px solid ${t.red ? "#e05252" : "#c9a84c"}` : "2px solid transparent",
+                color: categoryFilter === t.id ? (t.red ? "#e05252" : "#c9a84c") : "#445566",
+                transition: "all 0.15s",
+              }}
+            >
+              {t.label}
+            </div>
+          ))}
+        </div>
+
+        {/* Deleted contacts table */}
+        {isDeleted && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ fontSize: 11, color: "#445566", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #1a2235" }}>
+                <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Category</th>
+                <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Name</th>
+                <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Deleted</th>
+                <th style={{ textAlign: "left", padding: "6px 0", fontWeight: 600 }}>Days Remaining</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(deletedContacts === null) ? (
+                <tr><td colSpan={5} style={{ padding: 20, color: "#445566", textAlign: "center" }}>Loading…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding: 20, color: "#445566", textAlign: "center" }}>No deleted contacts.</td></tr>
+              ) : filtered.map(c => {
+                const days = daysLeft(c.deletedAt);
+                const catStyle = CONTACT_CAT_STYLE[c.category] || CONTACT_CAT_STYLE.Miscellaneous;
+                return (
+                  <tr key={c.id} style={{ borderBottom: "1px solid #0d1525" }}>
+                    <td style={{ padding: "10px 12px 10px 0" }}>
+                      <span style={{ padding: "2px 8px", borderRadius: 3, fontSize: 10, fontWeight: 700, background: catStyle.bg, color: catStyle.color }}>{c.category}</span>
+                    </td>
+                    <td style={{ padding: "10px 12px 10px 0", color: "#ccd6e8" }}>{c.name}</td>
+                    <td style={{ padding: "10px 12px 10px 0", color: "#445566" }}>{c.deletedAt ? new Date(c.deletedAt).toLocaleDateString() : ""}</td>
+                    <td style={{ padding: "10px 12px 10px 0", color: days <= 7 ? "#e05252" : "#7788aa", fontWeight: days <= 7 ? 700 : 400 }}>{days} days</td>
+                    <td style={{ padding: "10px 0", textAlign: "right" }}>
+                      <button onClick={() => handleRestoreContact(c.id)} style={{ background: "#1a3a2a", border: "1px solid #2a5a3a", color: "#4CAE72", borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>Restore</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        {/* Active contacts table */}
+        {!isDeleted && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ fontSize: 11, color: "#445566", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #1a2235" }}>
+                <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Category</th>
+                <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Name</th>
+                <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Phone</th>
+                <th style={{ textAlign: "left", padding: "6px 12px 6px 0", fontWeight: 600 }}>Email</th>
+                <th style={{ textAlign: "left", padding: "6px 0", fontWeight: 600 }}>Cases</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={5} style={{ padding: 30, color: "#445566", textAlign: "center" }}>Loading contacts…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding: 30, color: "#445566", textAlign: "center" }}>
+                  {search ? "No contacts match your search." : "No contacts in this category yet."}
+                </td></tr>
+              ) : filtered.map(c => {
+                const catStyle = CONTACT_CAT_STYLE[c.category] || CONTACT_CAT_STYLE.Miscellaneous;
+                const caseCount = c.category === "Client"   ? allCases.filter(a => a.client === c.name && !a.deletedAt).length
+                                : c.category === "Attorney" ? allCases.filter(a => a.plaintiff === c.name && !a.deletedAt).length
+                                : c.category === "Court"    ? allCases.filter(a => a.judge === c.name && !a.deletedAt).length
+                                : 0;
+                return (
+                  <tr
+                    key={c.id}
+                    onClick={() => handleSelectContact(c)}
+                    style={{ borderBottom: "1px solid #0d1525", cursor: "pointer", transition: "background 0.1s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#0d1525"}
+                    onMouseLeave={e => e.currentTarget.style.background = ""}
+                  >
+                    <td style={{ padding: "10px 12px 10px 0" }}>
+                      <span style={{ padding: "2px 8px", borderRadius: 3, fontSize: 10, fontWeight: 700, background: catStyle.bg, color: catStyle.color, border: `1px solid ${catStyle.border}` }}>
+                        {c.category}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 12px 10px 0", color: "#ccd6e8", fontWeight: 500 }}>{c.name}</td>
+                    <td style={{ padding: "10px 12px 10px 0", color: "#7788aa", fontFamily: "monospace", fontSize: 12 }}>{c.phone || <span style={{ color: "#2a3a5a" }}>—</span>}</td>
+                    <td style={{ padding: "10px 12px 10px 0", color: "#5599cc", fontSize: 12 }}>{c.email || <span style={{ color: "#2a3a5a" }}>—</span>}</td>
+                    <td style={{ padding: "10px 0", color: caseCount > 0 ? "#c9a84c" : "#2a3a5a", fontWeight: caseCount > 0 ? 600 : 400 }}>
+                      {caseCount > 0 ? caseCount : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {selectedContact && (
+        <ContactDetailOverlay
+          contact={selectedContact}
+          currentUser={currentUser}
+          notes={contactNotes[selectedContact.id]}
+          allCases={allCases}
+          onClose={() => setSelectedContact(null)}
+          onUpdate={handleUpdateContact}
+          onDelete={handleDeleteContact}
+          onAddNote={handleAddNote}
+          onDeleteNote={handleDeleteNote}
+        />
+      )}
+      {showNew && <NewContactModal onSave={handleCreateContact} onClose={() => setShowNew(false)} />}
     </>
   );
 }

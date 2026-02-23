@@ -56,3 +56,16 @@ export const apiDeleteLink  = (id)     => apiFetch(`/api/links/${id}`, { method:
 // Activity
 export const apiGetActivity    = (caseId) => apiFetch(`/api/activity/${caseId}`);
 export const apiCreateActivity = (data)   => apiFetch("/api/activity", { method: "POST", body: data });
+
+// Contacts
+export const apiGetContacts        = ()         => apiFetch("/api/contacts");
+export const apiGetDeletedContacts = ()         => apiFetch("/api/contacts?deleted=true");
+export const apiCreateContact      = (data)     => apiFetch("/api/contacts",             { method: "POST",   body: data });
+export const apiUpdateContact      = (id, data) => apiFetch(`/api/contacts/${id}`,       { method: "PUT",    body: data });
+export const apiDeleteContact      = (id)       => apiFetch(`/api/contacts/${id}`,       { method: "DELETE" });
+export const apiRestoreContact     = (id)       => apiFetch(`/api/contacts/${id}/restore`, { method: "POST" });
+
+// Contact Notes
+export const apiGetContactNotes    = (contactId) => apiFetch(`/api/contact-notes/${contactId}`);
+export const apiCreateContactNote  = (data)      => apiFetch("/api/contact-notes",       { method: "POST",   body: data });
+export const apiDeleteContactNote  = (id)        => apiFetch(`/api/contact-notes/${id}`, { method: "DELETE" });

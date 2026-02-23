@@ -10,6 +10,8 @@ const deadlinesRoutes = require("./routes/deadlines");
 const notesRoutes    = require("./routes/notes");
 const linksRoutes    = require("./routes/links");
 const activityRoutes = require("./routes/activity");
+const contactsRoutes     = require("./routes/contacts");
+const contactNotesRoutes = require("./routes/contact-notes");
 
 const app  = express();
 const PORT = process.env.API_PORT || 3001;
@@ -40,7 +42,9 @@ app.use("/api/tasks",     tasksRoutes);
 app.use("/api/deadlines", deadlinesRoutes);
 app.use("/api/notes",     notesRoutes);
 app.use("/api/links",     linksRoutes);
-app.use("/api/activity",  activityRoutes);
+app.use("/api/activity",       activityRoutes);
+app.use("/api/contacts",      contactsRoutes);
+app.use("/api/contact-notes", contactNotesRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

@@ -31,6 +31,8 @@ server/
     notes.js        — GET/POST/DELETE /api/notes
     links.js        — GET/POST/DELETE /api/links
     activity.js     — GET/POST /api/activity
+    contacts.js     — CRUD /api/contacts (soft-delete/restore, 30-day retention)
+    contact-notes.js — GET/POST/DELETE /api/contact-notes
 
 lextrack/
   src/
@@ -51,6 +53,7 @@ lextrack/
 - Reports: 10 pre-built report types with CSV export and print
 - Time Log: activity history per user (task completions + notes)
 - Staff Directory
+- Contacts: 375 auto-populated contacts (Clients, Attorneys, Courts + manual Experts/Miscellaneous), with phone/email/fax/address, associated cases, persistent notes, and soft-delete with 30-day recovery
 
 ## Architecture Notes
 - **DB migration path**: All DB access via REST API — swap `DATABASE_URL` to point to Supabase, swap `express-session` for JWT, done.
@@ -69,3 +72,5 @@ lextrack/
 | case_notes | (user-created) |
 | case_links | (user-created) |
 | case_activity | (user-created) |
+| contacts | 375 (91 clients, 248 attorneys, 36 courts; seeded from case data) |
+| contact_notes | (user-created) |
