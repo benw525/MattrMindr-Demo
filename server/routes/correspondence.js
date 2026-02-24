@@ -48,8 +48,9 @@ router.get("/attachment/:id/:index", requireAuth, async (req, res) => {
     if (idx < 0 || idx >= attachments.length) return res.status(404).json({ error: "Attachment not found" });
     const att = attachments[idx];
     const buffer = Buffer.from(att.data, "base64");
+    const disposition = req.query.inline === "true" ? "inline" : "attachment";
     res.setHeader("Content-Type", att.contentType || "application/octet-stream");
-    res.setHeader("Content-Disposition", `attachment; filename="${att.filename}"`);
+    res.setHeader("Content-Disposition", `${disposition}; filename="${att.filename}"`);
     res.setHeader("Content-Length", buffer.length);
     return res.send(buffer);
   } catch (err) {

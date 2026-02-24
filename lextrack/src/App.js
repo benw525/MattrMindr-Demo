@@ -2341,6 +2341,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [correspondence, setCorrespondence] = useState([]);
   const [corrLoading, setCorrLoading] = useState(false);
   const [expandedEmail, setExpandedEmail] = useState(null);
+  const [attachmentPreview, setAttachmentPreview] = useState(null);
   const [corrCopied, setCorrCopied] = useState(false);
   const [showDocGen, setShowDocGen] = useState(false);
   const canRemove = isAttorney(currentUser);
@@ -3267,25 +3268,41 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                           {email.toEmails && <div>To: {email.toEmails}</div>}
                           {email.ccEmails && <div>CC: {email.ccEmails}</div>}
                         </div>
+                        {email.attachments.length > 0 && (
+                          <div style={{ marginTop: 8, marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text2)", marginBottom: 6 }}>Attachments</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                              {email.attachments.map((att, idx) => {
+                                const isPreviewable = /^(image\/|application\/pdf)/.test(att.contentType);
+                                const previewUrl = `/api/correspondence/attachment/${email.id}/${idx}?inline=true`;
+                                const downloadUrl = `/api/correspondence/attachment/${email.id}/${idx}`;
+                                const icon = att.contentType?.startsWith("image/") ? "🖼" : att.contentType === "application/pdf" ? "📄" : "📎";
+                                return (
+                                  <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                    <button
+                                      onClick={() => {
+                                        if (isPreviewable) {
+                                          setAttachmentPreview({ url: previewUrl, filename: att.filename, contentType: att.contentType, downloadUrl });
+                                        } else {
+                                          window.open(downloadUrl, "_blank");
+                                        }
+                                      }}
+                                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", background: "#eff6ff", borderRadius: 6, border: "1px solid #bfdbfe", cursor: "pointer", minWidth: 90, textAlign: "center" }}
+                                      title={isPreviewable ? "Click to preview" : "Click to download"}
+                                    >
+                                      <span style={{ fontSize: 22 }}>{icon}</span>
+                                      <span style={{ fontSize: 11, color: "#2563eb", fontWeight: 600, wordBreak: "break-all", maxWidth: 120 }}>{att.filename}</span>
+                                      <span style={{ fontSize: 10, color: "#94a3b8" }}>{(att.size / 1024).toFixed(0)} KB</span>
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         <div style={{ fontSize: 13, color: "var(--c-text)", whiteSpace: "pre-wrap", background: "var(--c-bg2)", borderRadius: 6, padding: 12, marginTop: 8, maxHeight: 400, overflow: "auto", border: "1px solid var(--c-border)" }}>
                           {email.bodyText || "(empty)"}
                         </div>
-                        {email.attachments.length > 0 && (
-                          <div style={{ marginTop: 8 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text2)", marginBottom: 4 }}>Attachments</div>
-                            {email.attachments.map((att, idx) => (
-                              <a
-                                key={idx}
-                                href={`/api/correspondence/attachment/${email.id}/${idx}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#2563eb", textDecoration: "none", marginRight: 12, padding: "3px 8px", background: "#eff6ff", borderRadius: 4, border: "1px solid #bfdbfe" }}
-                              >
-                                📎 {att.filename} <span style={{ color: "#94a3b8", fontSize: 10 }}>({(att.size / 1024).toFixed(0)} KB)</span>
-                              </a>
-                            ))}
-                          </div>
-                        )}
                         <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                           <button
                             className="btn btn-outline btn-sm"
@@ -3305,6 +3322,48 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {attachmentPreview && (
+          <div
+            onClick={() => setAttachmentPreview(null)}
+            style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ background: "var(--c-bg)", borderRadius: 10, width: "90vw", maxWidth: 900, height: "85vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", borderBottom: "1px solid var(--c-border)", flexShrink: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-h)" }}>{attachmentPreview.filename}</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <a
+                    href={attachmentPreview.downloadUrl}
+                    download
+                    style={{ padding: "5px 14px", fontSize: 12, fontWeight: 600, background: "#2563eb", color: "#fff", borderRadius: 4, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                  >Download</a>
+                  <button
+                    onClick={() => setAttachmentPreview(null)}
+                    style={{ background: "transparent", border: "none", fontSize: 20, color: "#94a3b8", cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}
+                  >✕</button>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: "#1e293b" }}>
+                {attachmentPreview.contentType?.startsWith("image/") ? (
+                  <img src={attachmentPreview.url} alt={attachmentPreview.filename} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                ) : attachmentPreview.contentType === "application/pdf" ? (
+                  <iframe src={attachmentPreview.url} title={attachmentPreview.filename} style={{ width: "100%", height: "100%", border: "none" }} />
+                ) : (
+                  <div style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", padding: 40 }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>📎</div>
+                    <div>Preview not available for this file type.</div>
+                    <div style={{ marginTop: 8 }}>
+                      <a href={attachmentPreview.downloadUrl} download style={{ color: "#2563eb" }}>Download to view</a>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
