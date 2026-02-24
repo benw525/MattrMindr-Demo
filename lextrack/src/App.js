@@ -1178,6 +1178,13 @@ export default function App() {
         });
       });
 
+      if (target.title.trim() === "File Answer" && caseForTask) {
+        const updated = { ...caseForTask, answerFiled: completedDate };
+        try {
+          await handleUpdateCase(updated);
+        } catch (err) { console.error("Failed to auto-set Answer Filed:", err); }
+      }
+
       const assignedToOther = target.assigned > 0 && target.assigned !== currentUser.id;
       const completionDetail = assignedToOther
         ? `"${target.title}" completed by ${currentUser.name} (assigned to ${getUserById(target.assigned)?.name || "unknown"})`
@@ -2136,7 +2143,8 @@ const CONTACT_LINKABLE_KEYS = new Set(["client", "insured", "plaintiff", "claimS
 function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, userOffices, onAddDeadline }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
-  const [hiddenFields, setHiddenFields] = useState(c._hiddenFields || []);
+  const DEFAULT_HIDDEN_DATES = ["answerFiled", "expertDepo", "partyDepo", "mediation"];
+  const [hiddenFields, setHiddenFields] = useState(c._hiddenFields != null ? c._hiddenFields : DEFAULT_HIDDEN_DATES);
   const [addingField, setAddingField] = useState(false);
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [newFieldIsName, setNewFieldIsName] = useState(false);
