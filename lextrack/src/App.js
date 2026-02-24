@@ -11,6 +11,7 @@ import {
   apiGetActivity, apiCreateActivity,
   apiGetContacts, apiGetDeletedContacts, apiCreateContact, apiUpdateContact, apiDeleteContact, apiRestoreContact, apiMergeContacts,
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
+  apiAiSearch,
 } from "./api.js";
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+3:wght@300;400;500;600&display=swap');`;
@@ -1679,6 +1680,25 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const [showModal, setShowModal] = useState(false);
   const [sortCol, setSortCol] = useState("title");
   const [sortDir, setSortDir] = useState("asc");
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiResults, setAiResults] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const runAiSearch = async () => {
+    if (!aiQuery.trim()) return;
+    setAiLoading(true);
+    setAiError("");
+    setAiResults(null);
+    try {
+      const data = await apiAiSearch(aiQuery.trim());
+      setAiResults(data.results || []);
+    } catch (err) {
+      setAiError(err.message || "AI search failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Load notes/links/activity from API when a case is opened
   useEffect(() => {
@@ -1805,6 +1825,82 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
         </div>
       </div>
       <div className="content">
+        <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ position: "relative", flex: 1 }}>
+            <input
+              style={{ width: "100%", paddingLeft: 36, paddingRight: 10, height: 40, borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13, background: "#fff" }}
+              placeholder="AI Search — ask anything about your cases (e.g. &quot;cases with trial in March&quot; or &quot;slip and fall in Mobile&quot;)…"
+              value={aiQuery}
+              onChange={e => setAiQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") runAiSearch(); }}
+            />
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "#94a3b8", pointerEvents: "none" }}>&#x2728;</span>
+          </div>
+          <button className="btn btn-gold" style={{ height: 40, whiteSpace: "nowrap", minWidth: 100 }} onClick={runAiSearch} disabled={aiLoading || !aiQuery.trim()}>
+            {aiLoading ? "Searching…" : "AI Search"}
+          </button>
+          {aiResults !== null && (
+            <button className="btn btn-outline" style={{ height: 40 }} onClick={() => { setAiResults(null); setAiQuery(""); setAiError(""); }}>Clear</button>
+          )}
+        </div>
+
+        {aiLoading && (
+          <div className="card" style={{ marginBottom: 16, padding: 24, textAlign: "center" }}>
+            <div style={{ fontSize: 14, color: "#64748b" }}>Searching across all case data — this may take a few seconds…</div>
+          </div>
+        )}
+
+        {aiError && (
+          <div className="card" style={{ marginBottom: 16, padding: 16, borderLeft: "4px solid #e05252" }}>
+            <div style={{ color: "#e05252", fontSize: 13 }}>{aiError}</div>
+          </div>
+        )}
+
+        {aiResults !== null && !aiLoading && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">
+              <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>&#x2728;</span> AI Search Results
+                <span style={{ fontSize: 12, fontWeight: 400, color: "#64748b" }}>({aiResults.length} match{aiResults.length !== 1 ? "es" : ""})</span>
+              </div>
+            </div>
+            {aiResults.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No matching cases found. Try rephrasing your search.</div>
+            ) : (
+              <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                {aiResults.map((r, i) => {
+                  const c = allCases.find(cc => cc.id === r.id);
+                  if (!c) return null;
+                  return (
+                    <div
+                      key={r.id}
+                      style={{ padding: "14px 18px", borderBottom: i < aiResults.length - 1 ? "1px solid #e2e8f0" : "none", cursor: "pointer", display: "flex", gap: 14, alignItems: "flex-start" }}
+                      onClick={() => setSelectedCase(c)}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+                      onMouseLeave={e => e.currentTarget.style.background = ""}
+                    >
+                      <div style={{ minWidth: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, #b8860b, #d4a843)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, flexShrink: 0, marginTop: 2 }}>{i + 1}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: "#1e293b" }}>{c.title}</span>
+                          <Badge label={recordType(c)} />
+                          {c.caseNum && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#2563eb" }}>{c.caseNum}</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, lineHeight: 1.5 }}>{r.reason}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, display: "flex", gap: 12 }}>
+                          {c.client && <span>Client: {c.client}</span>}
+                          {c.stage && <span>Stage: {c.stage}</span>}
+                          {(c.offices || []).length > 0 && <span>Office: {c.offices.join(", ")}</span>}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#b8860b", fontWeight: 500, flexShrink: 0 }}>View →</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         <div className="tabs">
           {["All", "Active", "Monitoring", "Closed"].map(s => <div key={s} className={`tab ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s}</div>)}
           <div className={`tab ${statusFilter === "Deleted" ? "active" : ""}`} style={{ color: statusFilter === "Deleted" ? "#e05252" : undefined }} onClick={() => setStatusFilter("Deleted")}>Deleted</div>

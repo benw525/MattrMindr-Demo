@@ -12,6 +12,7 @@ const linksRoutes    = require("./routes/links");
 const activityRoutes = require("./routes/activity");
 const contactsRoutes     = require("./routes/contacts");
 const contactNotesRoutes = require("./routes/contact-notes");
+const aiSearchRoutes     = require("./routes/ai-search");
 
 const app  = express();
 const PORT = process.env.API_PORT || 3001;
@@ -45,6 +46,7 @@ app.use("/api/links",     linksRoutes);
 app.use("/api/activity",       activityRoutes);
 app.use("/api/contacts",      contactsRoutes);
 app.use("/api/contact-notes", contactNotesRoutes);
+app.use("/api/ai-search",     aiSearchRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

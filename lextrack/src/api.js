@@ -74,6 +74,9 @@ export const apiRestoreContact     = (id)       => apiFetch(`/api/contacts/${id}
 
 export const apiMergeContacts      = (data)       => apiFetch("/api/contacts/merge",        { method: "POST",   body: data });
 
+// AI Search
+export const apiAiSearch = (query) => apiFetch("/api/ai-search", { method: "POST", body: { query } });
+
 // Contact Notes
 export const apiGetContactNotes    = (contactId) => apiFetch(`/api/contact-notes/${contactId}`);
 export const apiCreateContactNote  = (data)      => apiFetch("/api/contact-notes",       { method: "POST",   body: data });
