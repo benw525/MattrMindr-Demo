@@ -2165,6 +2165,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [caseExpenses, setCaseExpenses] = useState(c.caseExpenses || []);
   const [expenseServiceFilter, setExpenseServiceFilter] = useState("");
   const [expensePaidFilter, setExpensePaidFilter] = useState("all");
+  const [customTeam, setCustomTeam] = useState(c._customTeam || []);
+  const [addingTeamSlot, setAddingTeamSlot] = useState(false);
+  const [newTeamRole, setNewTeamRole] = useState("");
+  const [newTeamUserId, setNewTeamUserId] = useState(0);
   const canRemove = isAttorney(currentUser);
   const canDelete = isAppAdmin(currentUser);
 
@@ -2206,10 +2210,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   // Auto-save on draft/customFields/customDates/billing/expenses change (debounced)
   useEffect(() => {
     const t = setTimeout(() => {
-      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, _hiddenFields: hiddenFields, billingParties, caseExpenses });
+      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, _hiddenFields: hiddenFields, billingParties, caseExpenses, _customTeam: customTeam });
     }, 400);
     return () => clearTimeout(t);
-  }, [draft, customFields, customDates, billingParties, caseExpenses]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft, customFields, customDates, billingParties, caseExpenses, customTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Field label lookup for human-readable log entries
   const fieldLabel = (key) => {
@@ -2689,6 +2693,65 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   readOnly={!editMode}
                 />
               ))}
+              {customTeam.map(m => (
+                <div key={m.id} className="edit-field">
+                  <div className="edit-field-key" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span>{m.role}</span>
+                    {editMode && canRemove && (
+                      <button onClick={() => setCustomTeam(p => p.filter(t => t.id !== m.id))} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "0 2px" }}>✕</button>
+                    )}
+                  </div>
+                  {editMode ? (
+                    <select
+                      value={m.userId || 0}
+                      onChange={e => setCustomTeam(p => p.map(t => t.id === m.id ? { ...t, userId: parseInt(e.target.value) } : t))}
+                      className="edit-field-value"
+                    >
+                      <option value={0}>— None —</option>
+                      {filteredUsersForTeam.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  ) : (
+                    <div className="edit-field-value">{USERS.find(u => u.id === m.userId)?.name || "—"}</div>
+                  )}
+                </div>
+              ))}
+              {editMode && (
+                <div style={{ marginTop: 6 }}>
+                  {addingTeamSlot && (
+                    <div style={{ marginBottom: 8 }}>
+                      <input
+                        placeholder="Role (e.g. Co-Counsel, Investigator)"
+                        value={newTeamRole}
+                        onChange={e => setNewTeamRole(e.target.value)}
+                        style={{ width: "100%", fontSize: 12, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", marginBottom: 6, boxSizing: "border-box" }}
+                        autoFocus
+                      />
+                      <select
+                        value={newTeamUserId}
+                        onChange={e => setNewTeamUserId(parseInt(e.target.value))}
+                        style={{ width: "100%", fontSize: 12, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", marginBottom: 6 }}
+                      >
+                        <option value={0}>Select staff member</option>
+                        {filteredUsersForTeam.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                      <button
+                        className="btn btn-gold"
+                        style={{ fontSize: 12, width: "100%" }}
+                        disabled={!newTeamRole.trim() || !newTeamUserId}
+                        onClick={() => {
+                          setCustomTeam(p => [...p, { id: Date.now(), role: newTeamRole.trim(), userId: newTeamUserId }]);
+                          setNewTeamRole("");
+                          setNewTeamUserId(0);
+                          setAddingTeamSlot(false);
+                        }}
+                      >Add to Team</button>
+                    </div>
+                  )}
+                  <button className="btn btn-outline btn-sm" style={{ fontSize: 11, width: "100%" }} onClick={() => setAddingTeamSlot(s => !s)}>
+                    {addingTeamSlot ? "Cancel" : "+ Add Team Slot"}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div style={{ borderTop: "1px solid var(--c-border)", margin: "8px 0 32px" }} />
@@ -3486,6 +3549,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
                 ["Paralegal 1", para?.name],
                 ["Paralegal 2", para2?.name],
                 ["Legal Assistant", legalAsst?.name],
+                ...(c._customTeam || []).map(m => [m.role, USERS.find(u => u.id === m.userId)?.name]),
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} className="ip"><span className="ik">{k}</span><span className="iv">{v}</span></div>
               ))}

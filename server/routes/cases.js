@@ -40,6 +40,7 @@ const toFrontend = (row) => ({
   billingParties: Array.isArray(row.billing_parties) ? row.billing_parties : [],
   caseExpenses: Array.isArray(row.case_expenses) ? row.case_expenses : [],
   confidential: !!row.confidential,
+  _customTeam: Array.isArray(row.custom_team) ? row.custom_team : [],
   deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
 });
 
@@ -51,7 +52,9 @@ const canAccessCase = (row, req) => {
   if (!row.confidential) return true;
   if (isAppAdmin(req)) return true;
   const uid = req.session.userId;
-  return [row.lead_attorney, row.second_attorney, row.paralegal, row.paralegal2, row.legal_assistant].includes(uid);
+  if ([row.lead_attorney, row.second_attorney, row.paralegal, row.paralegal2, row.legal_assistant].includes(uid)) return true;
+  const customTeam = Array.isArray(row.custom_team) ? row.custom_team : [];
+  return customTeam.some(m => m.userId === uid);
 };
 
 const requireShareholder = (req, res, next) => {
@@ -99,8 +102,8 @@ router.post("/", requireAuth, async (req, res) => {
         (case_num, title, client, insured, plaintiff, claim_num, file_num, claim_spec,
          type, status, stage, lead_attorney, second_attorney, paralegal, paralegal2, legal_assistant,
          trial_date, answer_filed, written_disc, party_depo, expert_depo,
-         witness_depo, mediation, mediator, judge, dol, custom_fields, offices, expert, custom_dates, billing_parties, case_expenses, hidden_fields, confidential)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
+         witness_depo, mediation, mediator, judge, dol, custom_fields, offices, expert, custom_dates, billing_parties, case_expenses, hidden_fields, confidential, custom_team)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
        RETURNING *`,
       [
         d.caseNum || "", d.title, d.client || "", d.insured || "",
@@ -115,6 +118,7 @@ router.post("/", requireAuth, async (req, res) => {
         JSON.stringify(d.billingParties || []), JSON.stringify(d.caseExpenses || []),
         JSON.stringify(d._hiddenFields || []),
         !!d.confidential,
+        JSON.stringify(d._customTeam || []),
       ]
     );
     return res.status(201).json(toFrontend(rows[0]));
@@ -138,8 +142,8 @@ router.put("/:id", requireAuth, async (req, res) => {
         trial_date=$17, answer_filed=$18, written_disc=$19, party_depo=$20,
         expert_depo=$21, witness_depo=$22, mediation=$23, mediator=$24,
         judge=$25, dol=$26, custom_fields=$27, offices=$28, expert=$29, custom_dates=$30,
-        billing_parties=$31, case_expenses=$32, hidden_fields=$33, confidential=$34
-       WHERE id=$35 AND deleted_at IS NULL RETURNING *`,
+        billing_parties=$31, case_expenses=$32, hidden_fields=$33, confidential=$34, custom_team=$35
+       WHERE id=$36 AND deleted_at IS NULL RETURNING *`,
       [
         d.caseNum || "", d.title, d.client || "", d.insured || "",
         d.plaintiff || "", d.claimNum || "", d.fileNum || "", d.claimSpec || "",
@@ -153,6 +157,7 @@ router.put("/:id", requireAuth, async (req, res) => {
         JSON.stringify(d.billingParties || []), JSON.stringify(d.caseExpenses || []),
         JSON.stringify(d._hiddenFields || []),
         !!d.confidential,
+        JSON.stringify(d._customTeam || []),
         req.params.id,
       ]
     );
