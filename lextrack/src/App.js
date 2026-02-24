@@ -1296,7 +1296,7 @@ export default function App() {
       </aside>
       <div className="main">
         {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { handleSelectCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} userOffices={userOffices} />}
-        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} userOffices={userOffices} />}
+        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} userOffices={userOffices} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} />}
         {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} />}
         {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} userOffices={userOffices} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} />}
@@ -1668,7 +1668,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
 // ─── Cases View ───────────────────────────────────────────────────────────────
 const PAGE_SIZE = 50;
 
-function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, deletedCases, setDeletedCases, onDeleteCase, onRestoreCase, userOffices }) {
+function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, deletedCases, setDeletedCases, onDeleteCase, onRestoreCase, userOffices, onAddDeadline }) {
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("Active");
   const [deletedLoading, setDeletedLoading] = useState(false);
@@ -1925,6 +1925,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
           onAddLink={async (link) => { try { const saved = await apiCreateLink(link); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: [...(prev[selectedCase.id] || []), saved] })); } catch (err) { alert("Failed to save link: " + err.message); } }}
           onDeleteLink={async (linkId) => { try { await apiDeleteLink(linkId); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(l => l.id !== linkId) })); } catch (err) { alert("Failed to delete link: " + err.message); } }}
           onLogActivity={async (entry) => { try { const saved = await apiCreateActivity(entry); setCaseActivity(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { console.error("Failed to log activity:", err); } }}
+          onAddDeadline={onAddDeadline}
         />
       )}
     </>
@@ -2036,9 +2037,10 @@ function EditField({ fieldKey, label, type, options, value, onChange, onBlur, on
 
 const CONTACT_LINKABLE_KEYS = new Set(["client", "insured", "plaintiff", "claimSpec", "judge", "mediator", "expert"]);
 
-function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, userOffices }) {
+function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, userOffices, onAddDeadline }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
+  const [hiddenFields, setHiddenFields] = useState(c._hiddenFields || []);
   const [addingField, setAddingField] = useState(false);
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [newFieldIsName, setNewFieldIsName] = useState(false);
@@ -2101,7 +2103,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   // Auto-save on draft/customFields/customDates/billing/expenses change (debounced)
   useEffect(() => {
     const t = setTimeout(() => {
-      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, billingParties, caseExpenses });
+      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, _hiddenFields: hiddenFields, billingParties, caseExpenses });
     }, 400);
     return () => clearTimeout(t);
   }, [draft, customFields, customDates, billingParties, caseExpenses]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2207,7 +2209,11 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   };
 
   const updateCustomDate = (id, val) => {
+    const prev = customDates.find(d => d.id === id);
     setCustomDates(p => p.map(d => d.id === id ? { ...d, value: val } : d));
+    if (val && prev && !prev.value && onAddDeadline) {
+      onAddDeadline({ caseId: c.id, title: prev.label, date: val, type: "Filing", rule: "", assigned: currentUser.id });
+    }
   };
 
   const handleComplete = (taskId) => {
@@ -2396,7 +2402,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
               <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
                 <div className="case-overlay-section-title">Case Details</div>
-                {detailFields.map(f => (
+                {detailFields.filter(f => !hiddenFields.includes(f.key)).map(f => (
                   <EditField
                     key={f.key}
                     fieldKey={f.key}
@@ -2406,7 +2412,8 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     value={draft[f.key]}
                     onChange={val => f.type === "select" || f.type === "user" ? setAndLog(f.key, val) : set(f.key, val)}
                     onBlur={() => (f.type === "text") && handleBlur(f.key)}
-                    canRemove={false}
+                    canRemove={editMode && canRemove}
+                    onRemove={() => setHiddenFields(p => [...p, f.key])}
                     readOnly={!editMode}
                     onContactClick={!editMode && CONTACT_LINKABLE_KEYS.has(f.key) ? handleContactClick : undefined}
                   />
@@ -2457,20 +2464,19 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
               <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
                 <div className="case-overlay-section-title">Key Dates</div>
-                {dateFields.map(f => {
+                {dateFields.filter(f => !hiddenFields.includes(f.key)).map(f => {
                   const days = draft[f.key] ? daysUntil(draft[f.key]) : null;
                   return (
                     <div key={f.key} className="edit-field">
-                      <div className="edit-field-key">{f.label}</div>
+                      <div className="edit-field-key" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span>{f.label}</span>
+                        {editMode && canRemove && (
+                          <button onClick={() => setHiddenFields(p => [...p, f.key])} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "0 2px" }}>✕</button>
+                        )}
+                      </div>
                       <div className="edit-field-val" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         {editMode ? (
-                          <input
-                            type="date"
-                            value={draft[f.key] || ""}
-                            onChange={e => set(f.key, e.target.value)}
-                            onBlur={() => handleBlur(f.key)}
-                            style={{ flex: 1 }}
-                          />
+                          <input type="date" value={draft[f.key] || ""} onChange={e => set(f.key, e.target.value)} onBlur={() => handleBlur(f.key)} style={{ flex: 1 }} />
                         ) : (
                           <span style={{ fontSize: 13, color: "var(--c-text)", padding: "3px 0" }}>{draft[f.key] ? fmt(draft[f.key]) : "—"}</span>
                         )}
@@ -2483,36 +2489,23 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     </div>
                   );
                 })}
-                {customDates.map(d => {
-                  const days = d.value ? daysUntil(d.value) : null;
-                  return (
-                    <div key={d.id} className="edit-field">
-                      <div className="edit-field-key" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span>{d.label}</span>
-                        {editMode && canRemove && (
-                          <button onClick={() => removeCustomDate(d.id)} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "0 2px" }}>✕</button>
-                        )}
-                      </div>
-                      <div className="edit-field-val" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {editMode ? (
-                          <input
-                            type="date"
-                            value={d.value || ""}
-                            onChange={e => updateCustomDate(d.id, e.target.value)}
-                            style={{ flex: 1 }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 13, color: "var(--c-text)", padding: "3px 0" }}>{d.value ? fmt(d.value) : "—"}</span>
-                        )}
-                        {d.value && days !== null && (
-                          <span style={{ fontSize: 11, color: urgencyColor(days), whiteSpace: "nowrap", fontWeight: 600 }}>
-                            {days < 0 ? `${Math.abs(days)}d ago` : days === 0 ? "Today" : `${days}d`}
-                          </span>
-                        )}
-                      </div>
+                {customDates.map(d => (
+                  <div key={d.id} className="edit-field">
+                    <div className="edit-field-key" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>{d.label}</span>
+                      {editMode && (
+                        <button onClick={() => removeCustomDate(d.id)} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "0 2px" }}>✕</button>
+                      )}
                     </div>
-                  );
-                })}
+                    <div className="edit-field-val">
+                      {editMode ? (
+                        <input type="date" value={d.value || ""} onChange={e => updateCustomDate(d.id, e.target.value)} style={{ width: "100%" }} />
+                      ) : (
+                        <span style={{ fontSize: 13, color: "var(--c-text)", padding: "3px 0" }}>{d.value ? fmt(d.value) : "—"}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
                 {editMode && (
                   <div style={{ marginTop: 6 }}>
                     {addingDate && (
