@@ -868,7 +868,7 @@ export default function App() {
     </div>
   );
 
-  const overdueBadge = allDeadlines.filter(d => daysUntil(d.date) < 0).length + tasks.filter(t => t.status !== "Completed" && daysUntil(t.due) < 0).length;
+  const overdueBadge = tasks.filter(t => t.assigned === currentUser?.id && t.status !== "Completed" && daysUntil(t.due) < 0).length;
 
   const handleAddRecord = async (record) => {
     try {
@@ -1523,7 +1523,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
   const activeCases = allCases.filter(c => c.status === "Active");
   const upcomingDl = deadlines.filter(d => { const n = daysUntil(d.date); return n !== null && n >= 0 && n <= 30; }).sort((a, b) => new Date(a.date) - new Date(b.date));
   const trialSoon = allCases.filter(c => c.trialDate && daysUntil(c.trialDate) >= 0 && daysUntil(c.trialDate) <= 90).sort((a, b) => new Date(a.trialDate) - new Date(b.trialDate));
-  const myTasks = tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed");
+  const myTasks = tasks.filter(t => Number(t.assigned) === Number(currentUser.id) && t.status !== "Completed");
 
   return (
     <>
