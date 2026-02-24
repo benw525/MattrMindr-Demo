@@ -6695,15 +6695,15 @@ function DocumentsView({ currentUser }) {
 
           {/* Step 2: Select Placeholders */}
           {wizard.step === 2 && (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 4 }}>{wizard.editingId ? "Edit Placeholders" : "Step 2: Select Placeholders"}</div>
-              <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 16 }}>{wizard.editingId ? "Your existing placeholders are shown below. Add new ones, remove existing ones, or continue to the next step." : "Highlight any text below and click \"Make Placeholder\" to mark it as a field that changes per case."}</div>
+            <div style={{ display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 260px)" }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 4, flexShrink: 0 }}>{wizard.editingId ? "Edit Placeholders" : "Step 2: Select Placeholders"}</div>
+              <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 16, flexShrink: 0 }}>{wizard.editingId ? "Your existing placeholders are shown below. Add new ones, remove existing ones, or continue to the next step." : "Highlight any text below and click \"Make Placeholder\" to mark it as a field that changes per case."}</div>
 
-              <div style={{ display: "flex", gap: 20 }}>
-                <div style={{ flex: 2 }}>
+              <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0, overflow: "hidden" }}>
+                <div style={{ flex: 2, display: "flex", flexDirection: "column", minHeight: 0 }}>
                   <div
                     id="docPreviewPane"
-                    style={{ background: "var(--c-bg2)", border: "1px solid var(--c-border)", borderRadius: 8, padding: 20, maxHeight: 500, overflow: "auto", fontSize: 13, lineHeight: 1.8, color: "var(--c-text)", whiteSpace: "pre-wrap", userSelect: "text" }}
+                    style={{ background: "var(--c-bg2)", border: "1px solid var(--c-border)", borderRadius: 8, padding: 20, flex: 1, minHeight: 0, overflow: "auto", fontSize: 13, lineHeight: 1.8, color: "var(--c-text)", whiteSpace: "pre-wrap", userSelect: "text" }}
                   >
                     {(() => {
                       let displayText = wizard.text;
@@ -6771,7 +6771,7 @@ function DocumentsView({ currentUser }) {
                   </div>
                 </div>
 
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginBottom: 8 }}>Placeholders ({wizard.placeholders.length})</div>
                   {wizard.placeholders.length === 0 && <div style={{ fontSize: 12, color: "#8A9096", fontStyle: "italic" }}>None yet. Highlight text and click "Make Placeholder".</div>}
                   {wizard.placeholders.map(ph => (
@@ -6786,7 +6786,7 @@ function DocumentsView({ currentUser }) {
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20, flexShrink: 0, paddingTop: 8 }}>
                 <button className="btn btn-outline" onClick={() => { setWizard(null); }}>Cancel</button>
                 <button className="btn btn-primary" disabled={wizard.placeholders.length === 0} onClick={() => setWizard(w => ({ ...w, step: 3 }))}>{wizard.editingId ? "Next: Map Fields" : "Next: Map Fields"}</button>
               </div>
@@ -6795,11 +6795,11 @@ function DocumentsView({ currentUser }) {
 
           {/* Step 3: Map to case fields */}
           {wizard.step === 3 && (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 4 }}>Step 3: Map Fields</div>
-              <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 16 }}>For each placeholder, choose whether it auto-fills from case data or is entered manually each time.</div>
+            <div style={{ display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 260px)" }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 4, flexShrink: 0 }}>Step 3: Map Fields</div>
+              <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 16, flexShrink: 0 }}>For each placeholder, choose whether it auto-fills from case data or is entered manually each time.</div>
 
-              <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--c-border)", borderRadius: 8, padding: "4px 0" }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: "auto", border: "1px solid var(--c-border)", borderRadius: 8, padding: "4px 0" }}>
               {wizard.placeholders.map(ph => (
                 <div key={ph.id} style={{ display: "flex", gap: 16, alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--c-border2)" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -6821,7 +6821,7 @@ function DocumentsView({ currentUser }) {
               ))}
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20, flexShrink: 0, paddingTop: 8 }}>
                 <button className="btn btn-outline" onClick={() => setWizard(w => ({ ...w, step: 2 }))}>Back</button>
                 <button className="btn btn-primary" onClick={() => setWizard(w => ({ ...w, step: 4 }))}>Next: Name & Tag</button>
               </div>
