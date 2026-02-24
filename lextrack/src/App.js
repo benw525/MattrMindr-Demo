@@ -588,7 +588,7 @@ const isLegalAsst = (u) => hasRole(u, "Legal Assistant");
 
 function TimePromptModal({ pending, onSubmit }) {
   const [time, setTime]           = useState("");
-  const [claimIt, setClaimIt]     = useState(null);   // null | true | false
+  const [claimIt, setClaimIt]     = useState(false);  // true | false (defaults no-claim)
   const [assignId, setAssignId]   = useState(0);
   const [showAll, setShowAll]     = useState(false);
 
@@ -603,8 +603,6 @@ function TimePromptModal({ pending, onSubmit }) {
   const caseTeamUsers = USERS.filter(u => caseTeamIds.includes(u.id) && isAttyPara(u));
   const otherAttyPara = USERS.filter(u => !caseTeamIds.includes(u.id) && isAttyPara(u));
   const assignedUser  = task ? getUserById(task.assigned) : null;
-
-  const saveDisabled = showClaimPrompt && claimIt === null;
 
   const handleSave = () => {
     const t          = time.trim() || null;
@@ -625,7 +623,7 @@ function TimePromptModal({ pending, onSubmit }) {
           placeholder="e.g. 1.5 hours, 30 min, 2 hrs"
           value={time}
           onChange={e => setTime(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && !saveDisabled && handleSave()}
+          onKeyDown={e => e.key === "Enter" && handleSave()}
           autoFocus
         />
 
@@ -648,11 +646,6 @@ function TimePromptModal({ pending, onSubmit }) {
                 onClick={() => setClaimIt(false)}
               >No, keep in theirs</button>
             </div>
-            {claimIt === null && (
-              <p style={{ fontSize: 11, color: "#f59e0b", marginTop: 6 }}>
-                Please choose an option above to continue.
-              </p>
-            )}
           </div>
         )}
 
@@ -690,7 +683,6 @@ function TimePromptModal({ pending, onSubmit }) {
             className="btn btn-gold"
             style={{ flex: 1 }}
             onClick={handleSave}
-            disabled={saveDisabled}
           >Save</button>
           <button
             className="btn btn-outline"
@@ -1006,18 +998,19 @@ export default function App() {
     }
   };
 
-  const handleCompleteTask = (taskId) => {
+  const handleCompleteTask = (taskId, onAfterComplete) => {
     const target = tasks.find(t => t.id === taskId);
     if (!target) return;
     if (target.status === "Completed") {
       finishCompleteTask(taskId, null, null, null, true);
     } else {
       const caseForTask = allCases.find(c => c.id === target.caseId);
-      setPendingTimePrompt({ taskId, task: target, completingUser: currentUser, caseForTask });
+      setPendingTimePrompt({ taskId, task: target, completingUser: currentUser, caseForTask, onAfterComplete });
     }
   };
 
   const finishCompleteTask = async (taskId, timeLogged, completedBy, timeLogUser, isUncomplete = false) => {
+    const onAfterComplete = pendingTimePrompt?.onAfterComplete;
     setPendingTimePrompt(null);
     try {
       const target = tasks.find(t => t.id === taskId);
@@ -1155,6 +1148,7 @@ export default function App() {
           updatedTasks = [...updatedTasks, ...savedR];
         }
         setTasks(updatedTasks);
+        onAfterComplete?.();
         setFollowUpPrompt({
           target,
           caseForTask,
@@ -1173,6 +1167,7 @@ export default function App() {
       }
 
       setTasks(updatedTasks);
+      onAfterComplete?.();
     } catch (err) {
       alert("Failed to complete task: " + err.message);
     }
@@ -2088,18 +2083,26 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   // Wrap onCompleteTask to also log
   const handleComplete = (taskId) => {
     const t = tasks.find(t => t.id === taskId);
-    onCompleteTask(taskId);
-    if (t) {
-      const completing = t.status !== "Completed";
-      const assignedToOther = completing && t.assigned > 0 && t.assigned !== currentUser.id;
-      const assignedName = assignedToOther ? (getUserById(t.assigned)?.name || "unknown") : null;
+    if (!t) { onCompleteTask(taskId); return; }
+
+    const completing = t.status !== "Completed";
+
+    if (!completing) {
+      log("Task Reopened", `"${t.title}" marked incomplete`);
+      onCompleteTask(taskId);
+      return;
+    }
+
+    const assignedToOther = t.assigned > 0 && t.assigned !== currentUser.id;
+    const assignedName = assignedToOther ? (getUserById(t.assigned)?.name || "unknown") : null;
+    onCompleteTask(taskId, () => {
       log(
-        completing ? "Task Completed" : "Task Reopened",
+        "Task Completed",
         assignedToOther
           ? `"${t.title}" completed by ${currentUser.name} (assigned to ${assignedName})`
-          : `"${t.title}" marked ${completing ? "complete" : "incomplete"}`
+          : `"${t.title}" marked complete`
       );
-    }
+    });
   };
 
   // Wrap link handlers to log
