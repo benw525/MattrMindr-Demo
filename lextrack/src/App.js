@@ -871,14 +871,14 @@ export default function App() {
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>LexTrack</div>
+      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>MattrMindr</div>
       <div style={{ fontSize: 13, color: "#94a3b8" }}>Loading case data…</div>
     </div>
   );
 
   if (dataError) return (
     <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>LexTrack</div>
+      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>MattrMindr</div>
       <div style={{ fontSize: 13, color: "#e05252" }}>Failed to load data: {dataError}</div>
       <button className="btn btn-outline" onClick={() => setCurrentUser(null)}>Return to Login</button>
     </div>
@@ -1257,7 +1257,7 @@ export default function App() {
     <div className={`app${darkMode ? " dark" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-text">LexTrack</div>
+          <div className="sidebar-logo-text">MattrMindr</div>
           <div className="sidebar-logo-sub">Case Management</div>
         </div>
         <div className="sidebar-user">
@@ -1343,7 +1343,7 @@ function LoginScreen({ onLogin }) {
   return (
     <div className="login-bg">
       <div className="login-box">
-        <div className="login-title">LexTrack</div>
+        <div className="login-title">MattrMindr</div>
         <div className="login-sub">Case Management System</div>
         <div className="form-group">
           <label>Email</label>
@@ -3354,7 +3354,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
                   </div>
                 </div>
                 <div style={{ textAlign: "right", fontSize: 11, color: "#777" }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#333", marginBottom: 2 }}>LexTrack</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#333", marginBottom: 2 }}>MattrMindr</div>
                   <div>Printed {now}</div>
                 </div>
               </div>
@@ -3485,7 +3485,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
 
             {/* Footer */}
             <div className="footer">
-              <span>LexTrack Case Management · Confidential — Attorney Work Product</span>
+              <span>MattrMindr Case Management · Confidential — Attorney Work Product</span>
               <span>Printed {now}</span>
             </div>
           </div>
@@ -4625,7 +4625,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser }) {
                 if (urgent === 0) return null;
                 return <div style={{ fontSize: 12, color: "#94a3b8" }}><strong style={{ color: "#e07a30" }}>{urgent}</strong> within 14 days</div>;
               })()}
-              <div style={{ marginLeft: "auto", fontSize: 11, color: "#cbd5e1" }}>LexTrack · {generated.generatedAt} · {currentUser.name}</div>
+              <div style={{ marginLeft: "auto", fontSize: 11, color: "#cbd5e1" }}>MattrMindr · {generated.generatedAt} · {currentUser.name}</div>
             </div>
           </div>
         )}

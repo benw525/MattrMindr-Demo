@@ -49,5 +49,5 @@ app.use("/api/contact-notes", contactNotesRoutes);
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`LexTrack API listening on port ${PORT}`);
+  console.log(`MattrMindr API listening on port ${PORT}`);
 });
