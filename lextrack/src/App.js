@@ -2035,6 +2035,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [customFields, setCustomFields] = useState(c._customFields || []);
   const [addingField, setAddingField] = useState(false);
   const [newFieldLabel, setNewFieldLabel] = useState("");
+  const [newFieldIsName, setNewFieldIsName] = useState(false);
   const [customDates, setCustomDates] = useState(c._customDates || []);
   const [addingDate, setAddingDate] = useState(false);
   const [newDateLabel, setNewDateLabel] = useState("");
@@ -2060,11 +2061,19 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     apiGetContacts().then(setAllContacts).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleContactClick = (name) => {
+  const handleContactClick = async (name) => {
     if (!name || !name.trim()) return;
     const n = name.trim().toLowerCase();
     const found = allContacts.find(ct => ct.name.trim().toLowerCase() === n);
-    if (found) setContactPopup(found);
+    if (found) {
+      setContactPopup(found);
+    } else {
+      try {
+        const created = await apiCreateContact({ name: name.trim(), category: "Miscellaneous", phone: "", email: "", fax: "", address: "" });
+        setAllContacts(p => [...p, created]);
+        setContactPopup(created);
+      } catch { /* silently ignore if creation fails */ }
+    }
   };
 
   // Track "committed" values for blur-based change detection
@@ -2149,10 +2158,11 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const addCustomField = () => {
     if (!newFieldLabel.trim()) return;
     const label = newFieldLabel.trim();
-    setCustomFields(p => [...p, { id: newId(), label, value: "" }]);
+    setCustomFields(p => [...p, { id: newId(), label, value: "", isNameField: newFieldIsName }]);
     setNewFieldLabel("");
+    setNewFieldIsName(false);
     setAddingField(false);
-    log("Field Added", `Custom field "${label}" added`);
+    log("Field Added", `Custom field "${label}" added${newFieldIsName ? " (name/contact field)" : ""}`);
   };
 
   const removeCustomField = (id) => {
@@ -2247,30 +2257,30 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         </div>
       )}
       {contactPopup && (
-        <div onClick={e => e.target === e.currentTarget && (setContactPopup(null), setContactEditMode(false))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.18)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}>
-          <div className="modal-box" style={{ maxWidth: 400 }}>
+        <div onClick={e => e.target === e.currentTarget && (setContactPopup(null), setContactEditMode(false))} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.22)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}>
+          <div style={{ background: "#2b3544", borderRadius: 10, padding: "20px 24px", maxWidth: 360, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.45)", display: "inline-flex", flexDirection: "column" }}>
             {contactEditMode && contactEditDraft ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 600, color: "var(--c-text-h)" }}>Edit Contact</div>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 600, color: "#f1f5f9" }}>Edit Contact</div>
                   <button onClick={() => setContactEditMode(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8", lineHeight: 1, padding: "2px 4px" }}>✕</button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {[["Name", "name", "text"], ["Phone", "phone", "text"], ["Email", "email", "text"], ["Fax", "fax", "text"], ["Address", "address", "text"]].map(([lbl, key, type]) => (
+                  {[["Name", "name"], ["Phone", "phone"], ["Email", "email"], ["Fax", "fax"], ["Address", "address"]].map(([lbl, key]) => (
                     <div key={key}>
                       <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 3 }}>{lbl}</div>
-                      <input type={type} value={contactEditDraft[key] || ""} onChange={e => setContactEditDraft(p => ({ ...p, [key]: e.target.value }))} style={{ width: "100%", boxSizing: "border-box" }} />
+                      <input value={contactEditDraft[key] || ""} onChange={e => setContactEditDraft(p => ({ ...p, [key]: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", background: "#1e2a38", border: "1px solid #3d4f63", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 13 }} />
                     </div>
                   ))}
                   <div>
                     <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 3 }}>Category</div>
-                    <select value={contactEditDraft.category || "Client"} onChange={e => setContactEditDraft(p => ({ ...p, category: e.target.value }))} style={{ width: "100%" }}>
+                    <select value={contactEditDraft.category || "Client"} onChange={e => setContactEditDraft(p => ({ ...p, category: e.target.value }))} style={{ width: "100%", background: "#1e2a38", border: "1px solid #3d4f63", borderRadius: 5, color: "#e2e8f0", padding: "5px 8px", fontSize: 13 }}>
                       {["Client", "Attorney", "Court", "Expert", "Miscellaneous"].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-                  <button className="btn btn-outline btn-sm" onClick={() => setContactEditMode(false)}>Cancel</button>
+                  <button className="btn btn-outline btn-sm" style={{ borderColor: "#4a5568", color: "#cbd5e1" }} onClick={() => setContactEditMode(false)}>Cancel</button>
                   <button className="btn btn-sm" style={{ background: "#2563eb", color: "#fff", border: "1px solid #2563eb" }} onClick={async () => {
                     try {
                       const saved = await apiUpdateContact(contactEditDraft.id, contactEditDraft);
@@ -2285,29 +2295,29 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               const cs = CONTACT_CAT_STYLE[contactPopup.category] || CONTACT_CAT_STYLE.Miscellaneous;
               const row = (icon, val) => val ? (
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, color: "#94a3b8", width: 16, flexShrink: 0 }}>{icon}</span>
-                  <span style={{ fontSize: 13, color: "var(--c-text)" }}>{val}</span>
+                  <span style={{ fontSize: 13, color: "#64748b", width: 16, flexShrink: 0 }}>{icon}</span>
+                  <span style={{ fontSize: 13, color: "#cbd5e1" }}>{val}</span>
                 </div>
               ) : null;
               return (
                 <>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
                     <div>
-                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 6 }}>{contactPopup.name}</div>
+                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: "#f1f5f9", marginBottom: 6 }}>{contactPopup.name}</div>
                       <span style={{ fontSize: 11, fontWeight: 600, background: cs.bg, color: cs.color, border: `1px solid ${cs.border}`, borderRadius: 4, padding: "2px 8px" }}>{contactPopup.category}</span>
                     </div>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => { setContactEditDraft({ ...contactPopup }); setContactEditMode(true); }}>✎ Edit</button>
-                      <button onClick={() => setContactPopup(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8", lineHeight: 1, padding: "2px 4px" }}>✕</button>
+                      <button onClick={() => { setContactEditDraft({ ...contactPopup }); setContactEditMode(true); }} style={{ fontSize: 11, padding: "3px 10px", background: "transparent", border: "1px solid #4a5568", borderRadius: 5, color: "#94a3b8", cursor: "pointer" }}>✎ Edit</button>
+                      <button onClick={() => setContactPopup(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#64748b", lineHeight: 1, padding: "2px 4px" }}>✕</button>
                     </div>
                   </div>
-                  <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 14 }}>
+                  <div style={{ borderTop: "1px solid #3d4f63", paddingTop: 14 }}>
                     {row("📞", contactPopup.phone)}
                     {row("✉️", contactPopup.email)}
                     {row("📠", contactPopup.fax)}
                     {row("📍", contactPopup.address)}
                     {!contactPopup.phone && !contactPopup.email && !contactPopup.fax && !contactPopup.address && (
-                      <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>No contact details on file.</div>
+                      <div style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>No contact details on file.</div>
                     )}
                   </div>
                 </>
@@ -2408,21 +2418,28 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     canRemove={editMode && canRemove}
                     isCustom
                     readOnly={!editMode}
+                    onContactClick={!editMode && f.isNameField ? handleContactClick : undefined}
                   />
                 ))}
                 {editMode && (
                   <div style={{ marginTop: 6 }}>
                     {addingField && (
-                      <div className="add-field-row" style={{ marginBottom: 8 }}>
-                        <input
-                          placeholder="Field name (e.g. Policy Limit)"
-                          value={newFieldLabel}
-                          onChange={e => setNewFieldLabel(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && addCustomField()}
-                          style={{ flex: 1 }}
-                          autoFocus
-                        />
-                        <button className="btn btn-gold" style={{ fontSize: 12, whiteSpace: "nowrap" }} onClick={addCustomField}>Add</button>
+                      <div style={{ marginBottom: 8 }}>
+                        <div className="add-field-row" style={{ marginBottom: 6 }}>
+                          <input
+                            placeholder="Field name (e.g. Policy Limit)"
+                            value={newFieldLabel}
+                            onChange={e => setNewFieldLabel(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && addCustomField()}
+                            style={{ flex: 1 }}
+                            autoFocus
+                          />
+                          <button className="btn btn-gold" style={{ fontSize: 12, whiteSpace: "nowrap" }} onClick={addCustomField}>Add</button>
+                        </div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--c-text2)", cursor: "pointer", paddingLeft: 2 }}>
+                          <input type="checkbox" checked={newFieldIsName} onChange={e => setNewFieldIsName(e.target.checked)} />
+                          Name field (contact-linkable)
+                        </label>
                       </div>
                     )}
                     <button className="btn btn-outline btn-sm" style={{ fontSize: 11, width: "100%" }} onClick={() => setAddingField(s => !s)}>
