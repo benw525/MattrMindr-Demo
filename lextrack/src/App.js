@@ -6695,7 +6695,28 @@ function DocumentsView({ currentUser }) {
                     const pane = document.getElementById("docPreviewPane");
                     if (!pane || !pane.contains(sel.anchorNode)) return alert("Please select text from the document preview.");
                     const fullText = wizard.text;
-                    const idx = fullText.indexOf(text);
+                    const range = sel.getRangeAt(0);
+                    const preRange = document.createRange();
+                    preRange.selectNodeContents(pane);
+                    preRange.setEnd(range.startContainer, range.startOffset);
+                    const preText = preRange.toString();
+                    let idx = -1;
+                    const sortedPhs = [...wizard.placeholders].sort((a, b) => a.start - b.start);
+                    let offset = 0;
+                    let visualPos = 0;
+                    for (const ph of sortedPhs) {
+                      if (visualPos + (ph.start - offset) > preText.length) break;
+                      const labelLen = `[${ph.label}]`.length;
+                      const origLen = ph.end - ph.start;
+                      visualPos += (ph.start - offset);
+                      visualPos += labelLen;
+                      offset = ph.end;
+                    }
+                    const remainingVisual = preText.length - visualPos;
+                    const charOffset = offset + remainingVisual;
+                    const searchStart = Math.max(0, charOffset - 5);
+                    idx = fullText.indexOf(text, searchStart);
+                    if (idx === -1) idx = fullText.indexOf(text);
                     if (idx === -1) return alert("Could not locate the selected text. Try selecting a more unique phrase.");
                     const overlap = wizard.placeholders.some(p => !(idx + text.length <= p.start || idx >= p.end));
                     if (overlap) return alert("This selection overlaps with an existing placeholder.");
@@ -6738,11 +6759,12 @@ function DocumentsView({ currentUser }) {
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 4 }}>Step 3: Map Fields</div>
               <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 16 }}>For each placeholder, choose whether it auto-fills from case data or is entered manually each time.</div>
 
+              <div style={{ maxHeight: 500, overflow: "auto", border: "1px solid var(--c-border)", borderRadius: 8, padding: "4px 0" }}>
               {wizard.placeholders.map(ph => (
-                <div key={ph.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--c-border2)" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text)" }}>{ph.label}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>replaces: "{ph.original.substring(0, 50)}{ph.original.length > 50 ? "..." : ""}"</div>
+                <div key={ph.id} style={{ display: "flex", gap: 16, alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--c-border2)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text)", marginBottom: 2 }}>{ph.label}</div>
+                    <div style={{ fontSize: 12, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>replaces: "{ph.original.substring(0, 60)}{ph.original.length > 60 ? "..." : ""}"</div>
                   </div>
                   <select
                     value={ph.mapping || "_manual"}
@@ -6750,13 +6772,14 @@ function DocumentsView({ currentUser }) {
                       ...w,
                       placeholders: w.placeholders.map(p => p.id === ph.id ? { ...p, mapping: e.target.value } : p),
                     }))}
-                    style={{ fontSize: 12, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", minWidth: 180 }}
+                    style={{ fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", minWidth: 220, flexShrink: 0 }}
                   >
                     <option value="_manual">Ask me each time</option>
                     {CASE_FIELD_MAP.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                   </select>
                 </div>
               ))}
+              </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
                 <button className="btn btn-outline" onClick={() => setWizard(w => ({ ...w, step: 2 }))}>Back</button>
