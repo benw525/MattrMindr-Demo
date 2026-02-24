@@ -92,6 +92,7 @@ router.post("/login", async (req, res) => {
 
     req.session.userId = user.id;
     req.session.userName = user.name;
+    req.session.userEmail = user.email;
     req.session.userRole = user.role;
     req.session.userRoles = user.roles || [user.role];
     return res.json(userPayload(user));
