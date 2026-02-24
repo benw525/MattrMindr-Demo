@@ -6582,11 +6582,11 @@ function DocumentsView({ currentUser }) {
       <div className="topbar-row">
         <div><div className="topbar-title">Document Templates</div><div className="topbar-subtitle">{templates.length} template{templates.length !== 1 ? "s" : ""}</div></div>
         <button className="btn btn-primary" onClick={() => document.getElementById("docUploadInput").click()}>+ New Template</button>
-        <input id="docUploadInput" type="file" accept=".docx" style={{ display: "none" }} onChange={async e => {
+        <input id="docUploadInput" type="file" accept=".docx,.doc" style={{ display: "none" }} onChange={async e => {
           const file = e.target.files[0]; if (!file) return; e.target.value = "";
           try {
             const parsed = await apiUploadTemplateFile(file);
-            setWizard({ step: 1, file, text: parsed.text, paragraphs: parsed.paragraphs, placeholders: [], name: file.name.replace(/\.docx$/i, ""), tags: [], newTag: "" });
+            setWizard({ step: 1, file, text: parsed.text, paragraphs: parsed.paragraphs, placeholders: [], name: file.name.replace(/\.(docx?|doc)$/i, ""), tags: [], newTag: "", isDoc: parsed.isDoc });
           } catch (err) { alert("Failed to parse document: " + err.message); }
         }} />
       </div>
@@ -6608,7 +6608,7 @@ function DocumentsView({ currentUser }) {
           </div>
 
           {loading && <div style={{ color: "#94a3b8", fontSize: 13, padding: 20 }}>Loading...</div>}
-          {!loading && filtered.length === 0 && <div style={{ color: "#94a3b8", fontSize: 13, fontStyle: "italic", padding: 20 }}>No templates yet. Click "+ New Template" to upload a .docx file and create your first template.</div>}
+          {!loading && filtered.length === 0 && <div style={{ color: "#94a3b8", fontSize: 13, fontStyle: "italic", padding: 20 }}>No templates yet. Click "+ New Template" to upload a .doc or .docx file and create your first template.</div>}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
             {filtered.map(t => (
@@ -6649,6 +6649,11 @@ function DocumentsView({ currentUser }) {
             setTimeout(() => setWizard(w => w ? { ...w, step: 2 } : w), 300);
             return <div style={{ color: "#94a3b8", fontSize: 13 }}>Document parsed. Loading preview...</div>;
           })()}
+          {wizard.isDoc && wizard.step >= 2 && (
+            <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 6, padding: "8px 14px", marginBottom: 12, fontSize: 12, color: "#92400e" }}>
+              This .doc file has been converted to .docx format. The text content is preserved, but some formatting may be simplified. For best results, use .docx files.
+            </div>
+          )}
 
           {/* Step 2: Select Placeholders */}
           {wizard.step === 2 && (

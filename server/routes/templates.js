@@ -34,15 +34,18 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-  if (!req.file.originalname.endsWith(".docx")) return res.status(400).json({ error: "Only .docx files are supported" });
+  const fname = req.file.originalname.toLowerCase();
+  if (!fname.endsWith(".docx") && !fname.endsWith(".doc")) {
+    return res.status(400).json({ error: "Only .doc and .docx files are supported" });
+  }
 
   try {
     const result = await mammoth.extractRawText({ buffer: req.file.buffer });
     const text = result.value || "";
-
     const paragraphs = text.split("\n").filter(p => p.trim());
+    const isDoc = fname.endsWith(".doc") && !fname.endsWith(".docx");
 
-    return res.json({ text, paragraphs });
+    return res.json({ text, paragraphs, isDoc });
   } catch (err) {
     console.error("Template upload/parse error:", err);
     return res.status(500).json({ error: "Failed to parse document" });
@@ -51,6 +54,10 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
 
 router.post("/", requireAuth, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  const fname = req.file.originalname.toLowerCase();
+  if (!fname.endsWith(".docx") && !fname.endsWith(".doc")) {
+    return res.status(400).json({ error: "Only .doc and .docx files are supported" });
+  }
 
   const { name, tags, placeholders } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: "Template name is required" });
@@ -62,8 +69,31 @@ router.post("/", requireAuth, upload.single("file"), async (req, res) => {
     parsedPlaceholders = JSON.parse(placeholders || "[]");
   } catch { }
 
+  const isDoc = fname.endsWith(".doc") && !fname.endsWith(".docx");
+
   try {
-    const zip = new PizZip(req.file.buffer);
+    let docxBuffer = req.file.buffer;
+
+    if (isDoc) {
+      const result = await mammoth.convertToHtml({ buffer: req.file.buffer });
+      const htmlContent = result.value || "";
+      const newZip = new PizZip();
+      newZip.file("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+      newZip.file("_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      newZip.file("word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+
+      const plainText = htmlContent.replace(/<[^>]+>/g, "").trim();
+      const paragraphs = plainText.split(/\n+/).filter(p => p.trim());
+      const bodyXml = paragraphs.map(p =>
+        `<w:p><w:r><w:t xml:space="preserve">${p.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</w:t></w:r></w:p>`
+      ).join("");
+
+      newZip.file("word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" mc:Ignorable="w14 wp14"><w:body>${bodyXml}</w:body></w:document>`);
+
+      docxBuffer = newZip.generate({ type: "nodebuffer" });
+    }
+
+    const zip = new PizZip(docxBuffer);
 
     const sorted = [...parsedPlaceholders].sort((a, b) => (b.original || "").length - (a.original || "").length);
 
