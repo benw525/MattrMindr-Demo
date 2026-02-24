@@ -1959,7 +1959,7 @@ const CORE_FIELDS = [
 
 const isAttorney = (user) => hasRole(user, "Attorney") || hasRole(user, "Associate") || hasRole(user, "Shareholder");
 
-function EditField({ fieldKey, label, type, options, value, onChange, onBlur, onRemove, canRemove, isCustom, userList, readOnly }) {
+function EditField({ fieldKey, label, type, options, value, onChange, onBlur, onRemove, canRemove, isCustom, userList, readOnly, onContactClick }) {
   const displayVal = type === "date" ? (value || "") : (value ?? "");
   const userVal = type === "user" ? (value || "") : undefined;
   const availableUsers = userList || USERS;
@@ -1969,10 +1969,21 @@ function EditField({ fieldKey, label, type, options, value, onChange, onBlur, on
     if (type === "user") display = getUserById(Number(value))?.name || "—";
     else if (type === "date") display = value ? fmt(value) : "—";
     else display = value || "—";
+    const isClickable = onContactClick && display !== "—";
     return (
       <div className="edit-field">
         <div className="edit-field-key">{label}</div>
-        <div className="edit-field-val" style={{ color: "var(--c-text)", fontSize: 13, padding: "3px 0", fontWeight: 400 }}>{display}</div>
+        <div className="edit-field-val" style={{ padding: "3px 0" }}>
+          {isClickable ? (
+            <span
+              onClick={() => onContactClick(display)}
+              style={{ color: "#2563eb", cursor: "pointer", fontSize: 13, fontWeight: 400, textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 3 }}
+              title="View contact card"
+            >{display}</span>
+          ) : (
+            <span style={{ color: "var(--c-text)", fontSize: 13, fontWeight: 400 }}>{display}</span>
+          )}
+        </div>
       </div>
     );
   }
@@ -2016,6 +2027,8 @@ function EditField({ fieldKey, label, type, options, value, onChange, onBlur, on
   );
 }
 
+const CONTACT_LINKABLE_KEYS = new Set(["client", "insured", "plaintiff", "claimSpec", "judge", "mediator"]);
+
 function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, userOffices }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
@@ -2025,8 +2038,21 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [activeTab, setActiveTab] = useState("details"); // "details" | "activity"
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [allContacts, setAllContacts] = useState([]);
+  const [contactPopup, setContactPopup] = useState(null);
   const canRemove = isAttorney(currentUser);
   const canDelete = isAppAdmin(currentUser);
+
+  useEffect(() => {
+    apiGetContacts().then(setAllContacts).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleContactClick = (name) => {
+    if (!name || !name.trim()) return;
+    const n = name.trim().toLowerCase();
+    const found = allContacts.find(ct => ct.name.trim().toLowerCase() === n);
+    if (found) setContactPopup(found);
+  };
 
   // Track "committed" values for blur-based change detection
   const committed = useState({ ...c })[0]; // ref-like: we mutate it directly
@@ -2185,6 +2211,41 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
           </div>
         </div>
       )}
+      {contactPopup && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setContactPopup(null)} style={{ zIndex: 1100 }}>
+          <div className="modal-box" style={{ maxWidth: 380 }}>
+            {(() => {
+              const cs = CONTACT_CAT_STYLE[contactPopup.category] || CONTACT_CAT_STYLE.Miscellaneous;
+              const row = (icon, val) => val ? (
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, color: "#94a3b8", width: 16, flexShrink: 0 }}>{icon}</span>
+                  <span style={{ fontSize: 13, color: "var(--c-text)" }}>{val}</span>
+                </div>
+              ) : null;
+              return (
+                <>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 6 }}>{contactPopup.name}</div>
+                      <span style={{ fontSize: 11, fontWeight: 600, background: cs.bg, color: cs.color, border: `1px solid ${cs.border}`, borderRadius: 4, padding: "2px 8px" }}>{contactPopup.category}</span>
+                    </div>
+                    <button onClick={() => setContactPopup(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8", lineHeight: 1, padding: "2px 4px" }}>✕</button>
+                  </div>
+                  <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 14 }}>
+                    {row("📞", contactPopup.phone)}
+                    {row("✉️", contactPopup.email)}
+                    {row("📠", contactPopup.fax)}
+                    {row("📍", contactPopup.address)}
+                    {!contactPopup.phone && !contactPopup.email && !contactPopup.fax && !contactPopup.address && (
+                      <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>No contact details on file.</div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
       <div className="case-overlay">
 
         {/* Header */}
@@ -2246,6 +2307,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     onBlur={() => (f.type === "text") && handleBlur(f.key)}
                     canRemove={false}
                     readOnly={!editMode}
+                    onContactClick={!editMode && CONTACT_LINKABLE_KEYS.has(f.key) ? handleContactClick : undefined}
                   />
                 ))}
               </div>
