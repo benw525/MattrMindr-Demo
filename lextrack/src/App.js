@@ -3062,6 +3062,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                       setTimeout(() => setCorrCopied(false), 2000);
                     }}>{corrCopied ? "Copied!" : `case-${c.id}@${window.location.hostname}`}</span>
                   </span>
+                  <button className="btn btn-outline btn-sm" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => {
+                    setCorrLoading(true);
+                    apiGetCorrespondence(c.id).then(setCorrespondence).catch(() => {}).finally(() => setCorrLoading(false));
+                  }}>↻ Refresh</button>
                 </div>
               </div>
 
