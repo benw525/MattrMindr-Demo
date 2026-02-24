@@ -1872,10 +1872,16 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                     {paged.map(c => (
                       <tr key={c.id} className={`clickable-row ${selectedCase?.id === c.id ? "selected-row" : ""}`} onClick={() => setSelectedCase(selectedCase?.id === c.id ? null : c)}>
                         <td><Badge label={recordType(c)} /></td>
-                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "#2563eb", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
-                        <td><div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#94a3b8" }}>Pltf: {c.plaintiff}</div>}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <div style={{ fontFamily: "monospace", fontSize: 11, color: "#2563eb" }}>{c.caseNum || "—"}</div>
+                          {c.claimNum && <div style={{ fontFamily: "monospace", fontSize: 10, color: "#475569", marginTop: 2 }}>Claim: {c.claimNum}</div>}
+                        </td>
+                        <td>
+                          <div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>
+                          {c.plaintiff && <div style={{ fontSize: 12, color: "#334155", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>vs. {c.plaintiff}</div>}
+                        </td>
                         <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
-                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.client || "—"}{c.claimNum && <div style={{ fontSize: 10, color: "#94a3b8" }}>Claim: {c.claimNum}</div>}</td>
+                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.client || "—"}</td>
                         <td><Badge label={c.stage} /></td>
                         <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#94a3b8", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
                         <td><Avatar userId={c.leadAttorney} size={26} /></td>
