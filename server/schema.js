@@ -23,7 +23,8 @@ async function createSchema() {
         must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
         temp_password TEXT  NOT NULL DEFAULT '',
         password_reset_token TEXT NOT NULL DEFAULT '',
-        password_reset_expires TIMESTAMPTZ
+        password_reset_expires TIMESTAMPTZ,
+        deleted_at  TIMESTAMPTZ
       );
     `);
 

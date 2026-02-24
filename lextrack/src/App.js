@@ -5,7 +5,7 @@ import {
   apiGetCases, apiGetDeletedCases, apiCreateCase, apiUpdateCase, apiDeleteCase, apiRestoreCase,
   apiGetTasks, apiGetCaseTasks, apiCreateTask, apiCreateTasks, apiUpdateTask, apiCompleteTask, apiReassignTasksByRole,
   apiGetDeadlines, apiCreateDeadline,
-  apiGetUsers, apiCreateUser, apiDeleteUser, apiUpdateUserOffices, apiUpdateUserRoles, apiUpdateUser,
+  apiGetUsers, apiCreateUser, apiDeleteUser, apiGetDeletedUsers, apiRestoreUser, apiUpdateUserOffices, apiUpdateUserRoles, apiUpdateUser,
   apiGetNotes, apiCreateNote, apiDeleteNote,
   apiGetLinks, apiCreateLink, apiDeleteLink,
   apiGetActivity, apiCreateActivity,
@@ -815,33 +815,29 @@ export default function App() {
   }, [darkMode]);
   // shape: { target, caseForTask, updatedTasksAfterComplete, pendingChainSpawns, completedDate }
 
-  // Load users from API even before login (so login dropdown shows dynamic list)
-  useEffect(() => {
-    apiGetUsers().then(users => {
-      USERS.splice(0, USERS.length, ...users);
-      setAllUsers([...users]);
-    }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Load all data from API when user logs in
   useEffect(() => {
     if (!currentUser) return;
     setLoading(true);
     setDataError(null);
-    Promise.all([
+    const isAdmin = (currentUser.roles || [currentUser.role]).includes("App Admin");
+    const fetches = [
       apiGetCases(),
       apiGetTasks(),
       apiGetDeadlines(),
       apiGetUsers(),
-    ])
-      .then(([cases, fetchedTasks, deadlines, users]) => {
+    ];
+    if (isAdmin) fetches.push(apiGetDeletedUsers());
+    Promise.all(fetches)
+      .then(([cases, fetchedTasks, deadlines, users, deletedUsersResult]) => {
         setAllCases(cases);
         setTasks(fetchedTasks);
         setAllDeadlines(deadlines);
+        const allU = [...users, ...(deletedUsersResult || []).map(u => ({ ...u, deletedAt: u.deletedAt || u.deleted_at }))];
         USERS.splice(0, USERS.length, ...users);
-        setAllUsers([...users]);
+        setAllUsers(allU);
         const offMap = {};
-        users.forEach(u => { offMap[u.id] = u.offices || []; });
+        allU.forEach(u => { offMap[u.id] = u.offices || []; });
         setUserOffices(offMap);
       })
       .catch(err => setDataError(err.message))
@@ -1380,7 +1376,11 @@ function LoginScreen({ onLogin }) {
 
   const doReset = async () => {
     if (!resetCode.trim()) { setErr("Enter the reset code from your email."); return; }
-    if (!newPw || newPw.length < 6) { setErr("Password must be at least 6 characters."); return; }
+    if (!newPw || newPw.length < 8) { setErr("Password must be at least 8 characters."); return; }
+    if (!/[A-Z]/.test(newPw)) { setErr("Must contain at least 1 uppercase letter."); return; }
+    if (!/[a-z]/.test(newPw)) { setErr("Must contain at least 1 lowercase letter."); return; }
+    if (!/[0-9]/.test(newPw)) { setErr("Must contain at least 1 number."); return; }
+    if (!/[^A-Za-z0-9]/.test(newPw)) { setErr("Must contain at least 1 special character."); return; }
     if (newPw !== confirmPw) { setErr("Passwords do not match."); return; }
     setBusy(true); setErr("");
     try {
@@ -1440,7 +1440,7 @@ function LoginScreen({ onLogin }) {
           </div>
           <div className="form-group">
             <label>New Password</label>
-            <input type="password" placeholder="At least 6 characters" value={newPw} onChange={e => { setNewPw(e.target.value); setErr(""); }} />
+            <input type="password" placeholder="At least 8 characters" value={newPw} onChange={e => { setNewPw(e.target.value); setErr(""); }} />
           </div>
           <div className="form-group">
             <label>Confirm Password</label>
@@ -1469,7 +1469,11 @@ function ChangePasswordModal({ forced, currentUser, onDone, onClose }) {
 
   const doChange = async () => {
     if (!forced && !currentPw) { setErr("Enter your current password."); return; }
-    if (!newPw || newPw.length < 6) { setErr("New password must be at least 6 characters."); return; }
+    if (!newPw || newPw.length < 8) { setErr("Password must be at least 8 characters."); return; }
+    if (!/[A-Z]/.test(newPw)) { setErr("Password must contain at least 1 uppercase letter."); return; }
+    if (!/[a-z]/.test(newPw)) { setErr("Password must contain at least 1 lowercase letter."); return; }
+    if (!/[0-9]/.test(newPw)) { setErr("Password must contain at least 1 number."); return; }
+    if (!/[^A-Za-z0-9]/.test(newPw)) { setErr("Password must contain at least 1 special character."); return; }
     if (newPw !== confirmPw) { setErr("Passwords do not match."); return; }
     setBusy(true); setErr("");
     try {
@@ -1493,7 +1497,8 @@ function ChangePasswordModal({ forced, currentUser, onDone, onClose }) {
       )}
       <div className="form-group">
         <label>New Password</label>
-        <input type="password" placeholder="At least 6 characters" value={newPw} onChange={e => { setNewPw(e.target.value); setErr(""); }} />
+        <input type="password" placeholder="At least 8 characters" value={newPw} onChange={e => { setNewPw(e.target.value); setErr(""); }} />
+        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Must include uppercase, lowercase, number, and special character</div>
       </div>
       <div className="form-group">
         <label>Confirm New Password</label>
@@ -6762,9 +6767,12 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
   const [editingUser, setEditingUser] = useState(null);
   const canAdmin = isAppAdmin(currentUser);
 
+  const activeUsers = allUsers.filter(u => !u.deletedAt);
+  const deletedUsers = allUsers.filter(u => u.deletedAt);
   const filteredStaff = officeFilter === "All"
-    ? allUsers
-    : allUsers.filter(u => (userOffices[u.id] || []).includes(officeFilter));
+    ? activeUsers
+    : activeUsers.filter(u => (userOffices[u.id] || []).includes(officeFilter));
+  const [showDeletedStaff, setShowDeletedStaff] = useState(false);
 
   const handleToggleOffice = async (userId, office) => {
     const current = userOffices[userId] || [];
@@ -6794,12 +6802,19 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
   const handleDeleteStaff = async (userId) => {
     try {
       await apiDeleteUser(userId);
-      USERS.splice(USERS.findIndex(u => u.id === userId), 1);
-      setAllUsers(prev => prev.filter(u => u.id !== userId));
-      setUserOffices(prev => { const next = { ...prev }; delete next[userId]; return next; });
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, deletedAt: new Date().toISOString() } : u));
       setConfirmDeleteId(null);
     } catch (err) {
       alert("Failed to remove staff: " + err.message);
+    }
+  };
+
+  const handleRestoreStaff = async (userId) => {
+    try {
+      await apiRestoreUser(userId);
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, deletedAt: null } : u));
+    } catch (err) {
+      alert("Failed to restore staff: " + err.message);
     }
   };
 
@@ -6844,7 +6859,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
       <div className="topbar">
         <div>
           <div className="topbar-title">Staff Directory</div>
-          <div className="topbar-subtitle">{filteredStaff.length} of {allUsers.length} team members</div>
+          <div className="topbar-subtitle">{filteredStaff.length} of {activeUsers.length} team members</div>
         </div>
         <div className="topbar-actions">
           <select style={{ width: 140 }} value={officeFilter} onChange={e => setOfficeFilter(e.target.value)}>
@@ -6946,6 +6961,38 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
             );
           })}
         </div>
+        {canAdmin && deletedUsers.length > 0 && (
+          <div style={{ marginTop: 32 }}>
+            <button
+              onClick={() => setShowDeletedStaff(!showDeletedStaff)}
+              style={{ background: "transparent", border: "1px solid var(--c-border)", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 600, color: "#94a3b8", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
+            >
+              {showDeletedStaff ? "▾" : "▸"} Deactivated Staff ({deletedUsers.length})
+            </button>
+            {showDeletedStaff && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16, marginTop: 16 }}>
+                {deletedUsers.map(u => (
+                  <div key={u.id} className="card" style={{ padding: "20px 22px", opacity: 0.7, position: "relative" }}>
+                    <div style={{ position: "absolute", top: 10, right: 12 }}>
+                      <button
+                        onClick={() => handleRestoreStaff(u.id)}
+                        style={{ padding: "4px 12px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                      >Restore</button>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 10 }}>
+                      <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{u.initials}</div>
+                      <div>
+                        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 14, color: "var(--c-text-h)", fontWeight: 600 }}>{u.name}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>Deactivated {new Date(u.deletedAt).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div className="info-row"><span className="info-key">Email</span><span className="info-val" style={{ fontSize: 12 }}>{u.email || "—"}</span></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

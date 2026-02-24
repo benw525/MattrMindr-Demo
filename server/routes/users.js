@@ -4,19 +4,28 @@ const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
-const USER_FIELDS = "id, name, role, roles, email, initials, phone, cell, ext, avatar, offices";
+const USER_FIELDS = "id, name, role, roles, email, initials, phone, cell, ext, avatar, offices, deleted_at";
 
 function normalizeUser(r) {
   return {
     ...r,
     roles: r.roles && r.roles.length ? r.roles : [r.role],
     offices: r.offices || [],
+    deletedAt: r.deleted_at ? r.deleted_at.toISOString() : null,
   };
 }
 
-router.get("/", async (req, res) => {
+const isAppAdmin = (req) => (req.session.userRoles || [req.session.userRole]).includes("App Admin");
+
+router.get("/", requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT ${USER_FIELDS} FROM users ORDER BY name`);
+    const includeDeleted = req.query.deleted === "true";
+    if (includeDeleted) {
+      if (!isAppAdmin(req)) return res.status(403).json({ error: "Only App Admin can view deactivated staff" });
+      const { rows } = await pool.query(`SELECT ${USER_FIELDS} FROM users WHERE deleted_at IS NOT NULL ORDER BY name`);
+      return res.json(rows.map(normalizeUser));
+    }
+    const { rows } = await pool.query(`SELECT ${USER_FIELDS} FROM users WHERE deleted_at IS NULL ORDER BY name`);
     return res.json(rows.map(normalizeUser));
   } catch (err) {
     console.error("Users fetch error:", err);
@@ -25,18 +34,24 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", requireAuth, async (req, res) => {
+  if (!isAppAdmin(req)) return res.status(403).json({ error: "Only App Admin can create users" });
+
   const { name, role, roles, email, initials, phone, cell, ext, avatar, offices } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: "Name is required" });
+  if (!email || !email.trim()) return res.status(400).json({ error: "Email is required" });
   try {
+    const { rows: existing } = await pool.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [email.trim()]);
+    if (existing.length > 0) return res.status(400).json({ error: "A user with that email already exists" });
+
     const { rows: mx } = await pool.query("SELECT COALESCE(MAX(id), 0) AS max_id FROM users");
     const nextId = (parseInt(mx[0].max_id) || 0) + 1;
     const primaryRole = (roles && roles.length) ? roles[0] : (role || "Attorney");
     const rolesArr = (roles && roles.length) ? roles : [primaryRole];
     const { rows } = await pool.query(
-      `INSERT INTO users (id, name, role, roles, email, initials, phone, cell, ext, avatar, offices)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO users (id, name, role, roles, email, initials, phone, cell, ext, avatar, offices, must_change_password)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,TRUE)
        RETURNING ${USER_FIELDS}`,
-      [nextId, name.trim(), primaryRole, rolesArr, email || "", initials || "", phone || "", cell || "", ext || "", avatar || "#4C7AC9", offices || []]
+      [nextId, name.trim(), primaryRole, rolesArr, email.trim(), initials || "", phone || "", cell || "", ext || "", avatar || "#4C7AC9", offices || []]
     );
     return res.status(201).json(normalizeUser(rows[0]));
   } catch (err) {
@@ -49,10 +64,8 @@ router.put("/:id", requireAuth, async (req, res) => {
   const targetId = parseInt(req.params.id);
   const requesterId = req.session.userId;
 
-  if (requesterId !== targetId) {
-    const { rows: rq } = await pool.query("SELECT roles FROM users WHERE id = $1", [requesterId]);
-    const isAdmin = rq.length > 0 && (rq[0].roles || []).includes("App Admin");
-    if (!isAdmin) return res.status(403).json({ error: "Not authorized to edit this profile" });
+  if (requesterId !== targetId && !isAppAdmin(req)) {
+    return res.status(403).json({ error: "Not authorized to edit this profile" });
   }
 
   const { name, email, phone, cell, ext } = req.body;
@@ -76,7 +89,7 @@ router.put("/:id", requireAuth, async (req, res) => {
   vals.push(targetId);
   try {
     const { rows } = await pool.query(
-      `UPDATE users SET ${sets.join(", ")} WHERE id = $${idx} RETURNING ${USER_FIELDS}`,
+      `UPDATE users SET ${sets.join(", ")} WHERE id = $${idx} AND deleted_at IS NULL RETURNING ${USER_FIELDS}`,
       vals
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
@@ -88,22 +101,42 @@ router.put("/:id", requireAuth, async (req, res) => {
 });
 
 router.delete("/:id", requireAuth, async (req, res) => {
+  if (!isAppAdmin(req)) return res.status(403).json({ error: "Only App Admin can remove users" });
   try {
-    const { rows } = await pool.query("DELETE FROM users WHERE id = $1 RETURNING id", [req.params.id]);
+    const { rows } = await pool.query(
+      "UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id",
+      [req.params.id]
+    );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     return res.json({ ok: true });
   } catch (err) {
-    console.error("User delete error:", err);
+    console.error("User soft-delete error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/:id/restore", requireAuth, async (req, res) => {
+  if (!isAppAdmin(req)) return res.status(403).json({ error: "Only App Admin can restore users" });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING ${USER_FIELDS}`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    return res.json(normalizeUser(rows[0]));
+  } catch (err) {
+    console.error("User restore error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 });
 
 router.put("/:id/offices", requireAuth, async (req, res) => {
+  if (!isAppAdmin(req)) return res.status(403).json({ error: "Only App Admin can change offices" });
   const { offices } = req.body;
   if (!Array.isArray(offices)) return res.status(400).json({ error: "offices must be an array" });
   try {
     const { rows } = await pool.query(
-      `UPDATE users SET offices = $1 WHERE id = $2 RETURNING ${USER_FIELDS}`,
+      `UPDATE users SET offices = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING ${USER_FIELDS}`,
       [offices, req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
@@ -115,12 +148,13 @@ router.put("/:id/offices", requireAuth, async (req, res) => {
 });
 
 router.put("/:id/roles", requireAuth, async (req, res) => {
+  if (!isAppAdmin(req)) return res.status(403).json({ error: "Only App Admin can change roles" });
   const { roles } = req.body;
   if (!Array.isArray(roles) || roles.length === 0) return res.status(400).json({ error: "roles must be a non-empty array" });
   try {
     const primaryRole = roles[0];
     const { rows } = await pool.query(
-      `UPDATE users SET role = $1, roles = $2 WHERE id = $3 RETURNING ${USER_FIELDS}`,
+      `UPDATE users SET role = $1, roles = $2 WHERE id = $3 AND deleted_at IS NULL RETURNING ${USER_FIELDS}`,
       [primaryRole, roles, req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });

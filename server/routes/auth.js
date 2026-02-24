@@ -8,10 +8,32 @@ const { requireAuth } = require("../middleware/auth");
 const router = express.Router();
 
 function generateTempPassword() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "!@#$%&*?";
   let pw = "";
-  for (let i = 0; i < 10; i++) pw += chars[crypto.randomInt(chars.length)];
-  return pw;
+  pw += upper[crypto.randomInt(upper.length)];
+  pw += lower[crypto.randomInt(lower.length)];
+  pw += digits[crypto.randomInt(digits.length)];
+  pw += special[crypto.randomInt(special.length)];
+  const all = upper + lower + digits + special;
+  for (let i = 0; i < 6; i++) pw += all[crypto.randomInt(all.length)];
+  const arr = pw.split("");
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join("");
+}
+
+function validatePassword(pw) {
+  if (!pw || pw.length < 8) return "Password must be at least 8 characters.";
+  if (!/[A-Z]/.test(pw)) return "Password must contain at least 1 uppercase letter.";
+  if (!/[a-z]/.test(pw)) return "Password must contain at least 1 lowercase letter.";
+  if (!/[0-9]/.test(pw)) return "Password must contain at least 1 number.";
+  if (!/[^A-Za-z0-9]/.test(pw)) return "Password must contain at least 1 special character.";
+  return null;
 }
 
 function userPayload(user) {
@@ -43,6 +65,10 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "No account found with that email" });
     }
     const user = rows[0];
+
+    if (user.deleted_at) {
+      return res.status(401).json({ error: "This account has been deactivated. Contact your administrator." });
+    }
 
     let authenticated = false;
 
@@ -77,9 +103,8 @@ router.post("/login", async (req, res) => {
 
 router.post("/change-password", requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  if (!newPassword || newPassword.length < 6) {
-    return res.status(400).json({ error: "New password must be at least 6 characters" });
-  }
+  const pwErr = validatePassword(newPassword);
+  if (pwErr) return res.status(400).json({ error: pwErr });
   try {
     const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [req.session.userId]);
     if (rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -165,7 +190,8 @@ router.post("/forgot-password", async (req, res) => {
 router.post("/reset-password", async (req, res) => {
   const { email, code, newPassword } = req.body;
   if (!email || !code || !newPassword) return res.status(400).json({ error: "Email, code, and new password are required" });
-  if (newPassword.length < 6) return res.status(400).json({ error: "New password must be at least 6 characters" });
+  const rpErr = validatePassword(newPassword);
+  if (rpErr) return res.status(400).json({ error: rpErr });
 
   try {
     const { rows } = await pool.query(

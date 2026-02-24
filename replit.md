@@ -74,12 +74,16 @@ lextrack/
 
 ## Auth System
 - Passwords stored as bcrypt hashes in `password_hash` column
+- Password requirements: 8+ chars, 1 uppercase, 1 lowercase, 1 number, 1 special character (enforced on backend + frontend)
 - `must_change_password` flag forces password change after temp password login
 - `temp_password` column stores plaintext temp passwords (cleared after use)
 - Admin (App Admin role) can send temp passwords to any user via Staff Directory
 - Forgot Password: sends reset code via email, valid for 1 hour
 - New users automatically receive temp password email on creation
 - Users can change their own password from the sidebar
+- Deleted/deactivated users cannot log in; active sessions are invalidated via auth middleware
+- User soft-delete: `deleted_at` column on users table; App Admin can deactivate and restore staff
+- Only App Admin can create or delete users; only App Admin can view deactivated staff list
 
 ## Architecture Notes
 - **DB migration path**: All DB access via REST API — swap `DATABASE_URL` to point to Supabase, swap `express-session` for JWT, done.
