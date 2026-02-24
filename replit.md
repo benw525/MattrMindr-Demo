@@ -56,6 +56,7 @@ lextrack/
 - Staff Directory
 - Contacts: 375 auto-populated contacts (Clients, Attorneys, Courts + manual Experts/Miscellaneous), with phone/email/fax/address, associated cases, persistent notes, and soft-delete with 30-day recovery
 - AI Search: Natural language search across all case data (fields, notes, activity, billing, expenses) via OpenAI gpt-5-mini; results shown in separate panel with match explanations. Cases marked "Confidential" are excluded from AI search data.
+- Confidential Cases: Cases with the `confidential` flag are access-restricted server-side. Only assigned team members (lead attorney, 2nd attorney, paralegal 1/2, legal assistant) and App Admin users can view/edit/delete them. Non-team members don't see confidential cases in the case list at all.
 
 ## Architecture Notes
 - **DB migration path**: All DB access via REST API — swap `DATABASE_URL` to point to Supabase, swap `express-session` for JWT, done.

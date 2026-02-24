@@ -45,6 +45,15 @@ const toFrontend = (row) => ({
 
 const orNull = (val) => (val && String(val).trim()) ? val : null;
 
+const isAppAdmin = (req) => (req.session.userRoles || [req.session.userRole]).includes("App Admin");
+
+const canAccessCase = (row, req) => {
+  if (!row.confidential) return true;
+  if (isAppAdmin(req)) return true;
+  const uid = req.session.userId;
+  return [row.lead_attorney, row.second_attorney, row.paralegal, row.paralegal2, row.legal_assistant].includes(uid);
+};
+
 const requireShareholder = (req, res, next) => {
   if (req.session.userRole !== "Shareholder") {
     return res.status(403).json({ error: "Shareholders only" });
@@ -58,12 +67,12 @@ router.get("/", requireAuth, async (req, res) => {
       const { rows } = await pool.query(
         "SELECT * FROM cases WHERE deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC"
       );
-      return res.json(rows.map(toFrontend));
+      return res.json(rows.filter(r => canAccessCase(r, req)).map(toFrontend));
     }
     const { rows } = await pool.query(
       "SELECT * FROM cases WHERE deleted_at IS NULL ORDER BY title"
     );
-    return res.json(rows.map(toFrontend));
+    return res.json(rows.filter(r => canAccessCase(r, req)).map(toFrontend));
   } catch (err) {
     console.error("Cases fetch error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -74,6 +83,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    if (!canAccessCase(rows[0], req)) return res.status(403).json({ error: "Access denied — this case is confidential" });
     return res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Case fetch error:", err);
@@ -117,6 +127,9 @@ router.post("/", requireAuth, async (req, res) => {
 router.put("/:id", requireAuth, async (req, res) => {
   const d = req.body;
   try {
+    const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: "Not found" });
+    if (!canAccessCase(existing.rows[0], req)) return res.status(403).json({ error: "Access denied — this case is confidential" });
     const { rows } = await pool.query(
       `UPDATE cases SET
         case_num=$1, title=$2, client=$3, insured=$4, plaintiff=$5,
@@ -153,6 +166,9 @@ router.put("/:id", requireAuth, async (req, res) => {
 
 router.delete("/:id", requireAuth, requireShareholder, async (req, res) => {
   try {
+    const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: "Not found or already deleted" });
+    if (!canAccessCase(existing.rows[0], req)) return res.status(403).json({ error: "Access denied — this case is confidential" });
     const { rows } = await pool.query(
       "UPDATE cases SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *",
       [req.params.id]
