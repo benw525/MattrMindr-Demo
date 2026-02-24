@@ -5611,6 +5611,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
     { id: "All",           label: `All (${(contacts || []).length})` },
     { id: "Client",        label: `Clients (${counts.Client || 0})` },
     { id: "Attorney",      label: `Attorneys (${counts.Attorney || 0})` },
+    { id: "Adjuster",      label: `Adjusters (${counts.Adjuster || 0})` },
     { id: "Court",         label: `Courts (${counts.Court || 0})` },
     { id: "Expert",        label: `Experts (${counts.Expert || 0})` },
     { id: "Miscellaneous", label: `Miscellaneous (${counts.Miscellaneous || 0})` },
