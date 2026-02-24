@@ -128,26 +128,18 @@ router.post("/", requireAuth, upload.single("file"), async (req, res) => {
 
     const zip = new PizZip(docxBuffer);
 
-    const blankFields = parsedPlaceholders.filter(ph => ph.original && /^\[.+\]$/.test(ph.original) && ph.mapping === "_manual");
-    const replacements = parsedPlaceholders.filter(ph => !blankFields.includes(ph));
-    const sortedReplacements = [...replacements].sort((a, b) => (b.original || "").length - (a.original || "").length);
+    const sorted = [...parsedPlaceholders].sort((a, b) => (b.original || "").length - (a.original || "").length);
 
     const xmlFiles = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml", "word/footer1.xml", "word/footer2.xml", "word/footer3.xml"];
     for (const xmlPath of xmlFiles) {
       const file = zip.file(xmlPath);
       if (!file) continue;
       let xml = file.asText();
-      for (const ph of sortedReplacements) {
+      for (const ph of sorted) {
         if (!ph.original) continue;
         const escaped = ph.original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const simplePattern = new RegExp(escaped, "g");
         xml = xml.replace(simplePattern, `{{${ph.token}}}`);
-      }
-      if (blankFields.length > 0 && xmlPath === "word/document.xml") {
-        const blankRuns = blankFields.map(ph =>
-          `<w:p><w:r><w:t>{{${ph.token}}}</w:t></w:r></w:p>`
-        ).join("");
-        xml = xml.replace(/<\/w:body>/, blankRuns + "</w:body>");
       }
       zip.file(xmlPath, xml);
     }
@@ -265,32 +257,17 @@ router.put("/:id", requireAuth, async (req, res) => {
         if (!file) continue;
         let xml = file.asText();
 
-        const oldBlankTokens = oldPhs.filter(ph => ph.original && /^\[.+\]$/.test(ph.original) && ph.mapping === "_manual").map(ph => ph.token);
         for (const ph of oldPhs) {
           const tokenPattern = new RegExp(`\\{\\{${ph.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\}\\}`, "g");
-          if (oldBlankTokens.includes(ph.token)) {
-            xml = xml.replace(new RegExp(`<w:p><w:r><w:t>\\{\\{${ph.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\}\\}</w:t></w:r></w:p>`, "g"), "");
-            xml = xml.replace(tokenPattern, "");
-          } else {
-            xml = xml.replace(tokenPattern, (ph.original || ph.token));
-          }
+          xml = xml.replace(tokenPattern, (ph.original || ph.token));
         }
 
-        const newBlankFields = parsedNewPhs.filter(ph => ph.original && /^\[.+\]$/.test(ph.original) && ph.mapping === "_manual");
-        const newReplacements = parsedNewPhs.filter(ph => !newBlankFields.includes(ph));
-        const sorted = [...newReplacements].sort((a, b) => (b.original || "").length - (a.original || "").length);
+        const sorted = [...parsedNewPhs].sort((a, b) => (b.original || "").length - (a.original || "").length);
         for (const ph of sorted) {
           if (!ph.original) continue;
           const escaped = ph.original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           const simplePattern = new RegExp(escaped, "g");
           xml = xml.replace(simplePattern, `{{${ph.token}}}`);
-        }
-
-        if (newBlankFields.length > 0 && xmlPath === "word/document.xml") {
-          const blankRuns = newBlankFields.map(ph =>
-            `<w:p><w:r><w:t>{{${ph.token}}}</w:t></w:r></w:p>`
-          ).join("");
-          xml = xml.replace(/<\/w:body>/, blankRuns + "</w:body>");
         }
 
         zip.file(xmlPath, xml);
