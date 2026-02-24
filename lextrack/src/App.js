@@ -53,7 +53,7 @@ const urgencyColor = (days) => {
   if (days === null) return "#8A9096";
   if (days < 0) return "#e05252";
   if (days <= 7) return "#e07a30";
-  if (days <= 21) return "#3E5C76";
+  if (days <= 21) return "#4F7393";
   return "#4CAE72";
 };
 
@@ -224,16 +224,16 @@ const statusBadgeStyle = (status) => {
     "Trial Set": { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
     "Pre-Answer Motions": { bg: "#dcfce7", color: "#66aa66", border: "#bbf7d0" },
     "Written Discovery": { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
-    Depositions: { bg: "#fef9c3", color: "#3E5C76", border: "#fef9c3" },
+    Depositions: { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
     "Expert Discovery": { bg: "#fdf4ff", color: "#cc66aa", border: "#e9d5ff" },
     Pleadings: { bg: "var(--c-bg)", color: "var(--c-text2)", border: "var(--c-border)" },
     Mediation: { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
     "In Progress": { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
     "Not Started": { bg: "var(--c-card)", color: "#8A9096", border: "var(--c-border)" },
     Completed: { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
-    Waiting: { bg: "#fef9c3", color: "#3E5C76", border: "#fef9c3" },
+    Waiting: { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
     High: { bg: "#fef3c7", color: "#e07a30", border: "#fde68a" },
-    Medium: { bg: "#fef9c3", color: "#3E5C76", border: "#fef9c3" },
+    Medium: { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
     Low: { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
   };
   return map[status] || { bg: "var(--c-card)", color: "#8A9096", border: "var(--c-border)" };
@@ -257,7 +257,7 @@ const SortTh = ({ col, label, sortCol, sortDir, onSort, style }) => (
   <th style={{ cursor: "pointer", userSelect: "none", ...style }} onClick={() => onSort(col)}>
     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
       {label}
-      <span style={{ color: sortCol === col ? "#3E5C76" : "#D6D8DB", fontSize: 10 }}>
+      <span style={{ color: sortCol === col ? "#1E2A3A" : "#D6D8DB", fontSize: 10 }}>
         {sortCol === col ? (sortDir === "asc" ? "▲" : "▼") : "⇅"}
       </span>
     </span>
@@ -286,15 +286,16 @@ ${FONTS}
   --c-text3:   #8A9096;
   --c-text4:   #8A9096;
   --c-bg:      #F7F8FA;
+  --c-bg2:     #EEF1F4;
   --c-card:    #FFFFFF;
   --c-hover:   #E4E7EB;
   --c-border:  #D6D8DB;
   --c-border2: #EEF1F4;
   --c-border3: #D6D8DB;
-  --c-accent:  #3E5C76;
-  --c-success: #2F6F4E;
-  --c-warning: #A36B00;
-  --c-error:   #8B2E2E;
+  --c-accent:  #1E2A3A;
+  --c-success: #2F7A5F;
+  --c-warning: #B67A18;
+  --c-error:   #B24A4A;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--c-bg); color: var(--c-text); font-family: 'Source Sans 3', sans-serif; }
@@ -302,7 +303,7 @@ body { background: var(--c-bg); color: var(--c-text); font-family: 'Source Sans 
 ::-webkit-scrollbar-track { background: #F7F8FA; }
 ::-webkit-scrollbar-thumb { background: #D6D8DB; border-radius: 3px; }
 .app { display: flex; height: 100vh; overflow: hidden; }
-.sidebar { width: 240px; background: #FFFFFF; border-right: 1px solid #D6D8DB; display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar { width: 240px; background: #EDEFF2; border-right: 1px solid #D6D8DB; display: flex; flex-direction: column; flex-shrink: 0; }
 .sidebar-logo { padding: 28px 24px 20px; border-bottom: 1px solid #D6D8DB; }
 .sidebar-logo-text { font-family: 'Playfair Display', serif; font-size: 17px; color: #121A26; font-weight: 700; }
 .sidebar-logo-sub { font-size: 10px; color: #8A9096; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 2px; }
@@ -311,26 +312,26 @@ body { background: var(--c-bg); color: var(--c-text); font-family: 'Source Sans 
 .sidebar-user-role { font-size: 11px; color: #8A9096; }
 .sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 0; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; cursor: pointer; font-size: 13.5px; color: #5D6268; border-left: 3px solid transparent; transition: all 0.15s; }
-.nav-item:hover { color: #1F2428; background: #EEF1F4; }
-.nav-item.active { color: #3E5C76; background: #E4E7EB; border-left-color: #3E5C76; }
+.nav-item:hover { color: #1F2428; background: #DDE3EA; }
+.nav-item.active { color: #1E2A3A; background: #DDE3EA; border-left-color: #1E2A3A; }
 .nav-icon { font-size: 15px; width: 18px; text-align: center; }
-.nav-badge { margin-left: auto; background: #f5dada; color: #8B2E2E; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
+.nav-badge { margin-left: auto; background: #f5dada; color: #B24A4A; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .topbar { padding: 14px 28px; border-bottom: 1px solid #D6D8DB; display: flex; align-items: center; justify-content: space-between; background: #FFFFFF; flex-shrink: 0; flex-wrap: wrap; gap: 10px; }
 .topbar-title { font-family: 'Playfair Display', serif; font-size: 20px; color: #121A26; font-weight: 600; }
 .topbar-subtitle { font-size: 12px; color: #8A9096; margin-top: 1px; }
 .topbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .btn { padding: 7px 16px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; font-family: 'Source Sans 3', sans-serif; }
-.btn-gold { background: #3E5C76; color: #FFFFFF; }
-.btn-gold:hover { background: #2e4a62; }
+.btn-gold { background: #1E2A3A; color: #FFFFFF; }
+.btn-gold:hover { background: #2A3A4F; }
 .btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-outline { background: transparent; color: #5D6268; border: 1px solid #D6D8DB; }
-.btn-outline:hover { border-color: #3E5C76; color: #3E5C76; }
+.btn-outline:hover { border-color: #1E2A3A; color: #1E2A3A; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 .content { flex: 1; overflow-y: auto; padding: 24px 28px; }
 .card { background: #FFFFFF; border: 1px solid #D6D8DB; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
 .card-header { padding: 16px 20px; border-bottom: 1px solid #D6D8DB; display: flex; align-items: center; justify-content: space-between; }
-.card-title { font-family: 'Playfair Display', serif; font-size: 15px; color: #3E5C76; font-weight: 600; }
+.card-title { font-family: 'Playfair Display', serif; font-size: 15px; color: #1E2A3A; font-weight: 600; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .stat-card { background: #FFFFFF; border: 1px solid #D6D8DB; border-radius: 8px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
@@ -345,16 +346,16 @@ tr:last-child td { border-bottom: none; }
 tr:hover td { background: #EEF1F4; }
 .clickable-row { cursor: pointer; }
 .selected-row td { background: #E4E7EB !important; }
-.selected-row td:first-child { border-left: 3px solid #3E5C76; }
+.selected-row td:first-child { border-left: 3px solid #1E2A3A; }
 input:not([type=radio]):not([type=checkbox]), select, textarea { background: #EEF1F4; border: 1px solid #D6D8DB; color: #1F2428; padding: 8px 12px; border-radius: 5px; font-size: 13.5px; font-family: 'Source Sans 3', sans-serif; width: 100%; }
-input:not([type=radio]):not([type=checkbox]):focus, select:focus, textarea:focus { outline: none; border-color: #3E5C76; }
+input:not([type=radio]):not([type=checkbox]):focus, select:focus, textarea:focus { outline: none; border-color: #1E2A3A; }
 input[type=radio], input[type=checkbox] { width: auto; padding: 0; border: none; background: none; cursor: pointer; }
 label { font-size: 12px; color: #8A9096; display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .form-group { margin-bottom: 14px; }
 .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid #D6D8DB; flex-wrap: wrap; }
 .tab { padding: 8px 16px; font-size: 13px; color: #5D6268; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; font-weight: 500; white-space: nowrap; }
-.tab.active { color: #3E5C76; border-bottom-color: #3E5C76; }
+.tab.active { color: #1E2A3A; border-bottom-color: #1E2A3A; }
 .tab:hover:not(.active) { color: #1F2428; }
 .tab-divider { width: 1px; background: #D6D8DB; margin: 4px 6px; }
 .deadline-item { padding: 12px 16px; border-bottom: 1px solid #EEF1F4; display: flex; align-items: center; gap: 12px; }
@@ -383,24 +384,24 @@ label { font-size: 12px; color: #8A9096; display: block; margin-bottom: 4px; tex
 .login-box { background: #FFFFFF; border: 1px solid #D6D8DB; border-radius: 12px; padding: 44px 40px; width: 400px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
 .login-title { font-family: 'Playfair Display', serif; font-size: 26px; color: #121A26; text-align: center; margin-bottom: 6px; }
 .login-sub { font-size: 12px; color: #8A9096; text-align: center; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 32px; }
-.calc-result { background: #EEF1F4; border: 1px solid #3E5C7615; border-radius: 6px; padding: 14px 16px; margin-top: 16px; }
+.calc-result { background: #EEF1F4; border: 1px solid #1E2A3A15; border-radius: 6px; padding: 14px 16px; margin-top: 16px; }
 .pagination { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-top: 1px solid #D6D8DB; font-size: 13px; color: #8A9096; flex-wrap: wrap; }
 .page-btn { padding: 4px 10px; border-radius: 4px; background: #EEF1F4; border: 1px solid #D6D8DB; color: #5D6268; cursor: pointer; font-size: 12px; }
-.page-btn:hover { border-color: #3E5C76; color: #3E5C76; }
-.page-btn.active { background: #3E5C7612; border-color: #3E5C76; color: #3E5C76; }
+.page-btn:hover { border-color: #1E2A3A; color: #1E2A3A; }
+.page-btn.active { background: #1E2A3A12; border-color: #1E2A3A; color: #1E2A3A; }
 .checkbox { width: 17px; height: 17px; border-radius: 4px; border: 2px solid #D6D8DB; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; flex-shrink: 0; transition: all 0.15s; }
-.checkbox.done { background: #2F6F4E; border-color: #2F6F4E; }
-.rec-badge { display: inline-flex; align-items: center; gap: 3px; background: #e0f2ec; color: #2F6F4E; border: 1px solid #2F6F4E33; border-radius: 3px; padding: 1px 5px; font-size: 10px; font-weight: 600; margin-left: 5px; }
+.checkbox.done { background: #2F7A5F; border-color: #2F7A5F; }
+.rec-badge { display: inline-flex; align-items: center; gap: 3px; background: #e0f2ec; color: #2F7A5F; border: 1px solid #2F7A5F33; border-radius: 3px; padding: 1px 5px; font-size: 10px; font-weight: 600; margin-left: 5px; }
 .chain-badge { display: inline-flex; align-items: center; gap: 3px; background: #ede9fe; color: #8877cc; border: 1px solid #a78bfa; border-radius: 3px; padding: 1px 5px; font-size: 10px; font-weight: 600; margin-left: 5px; }
 .task-inline-edit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
 .task-inline-edit input[type="date"] { background: #EEF1F4; border: 1px solid #D6D8DB; color: #1F2428; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
 .task-inline-edit select { background: #EEF1F4; border: 1px solid #D6D8DB; color: #1F2428; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
-.task-inline-edit input[type="date"]:focus, .task-inline-edit select:focus { outline: none; border-color: #3E5C76; }
+.task-inline-edit input[type="date"]:focus, .task-inline-edit select:focus { outline: none; border-color: #1E2A3A; }
 .toggle { width: 38px; height: 20px; border-radius: 10px; cursor: pointer; position: relative; flex-shrink: 0; transition: background 0.2s; }
 .toggle-knob { position: absolute; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left 0.2s; }
 .report-card { background: #FFFFFF; border: 1px solid #D6D8DB; border-radius: 8px; padding: 18px 20px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-.report-card:hover { border-color: #3E5C7633; background: #EEF1F4; }
-.report-card.active { border-color: #3E5C76; background: #EEF1F4; }
+.report-card:hover { border-color: #1E2A3A33; background: #EEF1F4; }
+.report-card.active { border-color: #1E2A3A; background: #EEF1F4; }
 .report-card-icon { font-size: 24px; margin-bottom: 8px; }
 .report-card-title { font-family: 'Playfair Display', serif; font-size: 14px; color: #121A26; font-weight: 600; margin-bottom: 4px; }
 .report-card-desc { font-size: 11px; color: #8A9096; line-height: 1.4; }
@@ -422,7 +423,7 @@ label { font-size: 12px; color: #8A9096; display: block; margin-bottom: 4px; tex
 .note-item { padding: 10px 14px; border-bottom: 1px solid #EEF1F4; cursor: pointer; transition: background 0.1s; }
 .note-item:last-child { border-bottom: none; }
 .note-item:hover { background: #EEF1F4; }
-.note-item.expanded { background: #E4E7EB; border-left: 3px solid #3E5C76; }
+.note-item.expanded { background: #E4E7EB; border-left: 3px solid #1E2A3A; }
 .note-type-badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
 .print-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 30px 20px; }
 .print-doc { background: #fff; color: #111; width: 816px; min-height: 100vh; padding: 60px 72px; font-family: 'Source Sans 3', Georgia, serif; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
@@ -445,7 +446,7 @@ label { font-size: 12px; color: #8A9096; display: block; margin-bottom: 4px; tex
 .case-overlay-tabs { flex-shrink: 0; display: flex; gap: 0; border-bottom: 1px solid #D6D8DB; padding: 0 32px; background: #FFFFFF; }
 .case-overlay-tab { padding: 12px 20px; font-size: 13px; color: #8A9096; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; font-weight: 500; }
 .case-overlay-tab:hover { color: #5D6268; }
-.case-overlay-tab.active { color: #121A26; border-bottom-color: #3E5C76; }
+.case-overlay-tab.active { color: #121A26; border-bottom-color: #1E2A3A; }
 .case-overlay-body { flex: 1; overflow-y: auto; padding: 28px 32px; }
 .case-overlay-body > * { max-width: 1100px; width: 100%; margin-left: auto; margin-right: auto; }
 .case-overlay-section { margin-bottom: 32px; }
@@ -591,7 +592,7 @@ body.dark-body { background: #0E1116; }
 .sidebar-footer { padding: 16px 20px; border-top: 1px solid #D6D8DB; }
 .dark .sidebar-footer { border-top-color: #27313D; }
 .dark-mode-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 8px 0; background: transparent; border: 1px solid #D6D8DB; border-radius: 6px; cursor: pointer; font-size: 12px; color: #8A9096; font-family: 'Source Sans 3', sans-serif; margin-bottom: 10px; transition: all 0.15s; }
-.dark-mode-btn:hover { border-color: #3E5C76; color: #3E5C76; }
+.dark-mode-btn:hover { border-color: #1E2A3A; color: #1E2A3A; }
 .dark .dark-mode-btn { border-color: #27313D; color: #9DA7B3; }
 .dark .dark-mode-btn:hover { border-color: #4F7393; color: #4F7393; }
 `;
@@ -1420,12 +1421,12 @@ function LoginScreen({ onLogin }) {
             <input type="password" placeholder="Enter your password" value={password} onChange={e => { setPassword(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && doLogin()} />
           </div>
           {err && <div style={{ color: "#e05252", fontSize: 13, marginBottom: 12 }}>{err}</div>}
-          {msg && <div style={{ color: "#3E5C76", fontSize: 13, marginBottom: 12 }}>{msg}</div>}
+          {msg && <div style={{ color: "#1E2A3A", fontSize: 13, marginBottom: 12 }}>{msg}</div>}
           <button className="btn btn-gold" style={{ width: "100%", padding: 10 }} onClick={doLogin} disabled={busy}>
             {busy ? "Signing in…" : "Sign In"}
           </button>
           <div style={{ marginTop: 16, textAlign: "center" }}>
-            <span style={{ fontSize: 12, color: "#3E5C76", cursor: "pointer" }} onClick={() => { setErr(""); setMsg(""); setView("forgot"); }}>Forgot password?</span>
+            <span style={{ fontSize: 12, color: "#1E2A3A", cursor: "pointer" }} onClick={() => { setErr(""); setMsg(""); setView("forgot"); }}>Forgot password?</span>
           </div>
         </>)}
 
@@ -1440,7 +1441,7 @@ function LoginScreen({ onLogin }) {
             {busy ? "Sending…" : "Send Reset Code"}
           </button>
           <div style={{ marginTop: 16, textAlign: "center" }}>
-            <span style={{ fontSize: 12, color: "#3E5C76", cursor: "pointer" }} onClick={() => { setErr(""); setView("login"); }}>Back to login</span>
+            <span style={{ fontSize: 12, color: "#1E2A3A", cursor: "pointer" }} onClick={() => { setErr(""); setView("login"); }}>Back to login</span>
           </div>
         </>)}
 
@@ -1463,7 +1464,7 @@ function LoginScreen({ onLogin }) {
             {busy ? "Resetting…" : "Reset Password"}
           </button>
           <div style={{ marginTop: 16, textAlign: "center" }}>
-            <span style={{ fontSize: 12, color: "#3E5C76", cursor: "pointer" }} onClick={() => { setErr(""); setView("login"); }}>Back to login</span>
+            <span style={{ fontSize: 12, color: "#1E2A3A", cursor: "pointer" }} onClick={() => { setErr(""); setView("login"); }}>Back to login</span>
           </div>
         </>)}
       </div>
@@ -1544,7 +1545,7 @@ function ChangePasswordModal({ forced, currentUser, onDone, onClose }) {
 }
 
 // ─── Toggle Helper ────────────────────────────────────────────────────────────
-function Toggle({ on, onChange, color = "#3E5C76" }) {
+function Toggle({ on, onChange, color = "#1E2A3A" }) {
   return (
     <div className="toggle" style={{ background: on ? color : "#D6D8DB" }} onClick={onChange}>
       <div className="toggle-knob" style={{ left: on ? 20 : 2 }} />
@@ -1591,7 +1592,7 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
             {OFFICES.map(o => {
               const checked = form.offices.includes(o);
               return (
-                <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#3E5C76" : "#8A9096", userSelect: "none" }}>
+                <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#1E2A3A" : "#8A9096", userSelect: "none" }}>
                   <input type="checkbox" checked={checked} onChange={() => toggleOffice(o)} />
                   {o}
                 </label>
@@ -1599,7 +1600,7 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
             })}
           </div>
           {form.offices.length > 0 && filteredUsers.length < USERS.length && (
-            <div style={{ fontSize: 11, color: "#3E5C76", marginTop: 6, fontStyle: "italic" }}>
+            <div style={{ fontSize: 11, color: "#1E2A3A", marginTop: 6, fontStyle: "italic" }}>
               Team dropdowns showing {filteredUsers.length} staff in selected office(s)
             </div>
           )}
@@ -1665,7 +1666,7 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
           <div className="form-group" />
         </div>
 
-        <div style={{ background: autoTasks ? "#E4E7EB" : "var(--c-bg)", border: `1px solid ${autoTasks ? "#3E5C7622" : "#D6D8DB"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
+        <div style={{ background: autoTasks ? "#E4E7EB" : "var(--c-bg)", border: `1px solid ${autoTasks ? "#1E2A3A22" : "#D6D8DB"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>✅ Auto-generate opening tasks</div>
@@ -1689,7 +1690,7 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
 // ─── Auto-escalate preview box ────────────────────────────────────────────────
 function EscalateBox({ on, onChange, basePriority }) {
   return (
-    <div style={{ background: on ? "#E4E7EB" : "var(--c-bg)", border: `1px solid ${on ? "#3E5C7622" : "#D6D8DB"}`, borderRadius: 7, padding: "12px 14px", transition: "all 0.2s" }}>
+    <div style={{ background: on ? "#E4E7EB" : "var(--c-bg)", border: `1px solid ${on ? "#1E2A3A22" : "#D6D8DB"}`, borderRadius: 7, padding: "12px 14px", transition: "all 0.2s" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: on ? 10 : 0 }}>
         <div><div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>🔺 Auto-Escalate Priority</div><div style={{ fontSize: 11, color: "#8A9096", marginTop: 2 }}>Priority rises automatically as the due date approaches</div></div>
         <Toggle on={on} onChange={onChange} />
@@ -1755,7 +1756,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
           </div>
           <div className="stat-card">
             <div className="stat-label">Trials in 90 Days</div>
-            <div className="stat-value" style={{ color: trialSoon.length > 0 ? "#3E5C76" : "var(--c-text-h)" }}>{trialSoon.length}</div>
+            <div className="stat-value" style={{ color: trialSoon.length > 0 ? "#1E2A3A" : "var(--c-text-h)" }}>{trialSoon.length}</div>
             <div className="stat-sub">{allCases.filter(c => c.trialDate).length} with trial dates</div>
           </div>
         </div>
@@ -2068,7 +2069,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <span style={{ fontWeight: 600, fontSize: 14, color: "#1F2428" }}>{c.title}</span>
                           <Badge label={recordType(c)} />
-                          {c.caseNum && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#3E5C76" }}>{c.caseNum}</span>}
+                          {c.caseNum && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A" }}>{c.caseNum}</span>}
                         </div>
                         <div style={{ fontSize: 12, color: "#8A9096", marginTop: 4, lineHeight: 1.5 }}>{r.reason}</div>
                         <div style={{ fontSize: 11, color: "#8A9096", marginTop: 4, display: "flex", gap: 12 }}>
@@ -2117,7 +2118,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                         return (
                           <tr key={c.id}>
                             <td><Badge label={recordType(c)} /></td>
-                            <td style={{ fontFamily: "monospace", fontSize: 11, color: "#3E5C76", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
+                            <td style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
                             <td><div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#8A9096" }}>Pltf: {c.plaintiff}</div>}</td>
                             <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
                             <td style={{ fontSize: 12, color: "#e05252" }}>{deletedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
@@ -2153,7 +2154,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                       <tr key={c.id} className={`clickable-row ${selectedCase?.id === c.id ? "selected-row" : ""}`} onClick={() => setSelectedCase(selectedCase?.id === c.id ? null : c)}>
                         <td><Badge label={recordType(c)} /></td>
                         <td style={{ whiteSpace: "nowrap" }}>
-                          <div style={{ fontFamily: "monospace", fontSize: 11, color: "#3E5C76" }}>{c.caseNum || "—"}</div>
+                          <div style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A" }}>{c.caseNum || "—"}</div>
                           {c.claimNum && <div style={{ fontFamily: "monospace", fontSize: 10, color: "#5D6268", marginTop: 2 }}>Claim: {c.claimNum}</div>}
                         </td>
                         <td>
@@ -2269,7 +2270,7 @@ function EditField({ fieldKey, label, type, options, value, onChange, onBlur, on
           {isClickable ? (
             <span
               onClick={() => onContactClick(display)}
-              style={{ color: "#3E5C76", cursor: "pointer", fontSize: 13, fontWeight: 400, textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 3 }}
+              style={{ color: "#1E2A3A", cursor: "pointer", fontSize: 13, fontWeight: 400, textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 3 }}
               title="View contact card"
             >{display}</span>
           ) : (
@@ -2570,7 +2571,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const actionColor = (action) => {
     if (action.includes("Completed")) return "#4CAE72";
     if (action.includes("Removed") || action.includes("Reopened") || action.includes("Deleted")) return "#e05252";
-    if (action.includes("Added") || action.includes("Created")) return "#3E5C76";
+    if (action.includes("Added") || action.includes("Created")) return "#1E2A3A";
     if (action.includes("Note") || action.includes("Deadline")) return "#5E81AC";
     if (action.includes("Billing") || action.includes("Expense")) return "#D08770";
     if (action.includes("Correspondence")) return "#88C0D0";
@@ -2628,7 +2629,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 </div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
                   <button className="btn btn-outline btn-sm" style={{ borderColor: "#4a5568", color: "#D6D8DB" }} onClick={() => setContactEditMode(false)}>Cancel</button>
-                  <button className="btn btn-sm" style={{ background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76" }} onClick={async () => {
+                  <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={async () => {
                     try {
                       const saved = await apiUpdateContact(contactEditDraft.id, contactEditDraft);
                       setAllContacts(p => p.map(ct => ct.id === saved.id ? saved : ct));
@@ -2680,9 +2681,9 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
               <Badge label={recordType(draft)} />
-              {draft.caseNum && <span style={{ fontSize: 11, color: "#3E5C76", fontFamily: "monospace" }}>{draft.caseNum}</span>}
+              {draft.caseNum && <span style={{ fontSize: 11, color: "#1E2A3A", fontFamily: "monospace" }}>{draft.caseNum}</span>}
               {editMode
-                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#3E5C76", background: "#E4E7EB", border: "1px solid #D6D8DB", borderRadius: 4, padding: "2px 8px", letterSpacing: "0.03em" }}>EDIT MODE</span>
+                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#1E2A3A", background: "#E4E7EB", border: "1px solid #D6D8DB", borderRadius: 4, padding: "2px 8px", letterSpacing: "0.03em" }}>EDIT MODE</span>
                 : <span style={{ fontSize: 11, color: "#8A9096" }}>Auto-saving</span>
               }
               <select
@@ -2711,7 +2712,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
           <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "flex-start" }}>
             <button
               className={`btn btn-sm ${editMode ? "" : "btn-outline"}`}
-              style={editMode ? { background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76" } : {}}
+              style={editMode ? { background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" } : {}}
               onClick={() => setEditMode(e => !e)}
             >{editMode ? "✓ Done" : "✎ Edit"}</button>
             <button className="btn btn-outline btn-sm" onClick={() => setShowPrint(true)}>🖨 Print</button>
@@ -2880,7 +2881,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   {OFFICES.map(o => {
                     const checked = (draft.offices || []).includes(o);
                     return (
-                      <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#3E5C76" : "var(--c-text2)", userSelect: "none" }}>
+                      <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#1E2A3A" : "var(--c-text2)", userSelect: "none" }}>
                         <input
                           type="checkbox"
                           checked={checked}
@@ -2905,7 +2906,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             <div className="case-overlay-section" style={{ maxWidth: 500 }}>
               <div className="case-overlay-section-title">Team</div>
               {editMode && (draft.offices || []).length > 0 && filteredUsersForTeam.length < USERS.length && (
-                <div style={{ fontSize: 11, color: "#3E5C76", marginBottom: 8, fontStyle: "italic" }}>
+                <div style={{ fontSize: 11, color: "#1E2A3A", marginBottom: 8, fontStyle: "italic" }}>
                   Showing {filteredUsersForTeam.length} staff in selected office(s)
                 </div>
               )}
@@ -3089,7 +3090,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
                       <button className="btn btn-outline btn-sm" onClick={() => setShowAddParty(false)}>Cancel</button>
-                      <button className="btn btn-sm" style={{ background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76" }} onClick={() => {
+                      <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={() => {
                         if (!newPartyForm.name.trim()) return;
                         const partyName = newPartyForm.name.trim();
                         setBillingParties(p => [...p, { id: newId(), name: partyName, dob: newPartyForm.dob, collateralSource: newPartyForm.collateralSource, medRows: [{ id: newId(), provider: "", treatmentDates: "", amount: "" }], csRows: [{ id: newId(), insuranceProvider: "", dateRange: "", amount: "" }] }]);
@@ -3105,7 +3106,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 <div style={{ fontSize: 13, color: "var(--c-text2)" }}>{billingParties.length} {billingParties.length === 1 ? "party" : "parties"}</div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn btn-outline btn-sm" onClick={() => setShowBillingPrint(true)}>🖨 Print</button>
-                  <button className="btn btn-sm" style={{ background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76" }} onClick={() => setShowAddParty(true)}>+ Add Party</button>
+                  <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={() => setShowAddParty(true)}>+ Add Party</button>
                 </div>
               </div>
               {billingParties.length === 0 && (
@@ -3142,7 +3143,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                           ))}
                           <tr style={{ background: "var(--c-bg2)" }}>
                             <td style={{ ...tdStyle, fontSize: 12, fontWeight: 600, color: "var(--c-text2)", padding: "6px 8px" }} colSpan={2}>Total</td>
-                            <td style={{ ...tdStyle, fontSize: 12, fontWeight: 700, color: medTotal > 0 ? "#3E5C76" : "var(--c-text2)", textAlign: "right", padding: "6px 8px" }}>{fmtAmt(medTotal)}</td>
+                            <td style={{ ...tdStyle, fontSize: 12, fontWeight: 700, color: medTotal > 0 ? "#1E2A3A" : "var(--c-text2)", textAlign: "right", padding: "6px 8px" }}>{fmtAmt(medTotal)}</td>
                             <td style={tdStyle} />
                           </tr>
                         </tbody>
@@ -3164,7 +3165,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                               ))}
                               <tr style={{ background: "var(--c-bg2)" }}>
                                 <td style={{ ...tdStyle, fontSize: 12, fontWeight: 600, color: "var(--c-text2)", padding: "6px 8px" }} colSpan={2}>Total</td>
-                                <td style={{ ...tdStyle, fontSize: 12, fontWeight: 700, color: csTotal > 0 ? "#3E5C76" : "var(--c-text2)", textAlign: "right", padding: "6px 8px" }}>{fmtAmt(csTotal)}</td>
+                                <td style={{ ...tdStyle, fontSize: 12, fontWeight: 700, color: csTotal > 0 ? "#1E2A3A" : "var(--c-text2)", textAlign: "right", padding: "6px 8px" }}>{fmtAmt(csTotal)}</td>
                                 <td style={tdStyle} />
                               </tr>
                             </tbody>
@@ -3204,11 +3205,11 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 </select>
                 <div style={{ display: "flex", gap: 4 }}>
                   {[["all", "All"], ["paid", "Paid"], ["unpaid", "Unpaid"]].map(([val, lbl]) => (
-                    <button key={val} className={`btn btn-sm ${expensePaidFilter === val ? "" : "btn-outline"}`} style={expensePaidFilter === val ? { background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76", fontSize: 11 } : { fontSize: 11 }} onClick={() => setExpensePaidFilter(val)}>{lbl}</button>
+                    <button key={val} className={`btn btn-sm ${expensePaidFilter === val ? "" : "btn-outline"}`} style={expensePaidFilter === val ? { background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 11 } : { fontSize: 11 }} onClick={() => setExpensePaidFilter(val)}>{lbl}</button>
                   ))}
                 </div>
                 <div style={{ flex: 1 }} />
-                <button className="btn btn-sm" style={{ background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76", fontSize: 12 }} onClick={() => { setCaseExpenses(p => [...p, { id: newId(), serviceProvided: "", dateOfInvoice: "", amount: "", paid: false }]); log("Expense Added", "New expense row added"); }}>+ Add Row</button>
+                <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 12 }} onClick={() => { setCaseExpenses(p => [...p, { id: newId(), serviceProvided: "", dateOfInvoice: "", amount: "", paid: false }]); log("Expense Added", "New expense row added"); }}>+ Add Row</button>
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -3234,7 +3235,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     <td style={{ padding: "8px 10px", fontSize: 12, fontWeight: 600, color: "var(--c-text2)" }} colSpan={2}>
                       Total{expenseServiceFilter ? ` · ${expenseServiceFilter}` : ""}{expensePaidFilter !== "all" ? ` · ${expensePaidFilter}` : ""}
                     </td>
-                    <td style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700, color: total > 0 ? "#3E5C76" : "var(--c-text2)", textAlign: "right" }}>{fmtAmt(total)}</td>
+                    <td style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700, color: total > 0 ? "#1E2A3A" : "var(--c-text2)", textAlign: "right" }}>{fmtAmt(total)}</td>
                     <td colSpan={2} />
                   </tr>
                 </tbody>
@@ -3254,7 +3255,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 <span>Correspondence</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 11, color: "#8A9096", fontWeight: 400 }}>
-                    Email: <span style={{ fontFamily: "monospace", color: "#3E5C76", cursor: "pointer" }} onClick={() => {
+                    Email: <span style={{ fontFamily: "monospace", color: "#1E2A3A", cursor: "pointer" }} onClick={() => {
                       navigator.clipboard.writeText(`case-${c.id}@mail.mattrmindr.com`);
                       setCorrCopied(true);
                       setTimeout(() => setCorrCopied(false), 2000);
@@ -3271,7 +3272,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
               {!corrLoading && correspondence.length === 0 && (
                 <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic", padding: "20px 0" }}>
-                  No correspondence received yet. CC or forward emails to <span style={{ fontFamily: "monospace", color: "#3E5C76" }}>case-{c.id}@mail.mattrmindr.com</span> and they will appear here.
+                  No correspondence received yet. CC or forward emails to <span style={{ fontFamily: "monospace", color: "#1E2A3A" }}>case-{c.id}@mail.mattrmindr.com</span> and they will appear here.
                 </div>
               )}
 
@@ -3284,7 +3285,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                       style={{ cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start" }}
                       onClick={() => setExpandedEmail(isExpanded ? null : email.id)}
                     >
-                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#3E5C76", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#1E2A3A", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
                         {(email.fromName || email.fromEmail || "?")[0].toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -3299,7 +3300,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                           </div>
                         )}
                         {email.hasAttachments && (
-                          <div style={{ fontSize: 11, color: "#3E5C76", marginTop: 2 }}>📎 {email.attachments.length} attachment{email.attachments.length !== 1 ? "s" : ""}</div>
+                          <div style={{ fontSize: 11, color: "#1E2A3A", marginTop: 2 }}>📎 {email.attachments.length} attachment{email.attachments.length !== 1 ? "s" : ""}</div>
                         )}
                       </div>
                     </div>
@@ -3333,7 +3334,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                                       title={isPreviewable ? "Click to preview" : "Click to download"}
                                     >
                                       <span style={{ fontSize: 22 }}>{icon}</span>
-                                      <span style={{ fontSize: 11, color: "#3E5C76", fontWeight: 600, wordBreak: "break-all", maxWidth: 120 }}>{att.filename}</span>
+                                      <span style={{ fontSize: 11, color: "#1E2A3A", fontWeight: 600, wordBreak: "break-all", maxWidth: 120 }}>{att.filename}</span>
                                       <span style={{ fontSize: 10, color: "#8A9096" }}>{(att.size / 1024).toFixed(0)} KB</span>
                                     </button>
                                   </div>
@@ -3384,7 +3385,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   <a
                     href={attachmentPreview.downloadUrl}
                     download
-                    style={{ padding: "5px 14px", fontSize: 12, fontWeight: 600, background: "#3E5C76", color: "#fff", borderRadius: 4, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                    style={{ padding: "5px 14px", fontSize: 12, fontWeight: 600, background: "#1E2A3A", color: "#fff", borderRadius: 4, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
                   >Download</a>
                   <button
                     onClick={() => setAttachmentPreview(null)}
@@ -3402,7 +3403,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     <div style={{ fontSize: 48, marginBottom: 12 }}>📎</div>
                     <div>Preview not available for this file type.</div>
                     <div style={{ marginTop: 8 }}>
-                      <a href={attachmentPreview.downloadUrl} download style={{ color: "#3E5C76" }}>Download to view</a>
+                      <a href={attachmentPreview.downloadUrl} download style={{ color: "#1E2A3A" }}>Download to view</a>
                     </div>
                   </div>
                 )}
@@ -3448,7 +3449,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 16 }}>
                 {ACTIVITY_FILTERS.map(f => (
-                  <button key={f.key} className={`btn btn-sm ${activityFilter === f.key ? "" : "btn-outline"}`} style={activityFilter === f.key ? { background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76", fontSize: 11, padding: "3px 10px" } : { fontSize: 11, padding: "3px 10px" }} onClick={() => setActivityFilter(f.key)}>{f.label}</button>
+                  <button key={f.key} className={`btn btn-sm ${activityFilter === f.key ? "" : "btn-outline"}`} style={activityFilter === f.key ? { background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 11, padding: "3px 10px" } : { fontSize: 11, padding: "3px 10px" }} onClick={() => setActivityFilter(f.key)}>{f.label}</button>
                 ))}
               </div>
 
@@ -3601,7 +3602,7 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
                   onClick={() => openLink(link.path)}
                   title={link.path}
                   style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                  onMouseEnter={e => { e.currentTarget.style.color = "#3E5C76"; e.currentTarget.style.textDecoration = "underline"; }}
+                  onMouseEnter={e => { e.currentTarget.style.color = "#1E2A3A"; e.currentTarget.style.textDecoration = "underline"; }}
                   onMouseLeave={e => { e.currentTarget.style.color = "var(--c-text)"; e.currentTarget.style.textDecoration = "none"; }}
                 >
                   {link.label}
@@ -3630,7 +3631,7 @@ function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) 
 // ─── Note type config ─────────────────────────────────────────────────────────
 const NOTE_TYPES = [
   { label: "General",          color: "var(--c-text2)", bg: "var(--c-card)" },
-  { label: "Attorney Note",    color: "#3E5C76", bg: "#fef3c7" },
+  { label: "Attorney Note",    color: "#1E2A3A", bg: "#fef3c7" },
   { label: "Client Contact",   color: "#5599cc", bg: "#E4E7EB" },
   { label: "Claim Specialist", color: "#44bbaa", bg: "#ccfbf1" },
   { label: "Mediation",        color: "#a066cc", bg: "#fdf4ff" },
@@ -3840,7 +3841,7 @@ function BillingPrintView({ c, billingParties, onClose }) {
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
         <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700 }}>Billing Summary — {c.title}</div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" style={{ background: "#3E5C76", color: "#fff", border: "1px solid #3E5C76" }} onClick={handlePrint}>Print</button>
+          <button className="btn" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={handlePrint}>Print</button>
           <button className="btn btn-outline" onClick={onClose}>Close</button>
         </div>
       </div>
@@ -3861,7 +3862,7 @@ function BillingPrintView({ c, billingParties, onClose }) {
                 {party.medRows.filter(r => r.provider || r.amount).map(r => (
                   <tr key={r.id}><td style={tdS}>{r.provider || "—"}</td><td style={tdS}>{r.treatmentDates || "—"}</td><td style={{ ...tdS, textAlign: "right" }}>{r.amount ? fmtAmt(parseFloat(r.amount) || 0) : "—"}</td></tr>
                 ))}
-                <tr style={{ background: "#EEF1F4" }}><td style={{ ...tdS, fontWeight: 700 }} colSpan={2}>Total</td><td style={{ ...tdS, fontWeight: 700, textAlign: "right", color: "#3E5C76" }}>{fmtAmt(medTotal)}</td></tr>
+                <tr style={{ background: "#EEF1F4" }}><td style={{ ...tdS, fontWeight: 700 }} colSpan={2}>Total</td><td style={{ ...tdS, fontWeight: 700, textAlign: "right", color: "#1E2A3A" }}>{fmtAmt(medTotal)}</td></tr>
               </tbody>
             </table>
             {party.collateralSource && (
@@ -3873,7 +3874,7 @@ function BillingPrintView({ c, billingParties, onClose }) {
                     {party.csRows.filter(r => r.insuranceProvider || r.amount).map(r => (
                       <tr key={r.id}><td style={tdS}>{r.insuranceProvider || "—"}</td><td style={tdS}>{r.dateRange || "—"}</td><td style={{ ...tdS, textAlign: "right" }}>{r.amount ? fmtAmt(parseFloat(r.amount) || 0) : "—"}</td></tr>
                     ))}
-                    <tr style={{ background: "#EEF1F4" }}><td style={{ ...tdS, fontWeight: 700 }} colSpan={2}>Total</td><td style={{ ...tdS, fontWeight: 700, textAlign: "right", color: "#3E5C76" }}>{fmtAmt(csTotal)}</td></tr>
+                    <tr style={{ background: "#EEF1F4" }}><td style={{ ...tdS, fontWeight: 700 }} colSpan={2}>Total</td><td style={{ ...tdS, fontWeight: 700, textAlign: "right", color: "#1E2A3A" }}>{fmtAmt(csTotal)}</td></tr>
                   </tbody>
                 </table>
               </>
@@ -4185,7 +4186,7 @@ function CalendarGrid({ deadlines, allCases, externalEvents }) {
 
         {/* Legend */}
         <div style={{ padding: "8px 18px", borderBottom: "1px solid var(--c-border)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {[["#e05252","Overdue"],["#e07a30","≤7 days"],["#3E5C76","≤21 days"],["#4CAE72","Upcoming"],["#5588cc","External Cal"]].map(([col,lbl]) => (
+          {[["#e05252","Overdue"],["#e07a30","≤7 days"],["#1E2A3A","≤21 days"],["#4CAE72","Upcoming"],["#5588cc","External Cal"]].map(([col,lbl]) => (
             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: col, flexShrink: 0 }} />
               <span style={{ fontSize: 11, color: "#8A9096" }}>{lbl}</span>
@@ -4211,7 +4212,7 @@ function CalendarGrid({ deadlines, allCases, externalEvents }) {
               <div key={dateStr} onClick={() => setSelected(isSelected ? null : dateStr)}
                 style={{ minHeight: 80, borderRight: borderR, borderBottom: "1px solid var(--c-border2)", padding: "6px 7px", cursor: events.length ? "pointer" : "default", background: isSelected ? "#E4E7EB" : isToday ? "#E4E7EB" : "transparent", transition: "background 0.1s", position: "relative" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? "#3E5C76" : "#8A9096", width: 22, height: 22, borderRadius: "50%", background: isToday ? "#3E5C7612" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{dayNum}</span>
+                  <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? "#1E2A3A" : "#8A9096", width: 22, height: 22, borderRadius: "50%", background: isToday ? "#1E2A3A12" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{dayNum}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {events.slice(0, 3).map((ev, ei) => (
@@ -4317,7 +4318,7 @@ function ICalManager({ externalEvents, setExternalEvents }) {
 
           {/* Add feed form */}
           <div style={{ background: "var(--c-bg)", border: "1px solid var(--c-border3)", borderRadius: 7, padding: 16, marginBottom: feeds.length ? 16 : 0 }}>
-            <div style={{ fontSize: 12, color: "#3E5C76", fontWeight: 600, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>Add New Calendar Feed</div>
+            <div style={{ fontSize: 12, color: "#1E2A3A", fontWeight: 600, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>Add New Calendar Feed</div>
             <div className="form-row" style={{ marginBottom: 10 }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Calendar Name</label>
@@ -4382,7 +4383,7 @@ function ICalManager({ externalEvents, setExternalEvents }) {
             ["Bar Association Calendars", "Most state bar websites publish a CLE/events calendar — look for an iCal or .ics download link"],
           ].map(([src, tip]) => (
             <div key={src} style={{ display: "flex", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--c-border2)" }}>
-              <div style={{ fontSize: 13, color: "#3E5C76", fontWeight: 600, width: 180, flexShrink: 0 }}>{src}</div>
+              <div style={{ fontSize: 13, color: "#1E2A3A", fontWeight: 600, width: 180, flexShrink: 0 }}>{src}</div>
               <div style={{ fontSize: 12, color: "var(--c-text2)", lineHeight: 1.5 }}>{tip}</div>
             </div>
           ))}
@@ -4468,7 +4469,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
                     return (
                       <tr key={d.id}>
                         <td><div style={{ width: 10, height: 10, borderRadius: "50%", background: col }} /></td>
-                        <td><div style={{ color: "var(--c-text)", fontWeight: 600 }}>{d.title}</div>{d.rule && <div style={{ fontSize: 11, color: "#3E5C76", fontFamily: "monospace" }}>{d.rule}</div>}</td>
+                        <td><div style={{ color: "var(--c-text)", fontWeight: 600 }}>{d.title}</div>{d.rule && <div style={{ fontSize: 11, color: "#1E2A3A", fontFamily: "monospace" }}>{d.rule}</div>}</td>
                         <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{cs?.title?.slice(0, 40) || `#${d.caseId}`}<div style={{ fontSize: 10, color: "#8A9096" }}>{cs?.caseNum}</div></td>
                         <td><Badge label={d.type} /></td>
                         <td style={{ color: col, fontSize: 13, whiteSpace: "nowrap" }}>{fmt(d.date)}</td>
@@ -4546,9 +4547,9 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
                 <button className="btn btn-gold" onClick={runCalc}>Calculate</button>
                 {calcResult && (
                   <div className="calc-result">
-                    <div style={{ fontSize: 11, color: "#3E5C76", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Result</div>
+                    <div style={{ fontSize: 11, color: "#1E2A3A", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Result</div>
                     <div style={{ fontSize: 24, fontFamily: "'Playfair Display',serif", color: "var(--c-text-h)", marginBottom: 8 }}>{fmt(calcResult.result)}</div>
-                    <div style={{ fontSize: 13, color: "var(--c-text2)" }}><strong style={{ color: "#3E5C76" }}>{calcResult.rule.name}</strong><br />{calcResult.rule.days} days from {fmt(calcResult.from)} · <span style={{ fontFamily: "monospace", fontSize: 12 }}>{calcResult.rule.rule}</span></div>
+                    <div style={{ fontSize: 13, color: "var(--c-text2)" }}><strong style={{ color: "#1E2A3A" }}>{calcResult.rule.name}</strong><br />{calcResult.rule.days} days from {fmt(calcResult.from)} · <span style={{ fontFamily: "monospace", fontSize: 12 }}>{calcResult.rule.rule}</span></div>
                     <div style={{ marginTop: 10, fontSize: 12, color: "#e07a30", fontStyle: "italic" }}>⚠ Always verify against court orders and local rules.</div>
                   </div>
                 )}
@@ -4559,7 +4560,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>Action</th><th>Days</th><th>From</th><th>Rule</th></tr></thead>
-                  <tbody>{COURT_RULES.map(r => <tr key={r.id}><td style={{ color: "var(--c-text)" }}>{r.name}</td><td style={{ color: "#3E5C76", fontWeight: 700 }}>{r.days}</td><td style={{ fontSize: 12, color: "var(--c-text2)" }}>{r.from}</td><td style={{ fontFamily: "monospace", fontSize: 11, color: "#8A9096" }}>{r.rule}</td></tr>)}</tbody>
+                  <tbody>{COURT_RULES.map(r => <tr key={r.id}><td style={{ color: "var(--c-text)" }}>{r.name}</td><td style={{ color: "#1E2A3A", fontWeight: 700 }}>{r.days}</td><td style={{ fontSize: 12, color: "var(--c-text2)" }}>{r.from}</td><td style={{ fontFamily: "monospace", fontSize: 11, color: "#8A9096" }}>{r.rule}</td></tr>)}</tbody>
                 </table>
               </div>
             </div>
@@ -4773,7 +4774,7 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
                         <td>
                           <button
                             onClick={() => setExpandedTask(isExpanded ? null : t.id)}
-                            style={{ background: "none", border: "none", color: isExpanded ? "#3E5C76" : "#8A9096", cursor: "pointer", fontSize: 13, padding: "2px 6px", borderRadius: 3 }}
+                            style={{ background: "none", border: "none", color: isExpanded ? "#1E2A3A" : "#8A9096", cursor: "pointer", fontSize: 13, padding: "2px 6px", borderRadius: 3 }}
                             title="Edit due date, priority, assignee"
                           >✎</button>
                         </td>
@@ -5278,11 +5279,11 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
             {/* Summary footer */}
             <div style={{ padding: "12px 20px", borderTop: "1px solid var(--c-border)", display: "flex", gap: 20, flexWrap: "wrap" }}>
               <div style={{ fontSize: 12, color: "#8A9096" }}>
-                <strong style={{ color: "#3E5C76" }}>{generated.count}</strong> total records
+                <strong style={{ color: "#1E2A3A" }}>{generated.count}</strong> total records
               </div>
               {generated.reportId === "workload" && (() => {
                 const totalActive = allCases.filter(c => c.status === "Active").length;
-                return <div style={{ fontSize: 12, color: "#8A9096" }}><strong style={{ color: "#3E5C76" }}>{totalActive}</strong> total active cases across firm</div>;
+                return <div style={{ fontSize: 12, color: "#8A9096" }}><strong style={{ color: "#1E2A3A" }}>{totalActive}</strong> total active cases across firm</div>;
               })()}
               {generated.reportId === "overdue_tasks" && (() => {
                 const caseCount = new Set(generated.rows.map(r => r[0])).size;
@@ -5544,7 +5545,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
                       </td>
                       <td>
                         {r.category && (
-                          <span style={{ fontSize: 11, color: "#3E5C76", background: "#fff7ed", border: "1px solid #fed7aa", padding: "2px 7px", borderRadius: 4 }}>
+                          <span style={{ fontSize: 11, color: "#1E2A3A", background: "#fff7ed", border: "1px solid #fed7aa", padding: "2px 7px", borderRadius: 4 }}>
                             {r.category}
                           </span>
                         )}
@@ -5566,7 +5567,7 @@ const CONTACT_CATEGORIES = ["Client", "Attorney", "Adjuster", "Court", "Expert",
 
 const CONTACT_CAT_STYLE = {
   Client:        { bg: "#E4E7EB", color: "#5599cc", border: "#D6D8DB" },
-  Attorney:      { bg: "#fef9c3", color: "#3E5C76", border: "#fef9c3" },
+  Attorney:      { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
   Adjuster:      { bg: "#ffe4e6", color: "#e05252", border: "#fecdd3" },
   Court:         { bg: "#f3e8ff", color: "#9966cc", border: "#f3e8ff" },
   Expert:        { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
@@ -5577,7 +5578,7 @@ const CONTACT_NOTE_TYPES = [
   { label: "General",    bg: "var(--c-border)", color: "var(--c-text2)" },
   { label: "Call Log",   bg: "#dcfce7", color: "#4CAE72" },
   { label: "Email Log",  bg: "#E4E7EB", color: "#5599cc" },
-  { label: "Meeting",    bg: "#fef9c3", color: "#3E5C76" },
+  { label: "Meeting",    bg: "#fef9c3", color: "#1E2A3A" },
   { label: "Follow-up",  bg: "#fee2e2", color: "#e05252" },
 ];
 
@@ -5898,7 +5899,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
                 <tr style={{ background: "var(--c-card)", borderBottom: "2px solid #e2e8f0" }}>
                   <th style={{ width: 90, padding: "9px 10px", textAlign: "left", fontWeight: 400 }}></th>
                   {contacts.map(c => (
-                    <th key={c.id} style={{ padding: "9px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: c.id === primaryId ? "#3E5C76" : "var(--c-text2)", borderLeft: "1px solid var(--c-border)", wordBreak: "break-word", letterSpacing: "normal", textTransform: "none" }}>
+                    <th key={c.id} style={{ padding: "9px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: c.id === primaryId ? "#1E2A3A" : "var(--c-text2)", borderLeft: "1px solid var(--c-border)", wordBreak: "break-word", letterSpacing: "normal", textTransform: "none" }}>
                       {c.name}{c.id === primaryId ? " ★" : ""}
                     </th>
                   ))}
@@ -5973,7 +5974,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
           <button
             onClick={handleMerge}
             disabled={merging}
-            style={{ background: "#3E5C76", color: "var(--c-card)", border: "none", borderRadius: 4, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}
+            style={{ background: "#1E2A3A", color: "var(--c-card)", border: "none", borderRadius: 4, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: merging ? "not-allowed" : "pointer", opacity: merging ? 0.6 : 1 }}
           >
             {merging ? "Merging…" : `Merge ${contacts.length} Contacts`}
           </button>
@@ -6144,7 +6145,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
           {isAppAdmin(currentUser) && !isDeleted && (
             <button
               onClick={toggleMergeMode}
-              style={{ background: mergeMode ? "#3E5C76" : "var(--c-border)", color: mergeMode ? "var(--c-card)" : "var(--c-text2)", border: `1px solid ${mergeMode ? "#3E5C76" : "var(--c-border)"}`, borderRadius: 4, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+              style={{ background: mergeMode ? "#1E2A3A" : "var(--c-border)", color: mergeMode ? "var(--c-card)" : "var(--c-text2)", border: `1px solid ${mergeMode ? "#1E2A3A" : "var(--c-border)"}`, borderRadius: 4, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
             >
               {mergeMode ? "Cancel Merge" : "Merge Contacts"}
             </button>
@@ -6162,8 +6163,8 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
               onClick={() => setCategoryFilter(t.id)}
               style={{
                 padding: "10px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
-                borderBottom: categoryFilter === t.id ? `2px solid ${t.red ? "#e05252" : "#3E5C76"}` : "2px solid transparent",
-                color: categoryFilter === t.id ? (t.red ? "#e05252" : "#3E5C76") : "#8A9096",
+                borderBottom: categoryFilter === t.id ? `2px solid ${t.red ? "#e05252" : "#1E2A3A"}` : "2px solid transparent",
+                color: categoryFilter === t.id ? (t.red ? "#e05252" : "#1E2A3A") : "#8A9096",
                 transition: "all 0.15s",
               }}
             >
@@ -6226,7 +6227,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                       }
                       setShowMergeModal(true);
                     }}
-                    style={{ background: "#3E5C76", color: "var(--c-card)", border: "none", borderRadius: 4, padding: "6px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                    style={{ background: "#1E2A3A", color: "var(--c-card)", border: "none", borderRadius: 4, padding: "6px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
                   >
                     Merge Selected ({mergeSelected.size})
                   </button>
@@ -6280,7 +6281,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                       <td style={{ padding: "10px 12px 10px 0", color: "var(--c-text)", fontWeight: 500 }}>{c.name}</td>
                       <td style={{ padding: "10px 12px 10px 0", color: "var(--c-text2)", fontFamily: "monospace", fontSize: 12 }}>{c.phone || <span style={{ color: "var(--c-border)" }}>—</span>}</td>
                       <td style={{ padding: "10px 12px 10px 0", color: "#5599cc", fontSize: 12 }}>{c.email || <span style={{ color: "var(--c-border)" }}>—</span>}</td>
-                      <td style={{ padding: "10px 0", color: caseCount > 0 ? "#3E5C76" : "var(--c-border)", fontWeight: caseCount > 0 ? 600 : 400 }}>
+                      <td style={{ padding: "10px 0", color: caseCount > 0 ? "#1E2A3A" : "var(--c-border)", fontWeight: caseCount > 0 ? 600 : 400 }}>
                         {caseCount > 0 ? caseCount : "—"}
                       </td>
                     </tr>
@@ -6407,7 +6408,7 @@ function AddStaffModal({ onSave, onClose }) {
             {STAFF_ROLES.map(r => {
               const checked = form.roles.includes(r);
               return (
-                <label key={r} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12, color: checked ? "#3E5C76" : "#8A9096", userSelect: "none" }}>
+                <label key={r} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12, color: checked ? "#1E2A3A" : "#8A9096", userSelect: "none" }}>
                   <input type="checkbox" checked={checked} onChange={() => toggleRole(r)} />
                   {r}
                 </label>
@@ -6422,7 +6423,7 @@ function AddStaffModal({ onSave, onClose }) {
             {OFFICES.map(o => {
               const checked = form.offices.includes(o);
               return (
-                <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#3E5C76" : "#8A9096", userSelect: "none" }}>
+                <label key={o} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: checked ? "#1E2A3A" : "#8A9096", userSelect: "none" }}>
                   <input type="checkbox" checked={checked} onChange={() => toggleOffice(o)} />
                   {o}
                 </label>
@@ -6560,7 +6561,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose }) {
             <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--c-text2)" }}>✕</button>
           </div>
           {selected && (
-            <div style={{ fontSize: 12, color: "#3E5C76", marginTop: 4, cursor: "pointer" }} onClick={() => { setSelected(null); setValues({}); }}>
+            <div style={{ fontSize: 12, color: "#1E2A3A", marginTop: 4, cursor: "pointer" }} onClick={() => { setSelected(null); setValues({}); }}>
               ← Back to template list
             </div>
           )}
@@ -6587,12 +6588,12 @@ function GenerateDocumentModal({ caseData, currentUser, onClose }) {
               </div>
               {filtered.length === 0 && <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic", padding: "20px 0" }}>No templates found. Upload templates from the Documents view first.</div>}
               {filtered.map(t => (
-                <div key={t.id} onClick={() => handleSelect(t)} style={{ padding: "12px 14px", borderRadius: 8, border: "1px solid var(--c-border)", marginBottom: 8, cursor: "pointer", background: "var(--c-bg2)", transition: "border-color 0.15s" }} onMouseOver={e => e.currentTarget.style.borderColor = "#3E5C76"} onMouseOut={e => e.currentTarget.style.borderColor = ""}>
+                <div key={t.id} onClick={() => handleSelect(t)} style={{ padding: "12px 14px", borderRadius: 8, border: "1px solid var(--c-border)", marginBottom: 8, cursor: "pointer", background: "var(--c-bg2)", transition: "border-color 0.15s" }} onMouseOver={e => e.currentTarget.style.borderColor = "#1E2A3A"} onMouseOut={e => e.currentTarget.style.borderColor = ""}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text)" }}>{t.name}</div>
                   <div style={{ fontSize: 11, color: "#8A9096", marginTop: 2 }}>by {t.createdByName} · {t.placeholders.length} field{t.placeholders.length !== 1 ? "s" : ""}</div>
                   {t.tags.length > 0 && (
                     <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
-                      {t.tags.map(tag => <span key={tag} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "#E4E7EB", color: "#3E5C76", border: "1px solid #D6D8DB" }}>{tag}</span>)}
+                      {t.tags.map(tag => <span key={tag} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "#E4E7EB", color: "#1E2A3A", border: "1px solid #D6D8DB" }}>{tag}</span>)}
                     </div>
                   )}
                 </div>
@@ -6609,7 +6610,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose }) {
                 <div key={ph.token} style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 4 }}>
                     {ph.label}
-                    {ph.mapping && ph.mapping !== "_manual" && <span style={{ fontWeight: 400, color: "#3E5C76", marginLeft: 6, fontSize: 10 }}>auto-filled from {CASE_FIELD_MAP.find(f => f.key === ph.mapping)?.label || ph.mapping}</span>}
+                    {ph.mapping && ph.mapping !== "_manual" && <span style={{ fontWeight: 400, color: "#1E2A3A", marginLeft: 6, fontSize: 10 }}>auto-filled from {CASE_FIELD_MAP.find(f => f.key === ph.mapping)?.label || ph.mapping}</span>}
                   </label>
                   <input
                     value={values[ph.token] || ""}
@@ -6700,7 +6701,7 @@ function DocumentsView({ currentUser }) {
                 <div style={{ fontSize: 11, color: "#8A9096" }}>by {t.createdByName} · {t.placeholders.length} field{t.placeholders.length !== 1 ? "s" : ""}</div>
                 {t.tags.length > 0 && (
                   <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
-                    {t.tags.map(tag => <span key={tag} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "#E4E7EB", color: "#3E5C76", border: "1px solid #D6D8DB" }}>{tag}</span>)}
+                    {t.tags.map(tag => <span key={tag} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "#E4E7EB", color: "#1E2A3A", border: "1px solid #D6D8DB" }}>{tag}</span>)}
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
@@ -6743,7 +6744,7 @@ function DocumentsView({ currentUser }) {
           <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
             {(wizard.editingId ? ["Select Placeholders", "Map Fields", "Name & Save"] : ["Upload", "Select Placeholders", "Map Fields", "Name & Tag"]).map((label, i) => {
               const stepNum = wizard.editingId ? i + 2 : i + 1;
-              return <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px 0", fontSize: 12, fontWeight: wizard.step === stepNum ? 700 : 400, color: wizard.step === stepNum ? "#3E5C76" : "#8A9096", borderBottom: `2px solid ${wizard.step === stepNum ? "#3E5C76" : "var(--c-border)"}` }}>{i + 1}. {label}</div>;
+              return <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px 0", fontSize: 12, fontWeight: wizard.step === stepNum ? 700 : 400, color: wizard.step === stepNum ? "#1E2A3A" : "#8A9096", borderBottom: `2px solid ${wizard.step === stepNum ? "#1E2A3A" : "var(--c-border)"}` }}>{i + 1}. {label}</div>;
             })}
           </div>
 
@@ -6909,7 +6910,7 @@ function DocumentsView({ currentUser }) {
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 4 }}>Tags</label>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
                   {wizard.tags.map(tag => (
-                    <span key={tag} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: "#E4E7EB", color: "#3E5C76", border: "1px solid #D6D8DB", cursor: "pointer" }} onClick={() => setWizard(w => ({ ...w, tags: w.tags.filter(t => t !== tag) }))}>
+                    <span key={tag} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: "#E4E7EB", color: "#1E2A3A", border: "1px solid #D6D8DB", cursor: "pointer" }} onClick={() => setWizard(w => ({ ...w, tags: w.tags.filter(t => t !== tag) }))}>
                       {tag} ✕
                     </span>
                   ))}
@@ -6927,14 +6928,14 @@ function DocumentsView({ currentUser }) {
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={() => setWizard(w => ({ ...w, visibility: "global" }))}
-                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: `2px solid ${(wizard.visibility || "global") === "global" ? "#3E5C76" : "var(--c-border)"}`, background: (wizard.visibility || "global") === "global" ? "#E4E7EB" : "var(--c-bg2)", cursor: "pointer", textAlign: "left" }}
+                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: `2px solid ${(wizard.visibility || "global") === "global" ? "#1E2A3A" : "var(--c-border)"}`, background: (wizard.visibility || "global") === "global" ? "#E4E7EB" : "var(--c-bg2)", cursor: "pointer", textAlign: "left" }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text)" }}>Everyone</div>
                     <div style={{ fontSize: 11, color: "#8A9096", marginTop: 2 }}>All staff can use this template</div>
                   </button>
                   <button
                     onClick={() => setWizard(w => ({ ...w, visibility: "personal" }))}
-                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: `2px solid ${wizard.visibility === "personal" ? "#3E5C76" : "var(--c-border)"}`, background: wizard.visibility === "personal" ? "#E4E7EB" : "var(--c-bg2)", cursor: "pointer", textAlign: "left" }}
+                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: `2px solid ${wizard.visibility === "personal" ? "#1E2A3A" : "var(--c-border)"}`, background: wizard.visibility === "personal" ? "#E4E7EB" : "var(--c-bg2)", cursor: "pointer", textAlign: "left" }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text)" }}>Only Me</div>
                     <div style={{ fontSize: 11, color: "#8A9096", marginTop: 2 }}>Only visible to you</div>
@@ -7157,7 +7158,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                           <button
                             key={r}
                             onClick={() => handleToggleRole(u.id, r, u.roles && u.roles.length ? u.roles : [u.role])}
-                            style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#3E5C7622" : "var(--c-border)"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#3E5C76" : "var(--c-border)", transition: "all 0.15s" }}
+                            style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#1E2A3A22" : "var(--c-border)"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#1E2A3A" : "var(--c-border)", transition: "all 0.15s" }}
                           >{r}</button>
                         );
                       })}
@@ -7175,10 +7176,10 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                         <button
                           key={o}
                           onClick={() => handleToggleOffice(u.id, o)}
-                          style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#3E5C7622" : "var(--c-border)"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#3E5C76" : "var(--c-border)", transition: "all 0.15s" }}
+                          style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: `1px solid ${on ? "#1E2A3A22" : "var(--c-border)"}`, background: on ? "#fef3c7" : "transparent", color: on ? "#1E2A3A" : "var(--c-border)", transition: "all 0.15s" }}
                         >{o}</button>
                       ) : on ? (
-                        <span key={o} style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, background: "#fef3c7", color: "#3E5C76", border: "1px solid #3E5C7622" }}>{o}</span>
+                        <span key={o} style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, background: "#fef3c7", color: "#1E2A3A", border: "1px solid #1E2A3A22" }}>{o}</span>
                       ) : null;
                     })}
                     {!canAdmin && offices.length === 0 && <span style={{ fontSize: 12, color: "var(--c-border)", fontStyle: "italic" }}>None assigned</span>}

@@ -92,6 +92,25 @@ lextrack/
 - **Auto-escalation**: Task priority rises automatically as due date approaches.
 - **Activity logging**: Tracked per-case via `/api/activity`.
 
+## Color Palette
+| Token | Light | Dark |
+|-------|-------|------|
+| App Background | `#F7F8FA` | `#0E1116` |
+| Sidebar Background | `#EDEFF2` | `#12161C` |
+| Sidebar Active | `#DDE3EA` | `#1A212B` |
+| Card Background | `#FFFFFF` | `#161B22` |
+| Elevated Panel / Hover | `#E4E7EB` | `#1C2330` |
+| Primary Brand | `#1E2A3A` | `#1E2A3A` |
+| Brand Hover | `#2A3A4F` | `#4F7393` |
+| Primary Text | `#1F2428` | `#E6EDF3` |
+| Secondary Text | `#5D6268` | `#9DA7B3` |
+| Muted Text | `#8A9096` | `#6E7681` |
+| Border | `#D6D8DB` | `#27313D` |
+| Accent (links) | `#4F7393` | `#4F7393` |
+| Success | `#2F7A5F` | `#2F7A5F` |
+| Warning | `#B67A18` | `#B67A18` |
+| Error | `#B24A4A` | `#B24A4A` |
+
 ## Database Tables
 | Table | Purpose |
 |-------|---------|
