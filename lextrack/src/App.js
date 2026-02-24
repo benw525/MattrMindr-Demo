@@ -2057,7 +2057,6 @@ const CORE_FIELDS = [
   { key: "answerFiled",  label: "Answer Filed",           type: "date", section: "dates" },
   { key: "writtenDisc",  label: "Written Discovery",      type: "date", section: "dates" },
   { key: "partyDepo",    label: "Party Depositions",      type: "date", section: "dates" },
-  { key: "expertDepo",   label: "Expert Depositions",     type: "date", section: "dates" },
   { key: "mediation",    label: "Mediation Date",         type: "date", section: "dates" },
   { key: "trialDate",    label: "Trial Date",             type: "date", section: "dates" },
   // Team section
@@ -2143,7 +2142,7 @@ const CONTACT_LINKABLE_KEYS = new Set(["client", "insured", "plaintiff", "claimS
 function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, userOffices, onAddDeadline }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
-  const DEFAULT_HIDDEN_DATES = ["answerFiled", "expertDepo", "partyDepo", "mediation"];
+  const DEFAULT_HIDDEN_DATES = ["answerFiled", "partyDepo", "mediation"];
   const [hiddenFields, setHiddenFields] = useState(c._hiddenFields != null ? c._hiddenFields : DEFAULT_HIDDEN_DATES);
   const [addingField, setAddingField] = useState(false);
   const [newFieldLabel, setNewFieldLabel] = useState("");
@@ -3495,7 +3494,6 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
                 ["Answer Filed", fmt(c.answerFiled)],
                 ["Written Discovery", fmt(c.writtenDisc)],
                 ["Party Depositions", fmt(c.partyDepo)],
-                ["Expert Depositions", fmt(c.expertDepo)],
                 ["Mediation", fmt(c.mediation)],
                 ["Trial Date", fmt(c.trialDate)],
               ].map(([k, v]) => (
@@ -4468,7 +4466,7 @@ function buildReport(id, allCases, tasks, deadlines, params) {
       const win = params.window || 90;
       const rows = [];
       activeCases.forEach(c => {
-        const fields = [["Written Discovery", c.writtenDisc], ["Party Depositions", c.partyDepo], ["Expert Depositions", c.expertDepo]];
+        const fields = [["Written Discovery", c.writtenDisc], ["Party Depositions", c.partyDepo]];
         fields.forEach(([label, date]) => {
           if (!date) return;
           const d = daysUntil(date);
