@@ -1298,7 +1298,7 @@ export default function App() {
         {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { handleSelectCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} userOffices={userOffices} />}
         {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} userOffices={userOffices} />}
         {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} />}
-        {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
+        {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} userOffices={userOffices} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} />}
         {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} />}
         {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} />}
@@ -3971,10 +3971,12 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
 }
 
 // ─── Tasks View ───────────────────────────────────────────────────────────────
-function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask }) {
+function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask, userOffices }) {
   const [filter, setFilter] = useState("Open");
   const [showForm, setShowForm] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
+  const [caseDropOpen, setCaseDropOpen] = useState(false);
+  const [taskOffice, setTaskOffice] = useState("All");
   const [sortCol, setSortCol] = useState("due");
   const [sortDir, setSortDir] = useState("asc");
   const [expandedTask, setExpandedTask] = useState(null);
@@ -3982,7 +3984,8 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
   const handleSort = (col) => { if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("asc"); } };
 
   const sortedCases = useMemo(() => [...allCases].filter(c => c.status === "Active").sort((a, b) => (a.title || "").localeCompare(b.title || "")), [allCases]);
-  const filteredCases = useMemo(() => caseSearch ? sortedCases.filter(c => (c.title || "").toLowerCase().includes(caseSearch.toLowerCase()) || (c.caseNum || "").toLowerCase().includes(caseSearch.toLowerCase())) : sortedCases, [sortedCases, caseSearch]);
+  const filteredCases = useMemo(() => { const q = caseSearch.toLowerCase(); return q ? sortedCases.filter(c => (c.title || "").toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q)) : sortedCases; }, [sortedCases, caseSearch]);
+  const officeFilteredUsers = useMemo(() => taskOffice === "All" ? USERS : USERS.filter(u => (userOffices[u.id] || []).includes(taskOffice)), [taskOffice, userOffices]);
 
   const blank = useMemo(() => ({ caseId: sortedCases[0]?.id || 0, title: "", assigned: currentUser.id, due: addDays(today, 7), priority: "Low", autoEscalate: true, status: "Not Started", notes: "", recurring: false, recurringDays: 30 }), [sortedCases, currentUser.id]);
   const [newTask, setNewTask] = useState({ ...blank });
@@ -4024,16 +4027,54 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
             <div style={{ padding: 20 }}>
               <div className="form-group"><label>Task Title</label><input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} placeholder="Describe the task…" /></div>
               <div className="form-group">
-                <label>Case / Matter — sorted by style</label>
-                <input placeholder="Search by style or case number…" value={caseSearch} onChange={e => setCaseSearch(e.target.value)} style={{ marginBottom: 6 }} />
-                <select value={newTask.caseId} onChange={e => setNewTask(p => ({ ...p, caseId: Number(e.target.value) }))} size={5} style={{ height: "auto" }}>
-                  {filteredCases.map(c => <option key={c.id} value={c.id}>{c.title}{c.caseNum ? ` — ${c.caseNum}` : ""}</option>)}
-                </select>
+                <label>Case / Matter</label>
+                <div style={{ position: "relative" }}>
+                  {newTask.caseId && !caseDropOpen ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #cbd5e1", borderRadius: 6, padding: "7px 10px", background: "var(--c-bg)", cursor: "default" }}>
+                      <span style={{ flex: 1, fontSize: 13, color: "var(--c-text)" }}>{sortedCases.find(c => c.id === newTask.caseId)?.title || "Unknown"}{sortedCases.find(c => c.id === newTask.caseId)?.caseNum ? <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{sortedCases.find(c => c.id === newTask.caseId)?.caseNum}</span> : null}</span>
+                      <button type="button" style={{ border: "none", background: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0 }} onClick={() => { setNewTask(p => ({ ...p, caseId: 0 })); setCaseSearch(""); setCaseDropOpen(true); }}>×</button>
+                    </div>
+                  ) : (
+                    <div onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setCaseDropOpen(false); }} tabIndex={-1} style={{ outline: "none" }}>
+                      <input
+                        autoFocus={caseDropOpen}
+                        placeholder="Search by style or case number…"
+                        value={caseSearch}
+                        onChange={e => { setCaseSearch(e.target.value); setCaseDropOpen(true); }}
+                        onFocus={() => setCaseDropOpen(true)}
+                        autoComplete="off"
+                      />
+                      {caseDropOpen && (
+                        <div style={{ position: "absolute", zIndex: 200, left: 0, right: 0, maxHeight: 220, overflowY: "auto", border: "1px solid #cbd5e1", borderRadius: 6, background: "var(--c-surface)", boxShadow: "0 6px 20px rgba(0,0,0,0.12)", marginTop: 2 }}>
+                          {filteredCases.length === 0 && <div style={{ padding: "10px 12px", fontSize: 12, color: "#94a3b8" }}>No matches</div>}
+                          {filteredCases.map(c => (
+                            <div
+                              key={c.id}
+                              onMouseDown={e => { e.preventDefault(); setNewTask(p => ({ ...p, caseId: c.id })); setCaseSearch(""); setCaseDropOpen(false); }}
+                              style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--c-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                              onMouseEnter={e => e.currentTarget.style.background = "var(--c-hover)"}
+                              onMouseLeave={e => e.currentTarget.style.background = ""}
+                            >
+                              <span style={{ color: "var(--c-text)", fontWeight: 500 }}>{c.title}</span>
+                              {c.caseNum && <span style={{ fontSize: 10, color: "#94a3b8", fontFamily: "monospace", flexShrink: 0, marginLeft: 8 }}>{c.caseNum}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="form-row">
+                <div className="form-group"><label>Office</label>
+                  <select value={taskOffice} onChange={e => { const o = e.target.value; setTaskOffice(o); const newFiltered = o === "All" ? USERS : USERS.filter(u => (userOffices[u.id] || []).includes(o)); if (!newFiltered.find(u => u.id === newTask.assigned)) setNewTask(p => ({ ...p, assigned: newFiltered[0]?.id || p.assigned })); }}>
+                    <option value="All">All Offices</option>
+                    {OFFICES.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
                 <div className="form-group"><label>Assigned To</label>
                   <select value={newTask.assigned} onChange={e => setNewTask(p => ({ ...p, assigned: Number(e.target.value) }))}>
-                    {USERS.map(u => <option key={u.id} value={u.id}>{u.name} · {u.role}</option>)}
+                    {officeFilteredUsers.map(u => <option key={u.id} value={u.id}>{u.name} · {u.role}</option>)}
                   </select>
                 </div>
                 <div className="form-group"><label>Due Date</label><input type="date" value={newTask.due} onChange={e => setNewTask(p => ({ ...p, due: e.target.value }))} /></div>
