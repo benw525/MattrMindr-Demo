@@ -875,14 +875,14 @@ export default function App() {
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>MattrMindr</div>
+      <img src="/logo.png" alt="MattrMindr" style={{ height: 40 }} />
       <div style={{ fontSize: 13, color: "#94a3b8" }}>Loading case data…</div>
     </div>
   );
 
   if (dataError) return (
     <div style={{ minHeight: "100vh", background: "var(--c-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2563eb" }}>MattrMindr</div>
+      <img src="/logo.png" alt="MattrMindr" style={{ height: 40 }} />
       <div style={{ fontSize: 13, color: "#e05252" }}>Failed to load data: {dataError}</div>
       <button className="btn btn-outline" onClick={() => setCurrentUser(null)}>Return to Login</button>
     </div>
@@ -1268,8 +1268,7 @@ export default function App() {
     <div className={`app${darkMode ? " dark" : ""}`}>
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-text">MattrMindr</div>
-          <div className="sidebar-logo-sub">Case Management</div>
+          <img src="/logo.png" alt="MattrMindr" style={{ height: 30 }} />
         </div>
         <div className="sidebar-user">
           <Avatar userId={currentUser.id} size={34} />
@@ -1395,7 +1394,7 @@ function LoginScreen({ onLogin }) {
   return (
     <div className="login-bg">
       <div className="login-box">
-        <div className="login-title">MattrMindr</div>
+        <img src="/logo.png" alt="MattrMindr" style={{ height: 48, marginBottom: 8 }} />
         <div className="login-sub">Case Management System</div>
 
         {view === "login" && (<>
@@ -1487,7 +1486,7 @@ function ChangePasswordModal({ forced, currentUser, onDone, onClose }) {
 
   const content = (
     <>
-      <div className="login-title" style={{ fontSize: 20 }}>MattrMindr</div>
+      <img src="/logo.png" alt="MattrMindr" style={{ height: 36, marginBottom: 8 }} />
       {forced && <div style={{ fontSize: 13, color: "#64748b", margin: "8px 0 16px" }}>You must set a new password before continuing.</div>}
       {!forced && (
         <div className="form-group">
