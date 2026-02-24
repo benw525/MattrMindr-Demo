@@ -998,19 +998,34 @@ export default function App() {
     }
   };
 
-  const handleCompleteTask = (taskId, onAfterComplete) => {
+  const handleCompleteTask = (taskId) => {
     const target = tasks.find(t => t.id === taskId);
     if (!target) return;
     if (target.status === "Completed") {
       finishCompleteTask(taskId, null, null, null, true);
     } else {
       const caseForTask = allCases.find(c => c.id === target.caseId);
-      setPendingTimePrompt({ taskId, task: target, completingUser: currentUser, caseForTask, onAfterComplete });
+      setPendingTimePrompt({ taskId, task: target, completingUser: currentUser, caseForTask });
     }
   };
 
+  const logTaskActivity = (target, action, detail) => {
+    const entry = {
+      id: newId(),
+      caseId: target.caseId,
+      ts: new Date().toISOString(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      action,
+      detail,
+    };
+    apiCreateActivity(entry)
+      .then(saved => setCaseActivity(prev => ({ ...prev, [target.caseId]: [saved, ...(prev[target.caseId] || [])] })))
+      .catch(e => console.error("Failed to log activity:", e));
+  };
+
   const finishCompleteTask = async (taskId, timeLogged, completedBy, timeLogUser, isUncomplete = false) => {
-    const onAfterComplete = pendingTimePrompt?.onAfterComplete;
     setPendingTimePrompt(null);
     try {
       const target = tasks.find(t => t.id === taskId);
@@ -1029,6 +1044,7 @@ export default function App() {
 
       if (!completing) {
         setTasks(updatedTasks);
+        logTaskActivity(target, "Task Reopened", `"${target.title}" marked incomplete`);
         return;
       }
 
@@ -1140,6 +1156,11 @@ export default function App() {
         });
       });
 
+      const assignedToOther = target.assigned > 0 && target.assigned !== currentUser.id;
+      const completionDetail = assignedToOther
+        ? `"${target.title}" completed by ${currentUser.name} (assigned to ${getUserById(target.assigned)?.name || "unknown"})`
+        : `"${target.title}" marked complete`;
+
       // Follow-up tasks: always spawn recurring immediately, but hold chain spawns
       // until user decides whether they want another follow-up
       if (target.title.trim().startsWith("Follow-up")) {
@@ -1148,7 +1169,7 @@ export default function App() {
           updatedTasks = [...updatedTasks, ...savedR];
         }
         setTasks(updatedTasks);
-        onAfterComplete?.();
+        logTaskActivity(target, "Task Completed", completionDetail);
         setFollowUpPrompt({
           target,
           caseForTask,
@@ -1167,7 +1188,7 @@ export default function App() {
       }
 
       setTasks(updatedTasks);
-      onAfterComplete?.();
+      logTaskActivity(target, "Task Completed", completionDetail);
     } catch (err) {
       alert("Failed to complete task: " + err.message);
     }
@@ -2080,29 +2101,8 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     }
   };
 
-  // Wrap onCompleteTask to also log
   const handleComplete = (taskId) => {
-    const t = tasks.find(t => t.id === taskId);
-    if (!t) { onCompleteTask(taskId); return; }
-
-    const completing = t.status !== "Completed";
-
-    if (!completing) {
-      log("Task Reopened", `"${t.title}" marked incomplete`);
-      onCompleteTask(taskId);
-      return;
-    }
-
-    const assignedToOther = t.assigned > 0 && t.assigned !== currentUser.id;
-    const assignedName = assignedToOther ? (getUserById(t.assigned)?.name || "unknown") : null;
-    onCompleteTask(taskId, () => {
-      log(
-        "Task Completed",
-        assignedToOther
-          ? `"${t.title}" completed by ${currentUser.name} (assigned to ${assignedName})`
-          : `"${t.title}" marked complete`
-      );
-    });
+    onCompleteTask(taskId);
   };
 
   // Wrap link handlers to log
