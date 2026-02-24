@@ -53,6 +53,7 @@ async function createSchema() {
         judge           TEXT    NOT NULL DEFAULT '',
         dol             DATE,
         custom_fields   JSONB   NOT NULL DEFAULT '[]',
+        confidential    BOOLEAN NOT NULL DEFAULT FALSE,
         deleted_at      TIMESTAMPTZ,
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );

@@ -18,7 +18,7 @@ router.post("/", requireAuth, async (req, res) => {
 
   try {
     const [casesResult, notesResult, activityResult, tasksResult, deadlinesResult, linksResult, usersResult] = await Promise.all([
-      pool.query("SELECT * FROM cases WHERE deleted_at IS NULL ORDER BY title"),
+      pool.query("SELECT * FROM cases WHERE deleted_at IS NULL AND confidential = FALSE ORDER BY title"),
       pool.query("SELECT case_id, body, type FROM case_notes ORDER BY created_at DESC"),
       pool.query("SELECT case_id, action, detail FROM case_activity ORDER BY ts DESC"),
       pool.query("SELECT case_id, title, status, priority, due FROM tasks"),
