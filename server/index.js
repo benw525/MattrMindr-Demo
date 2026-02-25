@@ -21,6 +21,7 @@ const correspondenceRoutes   = require("./routes/correspondence");
 const inboundEmailRoutes     = require("./routes/inbound-email");
 const templatesRoutes        = require("./routes/templates");
 const partiesRoutes          = require("./routes/parties");
+const insuranceRoutes        = require("./routes/insurance");
 
 const app  = express();
 const PORT = process.env.API_PORT || 3001;
@@ -72,6 +73,7 @@ app.use("/api/ai-search",     aiSearchRoutes);
 app.use("/api/correspondence", correspondenceRoutes);
 app.use("/api/templates",      templatesRoutes);
 app.use("/api/parties",        partiesRoutes);
+app.use("/api/insurance",      insuranceRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

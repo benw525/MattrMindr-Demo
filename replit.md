@@ -47,6 +47,7 @@ server/
     inbound-email.js — POST /api/inbound-email (SendGrid Inbound Parse webhook, no auth)
     templates.js    — CRUD /api/templates, document generation with docxtemplater
     parties.js      — CRUD /api/parties (case parties: individuals & corporations)
+    insurance.js    — CRUD /api/insurance (case insurance policies with coverage tracking)
 
 lextrack/
   src/
@@ -130,3 +131,4 @@ lextrack/
 | case_correspondence | Inbound emails captured via SendGrid |
 | doc_templates | Document templates (.docx with placeholders) |
 | case_parties | Per-case parties (individuals & corporations, JSONB data) |
+| case_insurance | Per-case insurance policies with coverage tracking (JSONB data) |

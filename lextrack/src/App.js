@@ -15,6 +15,7 @@ import {
   apiAiSearch,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
+  apiGetInsurance, apiCreateInsurance, apiUpdateInsurance, apiDeleteInsurance,
   apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument,
 } from "./api.js";
 
@@ -2390,6 +2391,13 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [newPartyCustomType, setNewPartyCustomType] = useState("");
   const partyTimers = useRef({});
   const partyPendingData = useRef({});
+  const [insurance, setInsurance] = useState([]);
+  const [insuranceLoading, setInsuranceLoading] = useState(false);
+  const [expandedInsurance, setExpandedInsurance] = useState(null);
+  const [addingInsurance, setAddingInsurance] = useState(false);
+  const [newInsuranceType, setNewInsuranceType] = useState("Liability");
+  const insuranceTimers = useRef({});
+  const insurancePendingData = useRef({});
   const [showDocGen, setShowDocGen] = useState(false);
   const [activityFilter, setActivityFilter] = useState("all");
   const canRemove = isAttorney(currentUser);
@@ -2407,9 +2415,13 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     if (activeTab === "details") {
       setPartiesLoading(true);
       apiGetParties(c.id).then(setParties).catch(() => {}).finally(() => setPartiesLoading(false));
+      setInsuranceLoading(true);
+      apiGetInsurance(c.id).then(setInsurance).catch(() => {}).finally(() => setInsuranceLoading(false));
     }
     const timersRef = partyTimers.current;
     const pendingRef = partyPendingData.current;
+    const insTimersRef = insuranceTimers.current;
+    const insPendingRef = insurancePendingData.current;
     return () => {
       Object.entries(timersRef).forEach(([key, timer]) => {
         clearTimeout(timer);
@@ -2420,6 +2432,15 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         }
       });
       partyTimers.current = {};
+      Object.entries(insTimersRef).forEach(([key, timer]) => {
+        clearTimeout(timer);
+        const pendingData = insPendingRef[key];
+        if (pendingData) {
+          apiUpdateInsurance(parseInt(key), { data: pendingData }).catch(() => {});
+          delete insPendingRef[key];
+        }
+      });
+      insuranceTimers.current = {};
     };
   }, [activeTab, c.id]);
 
@@ -3292,8 +3313,194 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
             <div style={{ borderTop: "1px solid var(--c-border)", margin: "8px 0 32px" }} />
 
-            {/* Team */}
-            <div className="case-overlay-section" style={{ maxWidth: 500 }}>
+            {/* Insurance + Team two-column */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 48px", marginBottom: 32 }}>
+
+            {/* Left column: Insurance */}
+            <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
+              <div className="case-overlay-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Insurance ({insurance.length})</span>
+                <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 11, padding: "2px 10px" }} onClick={() => setAddingInsurance(true)}>+ Add Policy</button>
+              </div>
+
+              {addingInsurance && (
+                <div style={{ background: "var(--c-bg2)", border: "1px solid var(--c-border)", borderRadius: 8, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 12 }}>New Insurance Policy</div>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>Insurance Type</label>
+                    <select value={newInsuranceType} onChange={e => setNewInsuranceType(e.target.value)} style={{ width: "100%", fontSize: 13, padding: "6px 8px" }}>
+                      {["Liability", "UM/UIM", "MedPay", "PLUP", "Homeowners", "Business"].map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => { setAddingInsurance(false); setNewInsuranceType("Liability"); }}>Cancel</button>
+                    <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={async () => {
+                      try {
+                        const saved = await apiCreateInsurance({ caseId: c.id, insuranceType: newInsuranceType, data: {} });
+                        setInsurance(p => [...p, saved]);
+                        setAddingInsurance(false);
+                        setExpandedInsurance(saved.id);
+                        setNewInsuranceType("Liability");
+                        log("Insurance Added", `Added ${newInsuranceType} policy`);
+                      } catch (err) { alert("Failed to add insurance: " + err.message); }
+                    }}>Add</button>
+                  </div>
+                </div>
+              )}
+
+              {insuranceLoading && <div style={{ fontSize: 13, color: "#8A9096", padding: "12px 0" }}>Loading insurance...</div>}
+
+              {!insuranceLoading && insurance.length === 0 && !addingInsurance && (
+                <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic", padding: "12px 0" }}>No insurance policies added yet.</div>
+              )}
+
+              {!insuranceLoading && insurance.map(ins => {
+                const isExp = expandedInsurance === ins.id;
+                const d = ins.data || {};
+                const displayName = d.company || ins.insuranceType;
+                const INSURANCE_TYPE_COLORS = {
+                  "Liability": { bg: "#FDECEA" },
+                  "UM/UIM": { bg: "#E8F4FD" },
+                  "MedPay": { bg: "#E8F8E8" },
+                  "PLUP": { bg: "#FDF0E6" },
+                  "Homeowners": { bg: "#F5E6F5" },
+                  "Business": { bg: "#EDEFF2" },
+                };
+                const typeColor = INSURANCE_TYPE_COLORS[ins.insuranceType] || { bg: "#EDEFF2" };
+
+                const updateInsField = (field, value) => {
+                  const newData = { ...(insurancePendingData.current[ins.id] || d), [field]: value };
+                  insurancePendingData.current[ins.id] = newData;
+                  setInsurance(p => p.map(x => x.id === ins.id ? { ...x, data: newData } : x));
+                  const timerKey = `${ins.id}`;
+                  if (insuranceTimers.current[timerKey]) clearTimeout(insuranceTimers.current[timerKey]);
+                  insuranceTimers.current[timerKey] = setTimeout(async () => {
+                    const dataToSave = insurancePendingData.current[ins.id];
+                    delete insurancePendingData.current[ins.id];
+                    try { await apiUpdateInsurance(ins.id, { data: dataToSave }); } catch (err) { console.error(err); }
+                  }, 600);
+                };
+
+                const inputStyle = { width: "100%", fontSize: 13, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" };
+                const labelStyle = { fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 3 };
+                const fieldGroup = { marginBottom: 10 };
+
+                const partyOptions = parties.map(p => {
+                  const pd = p.data || {};
+                  const name = p.entityKind === "corporation" ? (pd.entityName || "Unnamed Entity") : [pd.firstName, pd.lastName].filter(Boolean).join(" ") || "Unnamed Party";
+                  return { value: `${p.partyType}: ${name}`, label: `${p.partyType}: ${name}` };
+                });
+
+                return (
+                  <div key={ins.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 8, overflow: "hidden" }}>
+                    <div
+                      onClick={() => setExpandedInsurance(isExp ? null : ins.id)}
+                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 14 }}>🛡️</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>{displayName}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 4, background: typeColor.bg, color: "#1F2428", letterSpacing: "0.02em" }}>{ins.insuranceType}</span>
+                            {d.status && <span style={{ fontSize: 11, color: "#8A9096" }}>· {d.status}</span>}
+                            {d.assignedParty && <span style={{ fontSize: 11, color: "#8A9096" }}>· {d.assignedParty}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 12, color: "#8A9096" }}>{isExp ? "▲" : "▼"}</span>
+                    </div>
+
+                    {isExp && (
+                      <div style={{ padding: "12px 14px", borderTop: "1px solid var(--c-border)" }}>
+                        <div style={fieldGroup}><label style={labelStyle}>Company</label><input style={inputStyle} value={d.company || ""} onChange={e => updateInsField("company", e.target.value)} placeholder="Insurance company name" /></div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                          <div style={fieldGroup}><label style={labelStyle}>Claim Number</label><input style={inputStyle} value={d.claimNumber || ""} onChange={e => updateInsField("claimNumber", e.target.value)} placeholder="Insurer's claim #" /></div>
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Status</label>
+                            <select style={inputStyle} value={d.status || ""} onChange={e => updateInsField("status", e.target.value)}>
+                              <option value="">—</option>
+                              {["Open", "Closed", "Denied", "Exhausted", "Pending", "In Litigation"].map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div style={fieldGroup}>
+                          <label style={labelStyle}>Assigned Party</label>
+                          <select style={inputStyle} value={d.assignedParty || ""} onChange={e => updateInsField("assignedParty", e.target.value)}>
+                            <option value="">— Select Party —</option>
+                            {partyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 12, marginBottom: 6 }}>Policy Numbers</div>
+                        {(d.policyNumbers || []).map((pn, idx) => (
+                          <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                            <input style={{ ...inputStyle, flex: 1 }} value={pn || ""} placeholder="Policy number" onChange={e => {
+                              const nums = [...(d.policyNumbers || [])];
+                              nums[idx] = e.target.value;
+                              updateInsField("policyNumbers", nums);
+                            }} />
+                            <button onClick={() => { const nums = (d.policyNumbers || []).filter((_, i) => i !== idx); updateInsField("policyNumbers", nums); }} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
+                          </div>
+                        ))}
+                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: 12 }} onClick={() => updateInsField("policyNumbers", [...(d.policyNumbers || []), ""])}>+ Add Policy Number</button>
+
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Coverage</div>
+                        {(d.coverages || []).map((cov, idx) => (
+                          <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                            <select style={{ ...inputStyle, width: 140, flex: "0 0 140px" }} value={cov.type || "Bodily Injury"} onChange={e => {
+                              const covs = [...(d.coverages || [])];
+                              covs[idx] = { ...covs[idx], type: e.target.value };
+                              updateInsField("coverages", covs);
+                            }}>
+                              {["Bodily Injury", "Property Damage", "Combined Single Limit", "Per Person", "Per Occurrence", "Aggregate", "Medical Payments", "Uninsured Motorist", "Underinsured Motorist", "Umbrella/Excess", "Deductible", "Other"].map(l => <option key={l}>{l}</option>)}
+                            </select>
+                            <input style={{ ...inputStyle, flex: 1 }} value={cov.amount || ""} placeholder="Amount (e.g. $100,000)" onChange={e => {
+                              const covs = [...(d.coverages || [])];
+                              covs[idx] = { ...covs[idx], amount: e.target.value };
+                              updateInsField("coverages", covs);
+                            }} />
+                            <button onClick={() => { const covs = (d.coverages || []).filter((_, i) => i !== idx); updateInsField("coverages", covs); }} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
+                          </div>
+                        ))}
+                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: 12 }} onClick={() => updateInsField("coverages", [...(d.coverages || []), { type: "Bodily Injury", amount: "" }])}>+ Add Coverage</button>
+
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Adjuster</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                          <div><label style={labelStyle}>Name</label><input style={inputStyle} value={d.adjusterName || ""} onChange={e => updateInsField("adjusterName", e.target.value)} /></div>
+                          <div><label style={labelStyle}>Phone</label><input style={inputStyle} value={d.adjusterPhone || ""} onChange={e => updateInsField("adjusterPhone", e.target.value)} /></div>
+                          <div><label style={labelStyle}>Email</label><input style={inputStyle} value={d.adjusterEmail || ""} onChange={e => updateInsField("adjusterEmail", e.target.value)} /></div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                          <div><label style={labelStyle}>Policy Start</label><input type="date" style={inputStyle} value={d.policyStart || ""} onChange={e => updateInsField("policyStart", e.target.value)} /></div>
+                          <div><label style={labelStyle}>Policy End</label><input type="date" style={inputStyle} value={d.policyEnd || ""} onChange={e => updateInsField("policyEnd", e.target.value)} /></div>
+                        </div>
+
+                        <div style={fieldGroup}><label style={labelStyle}>Notes</label><textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} value={d.notes || ""} onChange={e => updateInsField("notes", e.target.value)} placeholder="Additional notes..." /></div>
+
+                        <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                          <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#e05252", borderColor: "#e05252" }} onClick={async () => {
+                            if (!window.confirm(`Remove ${displayName} (${ins.insuranceType}) policy from this case?`)) return;
+                            try {
+                              await apiDeleteInsurance(ins.id);
+                              setInsurance(p => p.filter(x => x.id !== ins.id));
+                              setExpandedInsurance(null);
+                              log("Insurance Removed", `Removed ${ins.insuranceType}: ${displayName}`);
+                            } catch (err) { alert("Failed: " + err.message); }
+                          }}>Remove Policy</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Right column: Team */}
+            <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
               <div className="case-overlay-section-title">Team</div>
               {editMode && (draft.offices || []).length > 0 && filteredUsersForTeam.length < USERS.length && (
                 <div style={{ fontSize: 11, color: "#1E2A3A", marginBottom: 8, fontStyle: "italic" }}>
@@ -3372,6 +3579,8 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   </button>
                 </div>
               )}
+            </div>
+
             </div>
 
           </div>
