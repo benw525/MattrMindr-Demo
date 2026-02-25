@@ -17,7 +17,7 @@ router.post("/", requireAuth, async (req, res) => {
   }
 
   try {
-    const [casesResult, notesResult, activityResult, tasksResult, deadlinesResult, linksResult, usersResult] = await Promise.all([
+    const [casesResult, notesResult, activityResult, tasksResult, deadlinesResult, linksResult, usersResult, partiesResult, insuranceResult, expertsResult, corrResult] = await Promise.all([
       pool.query("SELECT * FROM cases WHERE deleted_at IS NULL AND confidential = FALSE ORDER BY title"),
       pool.query("SELECT case_id, body, type FROM case_notes ORDER BY created_at DESC"),
       pool.query("SELECT case_id, action, detail FROM case_activity ORDER BY ts DESC"),
@@ -25,6 +25,10 @@ router.post("/", requireAuth, async (req, res) => {
       pool.query("SELECT case_id, title, date, type FROM deadlines"),
       pool.query("SELECT case_id, label, category FROM case_links"),
       pool.query("SELECT id, name, role FROM users"),
+      pool.query("SELECT case_id, party_type, data FROM case_parties"),
+      pool.query("SELECT case_id, data FROM case_insurance"),
+      pool.query("SELECT case_id, data FROM case_experts"),
+      pool.query("SELECT case_id, subject, from_email, to_email FROM case_correspondence ORDER BY received_at DESC"),
     ]);
 
     const cases = casesResult.rows;
@@ -64,6 +68,59 @@ router.post("/", requireAuth, async (req, res) => {
       if (!linksByCase[l.case_id]) linksByCase[l.case_id] = [];
       if (linksByCase[l.case_id].length < 5) {
         linksByCase[l.case_id].push(`${l.label || ""}(${l.category || ""})`);
+      }
+    }
+
+    const partiesByCase = {};
+    for (const p of partiesResult.rows) {
+      if (!partiesByCase[p.case_id]) partiesByCase[p.case_id] = [];
+      const d = typeof p.data === "string" ? JSON.parse(p.data) : (p.data || {});
+      const name = d.entityName || [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ") || "";
+      if (name) {
+        const info = [name];
+        if (p.party_type) info.push(`(${p.party_type})`);
+        if (d.representedBy) info.push(`rep:${d.representedBy}`);
+        if (d.email) info.push(d.email);
+        if (d.phone) info.push(d.phone);
+        if (d.isOurClient) info.push("OurClient");
+        partiesByCase[p.case_id].push(info.join(" "));
+      }
+    }
+
+    const insuranceByCase = {};
+    for (const ins of insuranceResult.rows) {
+      if (!insuranceByCase[ins.case_id]) insuranceByCase[ins.case_id] = [];
+      const d = typeof ins.data === "string" ? JSON.parse(ins.data) : (ins.data || {});
+      const info = [];
+      if (d.carrier) info.push(`Carrier:${d.carrier}`);
+      if (d.policyNum) info.push(`Policy#:${d.policyNum}`);
+      if (d.claimNum) info.push(`Claim#:${d.claimNum}`);
+      if (d.adjuster) info.push(`Adjuster:${d.adjuster}`);
+      if (d.coverageType) info.push(`Type:${d.coverageType}`);
+      if (d.policyLimit) info.push(`Limit:$${d.policyLimit}`);
+      if (info.length) insuranceByCase[ins.case_id].push(info.join(" "));
+    }
+
+    const expertsByCase = {};
+    for (const ex of expertsResult.rows) {
+      if (!expertsByCase[ex.case_id]) expertsByCase[ex.case_id] = [];
+      const d = typeof ex.data === "string" ? JSON.parse(ex.data) : (ex.data || {});
+      const info = [];
+      if (d.name) info.push(d.name);
+      if (d.type) info.push(`(${d.type})`);
+      if (d.company) info.push(d.company);
+      if (d.specialty) info.push(d.specialty);
+      if (info.length) expertsByCase[ex.case_id].push(info.join(" "));
+    }
+
+    const corrByCase = {};
+    for (const cr of corrResult.rows) {
+      if (!corrByCase[cr.case_id]) corrByCase[cr.case_id] = [];
+      if (corrByCase[cr.case_id].length < 5) {
+        const info = [];
+        if (cr.subject) info.push(`"${cr.subject}"`);
+        if (cr.from_email) info.push(`from:${cr.from_email}`);
+        if (info.length) corrByCase[cr.case_id].push(info.join(" "));
       }
     }
 
@@ -144,6 +201,35 @@ router.post("/", requireAuth, async (req, res) => {
       const lnks = linksByCase[c.id] || [];
       if (lnks.length) {
         parts.push("Links:[" + lnks.join("; ") + "]");
+      }
+
+      const parties = partiesByCase[c.id] || [];
+      if (parties.length) {
+        parts.push("Parties:[" + parties.join("; ") + "]");
+      }
+
+      const ins = insuranceByCase[c.id] || [];
+      if (ins.length) {
+        parts.push("Insurance:[" + ins.join("; ") + "]");
+      }
+
+      const exps = expertsByCase[c.id] || [];
+      if (exps.length) {
+        parts.push("Experts:[" + exps.join("; ") + "]");
+      }
+
+      const corr = corrByCase[c.id] || [];
+      if (corr.length) {
+        parts.push("Emails:[" + corr.join("; ") + "]");
+      }
+
+      const medSummary = Array.isArray(c.medical_summary) ? c.medical_summary : [];
+      for (const mp of medSummary) {
+        if (mp.name) {
+          const providers = (mp.entries || []).map(e => e.provider).filter(Boolean);
+          const uniqueProviders = [...new Set(providers)];
+          if (uniqueProviders.length) parts.push(`MedProviders(${mp.name}):[${uniqueProviders.join(",")}]`);
+        }
       }
 
       return parts.join(" | ");
