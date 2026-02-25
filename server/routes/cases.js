@@ -27,7 +27,7 @@ const toFrontend = (row) => ({
   dispositionType: row.disposition_type,
   assignedAttorney: row.assigned_attorney || 0,
   secondAttorney: row.second_attorney || 0,
-  paralegal: row.paralegal || 0,
+  trialCoordinator: row.trial_coordinator || 0,
   investigator: row.investigator || 0,
   socialWorker: row.social_worker || 0,
   offices: row.offices || [],
@@ -55,7 +55,7 @@ const canAccessCase = (row, req) => {
   if (!row.confidential) return true;
   if (isAppAdmin(req)) return true;
   const uid = req.session.userId;
-  if ([row.assigned_attorney, row.second_attorney, row.paralegal, row.investigator, row.social_worker].includes(uid)) return true;
+  if ([row.assigned_attorney, row.second_attorney, row.trial_coordinator, row.investigator, row.social_worker].includes(uid)) return true;
   const customTeam = Array.isArray(row.custom_team) ? row.custom_team : [];
   return customTeam.some(m => m.userId === uid);
 };
@@ -132,7 +132,7 @@ router.post("/", requireAuth, async (req, res) => {
         (case_num, title, defendant_name, prosecutor, county, court, court_division,
          charge_description, charge_statute, charge_class, case_type, type, status, stage,
          custody_status, bond_amount, bond_conditions, jail_location, disposition_type,
-         assigned_attorney, second_attorney, paralegal, investigator, social_worker,
+         assigned_attorney, second_attorney, trial_coordinator, investigator, social_worker,
          arrest_date, arraignment_date, next_court_date, trial_date, sentencing_date, disposition_date,
          judge, charges, custom_fields, custom_dates, hidden_fields, offices, confidential, custom_team)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
@@ -143,7 +143,7 @@ router.post("/", requireAuth, async (req, res) => {
         d.chargeDescription || "", d.chargeStatute || "", d.chargeClass || "",
         d.caseType || "Felony", d.type || "Felony", d.status || "Active", d.stage || "Arraignment",
         d.custodyStatus || "", d.bondAmount || "", d.bondConditions || "", d.jailLocation || "", d.dispositionType || "",
-        orNull(d.assignedAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.investigator), orNull(d.socialWorker),
+        orNull(d.assignedAttorney), orNull(d.secondAttorney), orNull(d.trialCoordinator), orNull(d.investigator), orNull(d.socialWorker),
         orNull(d.arrestDate), orNull(d.arraignmentDate), orNull(d.nextCourtDate),
         orNull(d.trialDate), orNull(d.sentencingDate), orNull(d.dispositionDate),
         d.judge || "", JSON.stringify(d.charges || []),
@@ -170,7 +170,7 @@ router.put("/:id", requireAuth, async (req, res) => {
         case_num=$1, title=$2, defendant_name=$3, prosecutor=$4, county=$5, court=$6, court_division=$7,
         charge_description=$8, charge_statute=$9, charge_class=$10, case_type=$11, type=$12, status=$13, stage=$14,
         custody_status=$15, bond_amount=$16, bond_conditions=$17, jail_location=$18, disposition_type=$19,
-        assigned_attorney=$20, second_attorney=$21, paralegal=$22, investigator=$23, social_worker=$24,
+        assigned_attorney=$20, second_attorney=$21, trial_coordinator=$22, investigator=$23, social_worker=$24,
         arrest_date=$25, arraignment_date=$26, next_court_date=$27, trial_date=$28, sentencing_date=$29, disposition_date=$30,
         judge=$31, charges=$32, custom_fields=$33, custom_dates=$34, hidden_fields=$35, offices=$36, confidential=$37, custom_team=$38
        WHERE id=$39 AND deleted_at IS NULL RETURNING *`,
@@ -180,7 +180,7 @@ router.put("/:id", requireAuth, async (req, res) => {
         d.chargeDescription || "", d.chargeStatute || "", d.chargeClass || "",
         d.caseType || "Felony", d.type || "Felony", d.status || "Active", d.stage || "Arraignment",
         d.custodyStatus || "", d.bondAmount || "", d.bondConditions || "", d.jailLocation || "", d.dispositionType || "",
-        orNull(d.assignedAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.investigator), orNull(d.socialWorker),
+        orNull(d.assignedAttorney), orNull(d.secondAttorney), orNull(d.trialCoordinator), orNull(d.investigator), orNull(d.socialWorker),
         orNull(d.arrestDate), orNull(d.arraignmentDate), orNull(d.nextCourtDate),
         orNull(d.trialDate), orNull(d.sentencingDate), orNull(d.dispositionDate),
         d.judge || "", JSON.stringify(d.charges || []),

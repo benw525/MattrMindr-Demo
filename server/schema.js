@@ -52,7 +52,7 @@ async function createSchema() {
         disposition_type TEXT   NOT NULL DEFAULT '',
         assigned_attorney INTEGER REFERENCES users(id),
         second_attorney   INTEGER REFERENCES users(id),
-        paralegal         INTEGER REFERENCES users(id),
+        trial_coordinator  INTEGER REFERENCES users(id),
         investigator      INTEGER REFERENCES users(id),
         social_worker     INTEGER REFERENCES users(id),
         offices         TEXT[]  NOT NULL DEFAULT '{}',

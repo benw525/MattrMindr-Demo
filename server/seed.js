@@ -36,21 +36,21 @@ async function seed() {
         `INSERT INTO cases
           (id, case_num, title, defendant_name, prosecutor, county, court, court_division,
            case_type, type, status, stage,
-           assigned_attorney, second_attorney, paralegal, investigator, social_worker,
+           assigned_attorney, second_attorney, trial_coordinator, investigator, social_worker,
            arrest_date, arraignment_date, next_court_date, trial_date, sentencing_date, disposition_date,
            judge)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
          ON CONFLICT (id) DO UPDATE SET
            case_num=$2, title=$3, defendant_name=$4, prosecutor=$5, county=$6, court=$7, court_division=$8,
            case_type=$9, type=$10, status=$11, stage=$12,
-           assigned_attorney=$13, second_attorney=$14, paralegal=$15, investigator=$16, social_worker=$17,
+           assigned_attorney=$13, second_attorney=$14, trial_coordinator=$15, investigator=$16, social_worker=$17,
            arrest_date=$18, arraignment_date=$19, next_court_date=$20, trial_date=$21, sentencing_date=$22, disposition_date=$23,
            judge=$24`,
         [
           c.id, c.caseNum || "", c.title, c.defendantName || "", c.prosecutor || "",
           c.county || "", c.court || "", c.courtDivision || "",
           c.caseType || "Felony", c.type || "Felony", c.status || "Active", c.stage || "Arraignment",
-          orNull(c.assignedAttorney), orNull(c.secondAttorney), orNull(c.paralegal),
+          orNull(c.assignedAttorney), orNull(c.secondAttorney), orNull(c.trialCoordinator),
           orNull(c.investigator), orNull(c.socialWorker),
           orNull(c.arrestDate), orNull(c.arraignmentDate), orNull(c.nextCourtDate),
           orNull(c.trialDate), orNull(c.sentencingDate), orNull(c.dispositionDate),

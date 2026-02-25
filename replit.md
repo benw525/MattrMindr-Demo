@@ -122,7 +122,7 @@ lextrack/
 ## Team Assignment Fields
 - Assigned Attorney (replaces leadAttorney)
 - 2nd Attorney
-- Trial Coordinator (DB column: paralegal)
+- Trial Coordinator
 - Investigator
 - Social Worker
 

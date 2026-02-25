@@ -87,7 +87,7 @@ const getEffectivePriority = (task) => {
 const TASK_CHAINS = {
   "Initial Client Interview": {
     title: "Request Discovery from Prosecutor",
-    assignedRole: "paralegal",
+    assignedRole: "trialCoordinator",
     priority: "High",
     dueDaysFromCompletion: 3,
     autoEscalate: true,
@@ -127,8 +127,8 @@ const generateDefaultTasks = (caseObj, userId) => {
   const resolveRole = (role) => role ? (caseObj[role] || userId) : userId;
   const base = [
     { title: "Initial Client Interview",              assignedRole: "assignedAttorney", priority: "Urgent", dueDays: 1,  notes: "Meet with client to discuss charges and case details." },
-    { title: "Request Discovery from Prosecutor",     assignedRole: "paralegal",        priority: "High",   dueDays: 3,  notes: "Request all discovery materials from the DA's office." },
-    { title: "Obtain Arrest Report and Booking Info",  assignedRole: "paralegal",        priority: "High",   dueDays: 3,  notes: "" },
+    { title: "Request Discovery from Prosecutor",     assignedRole: "trialCoordinator",        priority: "High",   dueDays: 3,  notes: "Request all discovery materials from the DA's office." },
+    { title: "Obtain Arrest Report and Booking Info",  assignedRole: "trialCoordinator", priority: "High",   dueDays: 3,  notes: "" },
     { title: "Review Bond Conditions",                 assignedRole: "assignedAttorney", priority: "High",   dueDays: 2,  notes: "Review and assess bond conditions; file motion to modify if needed." },
     { title: "Check for Conflicts of Interest",        assignedRole: "assignedAttorney", priority: "Urgent", dueDays: 1,  notes: "Run conflict check against existing cases." },
     { title: "Client Background Investigation",        assignedRole: "investigator",     priority: "Medium", dueDays: 14, notes: "Gather background info, employment, family ties, community involvement." },
@@ -564,7 +564,7 @@ function TimePromptModal({ pending, onSubmit }) {
   const showClaimPrompt  = isAttyPara(completingUser)  && task?.assigned > 0 && task.assigned !== completingUser?.id;
   const showAssignPrompt = isLegalAsst(completingUser);
 
-  const caseTeamIds   = caseForTask ? [caseForTask.assignedAttorney, caseForTask.secondAttorney, caseForTask.paralegal, caseForTask.investigator, caseForTask.socialWorker].filter(id => id > 0) : [];
+  const caseTeamIds   = caseForTask ? [caseForTask.assignedAttorney, caseForTask.secondAttorney, caseForTask.trialCoordinator, caseForTask.investigator, caseForTask.socialWorker].filter(id => id > 0) : [];
   const caseTeamUsers = USERS.filter(u => caseTeamIds.includes(u.id) && isAttyPara(u));
   const otherAttyPara = USERS.filter(u => !caseTeamIds.includes(u.id) && isAttyPara(u));
   const assignedUser  = task ? getUserById(task.assigned) : null;
@@ -614,11 +614,11 @@ function TimePromptModal({ pending, onSubmit }) {
           </div>
         )}
 
-        {/* Legal Assistant: assign credit to attorney/paralegal? */}
+        {/* Legal Assistant: assign credit to attorney/trial coordinator? */}
         {showAssignPrompt && (
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--c-border)" }}>
             <p style={{ fontSize: 13, color: "var(--c-text)", marginBottom: 10 }}>
-              Assign time credit to an attorney or paralegal?
+              Assign time credit to an attorney or trial coordinator?
             </p>
             <select value={assignId} onChange={e => setAssignId(Number(e.target.value))}>
               <option value={0}>— Keep in my log —</option>
@@ -628,7 +628,7 @@ function TimePromptModal({ pending, onSubmit }) {
                 </optgroup>
               )}
               {showAll && otherAttyPara.length > 0 && (
-                <optgroup label="All attorneys / paralegals">
+                <optgroup label="All attorneys / trial coordinators">
                   {otherAttyPara.map(u => <option key={u.id} value={u.id}>{u.name} · {u.role}</option>)}
                 </optgroup>
               )}
@@ -894,7 +894,7 @@ export default function App() {
     }
   };
 
-  const TEAM_ROLES = ["assignedAttorney", "secondAttorney", "paralegal", "investigator", "socialWorker"];
+  const TEAM_ROLES = ["assignedAttorney", "secondAttorney", "trialCoordinator", "investigator", "socialWorker"];
 
   const handleUpdateCase = async (updated) => {
     try {
@@ -1502,7 +1502,7 @@ function Toggle({ on, onChange, color = "#1E2A3A" }) {
 
 // ─── New Case/Matter Modal ────────────────────────────────────────────────────
 function NewCaseModal({ onSave, onClose, userOffices }) {
-  const [form, setForm] = useState({ caseNum: "", title: "", defendantName: "", prosecutor: "", county: "", court: "", courtDivision: "", chargeDescription: "", chargeStatute: "", chargeClass: "", caseType: "Felony", stage: "Arraignment", assignedAttorney: 0, secondAttorney: 0, paralegal: 0, investigator: 0, socialWorker: 0, offices: [], arrestDate: "", notes: "" });
+  const [form, setForm] = useState({ caseNum: "", title: "", defendantName: "", prosecutor: "", county: "", court: "", courtDivision: "", chargeDescription: "", chargeStatute: "", chargeClass: "", caseType: "Felony", stage: "Arraignment", assignedAttorney: 0, secondAttorney: 0, trialCoordinator: 0, investigator: 0, socialWorker: 0, offices: [], arrestDate: "", notes: "" });
   const [autoTasks, setAutoTasks] = useState(true);
   const [conflicts, setConflicts] = useState(null);
   const [conflictChecking, setConflictChecking] = useState(false);
@@ -1637,7 +1637,7 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
         </div>
         <div className="form-row">
           <div className="form-group"><label>Trial Coordinator</label>
-            <select value={form.paralegal} onChange={e => set("paralegal", Number(e.target.value))}>
+            <select value={form.trialCoordinator} onChange={e => set("trialCoordinator", Number(e.target.value))}>
               <option value={0}>— None —</option>
               {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
@@ -2648,7 +2648,7 @@ const CORE_FIELDS = [
   // Team section
   { key: "assignedAttorney", label: "Assigned Attorney",    type: "user",   section: "team" },
   { key: "secondAttorney",   label: "2nd Attorney",         type: "user",   section: "team" },
-  { key: "paralegal",        label: "Trial Coordinator",     type: "user",   section: "team" },
+  { key: "trialCoordinator", label: "Trial Coordinator",     type: "user",   section: "team" },
   { key: "investigator",     label: "Investigator",         type: "user",   section: "team" },
   { key: "socialWorker",     label: "Social Worker",        type: "user",   section: "team" },
 ];
@@ -4807,7 +4807,7 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote, caseRe
 
   const currentIsLegalAsst = isLegalAsst(currentUser);
 
-  const caseTeamIds   = caseRecord ? [caseRecord.assignedAttorney, caseRecord.secondAttorney, caseRecord.paralegal, caseRecord.investigator, caseRecord.socialWorker].filter(id => id > 0) : [];
+  const caseTeamIds   = caseRecord ? [caseRecord.assignedAttorney, caseRecord.secondAttorney, caseRecord.trialCoordinator, caseRecord.investigator, caseRecord.socialWorker].filter(id => id > 0) : [];
   const caseTeamUsers = USERS.filter(u => caseTeamIds.includes(u.id) && isAttyPara(u));
   const otherAttyPara = USERS.filter(u => !caseTeamIds.includes(u.id) && isAttyPara(u));
 
@@ -4886,7 +4886,7 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote, caseRe
                   </optgroup>
                 )}
                 {showAllAssign && otherAttyPara.length > 0 && (
-                  <optgroup label="All attorneys / paralegals">
+                  <optgroup label="All attorneys / trial coordinators">
                     {otherAttyPara.map(u => <option key={u.id} value={u.id}>{u.name} · {u.role}</option>)}
                   </optgroup>
                 )}
@@ -5018,7 +5018,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
 
   const lead = getUserById(c.assignedAttorney);
   const second = getUserById(c.secondAttorney);
-  const para = getUserById(c.paralegal);
+  const para = getUserById(c.trialCoordinator);
   const inv = getUserById(c.investigator);
   const sw = getUserById(c.socialWorker);
   const now = new Date().toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -6554,7 +6554,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
     });
 
     const myCaseIds = new Set(allCasesForLog.filter(c =>
-      [c.assignedAttorney, c.secondAttorney, c.paralegal, c.investigator, c.socialWorker].includes(currentUser.id)
+      [c.assignedAttorney, c.secondAttorney, c.trialCoordinator, c.investigator, c.socialWorker].includes(currentUser.id)
     ).map(c => c.id));
     correspondence.forEach(email => {
       if (!myCaseIds.has(email.caseId)) return;
@@ -6810,7 +6810,7 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
     if (caseFilter === "myOffice" && myOffices.length > 0) {
       cases = cases.filter(c => (c.offices || []).some(o => myOffices.includes(o)));
     } else if (caseFilter === "myMatters") {
-      cases = cases.filter(c => [c.assignedAttorney, c.secondAttorney, c.paralegal, c.investigator, c.socialWorker].includes(currentUser.id));
+      cases = cases.filter(c => [c.assignedAttorney, c.secondAttorney, c.trialCoordinator, c.investigator, c.socialWorker].includes(currentUser.id));
     }
     if (caseSearch) {
       const q = caseSearch.toLowerCase();
@@ -8023,7 +8023,7 @@ const CASE_FIELD_MAP = [
   { key: "dispositionDate", label: "Disposition Date" },
   { key: "_assignedAttorneyName", label: "Assigned Attorney Name" },
   { key: "_secondAttorneyName", label: "2nd Attorney Name" },
-  { key: "_paralegalName", label: "Trial Coordinator Name" },
+  { key: "_trialCoordinatorName", label: "Trial Coordinator Name" },
   { key: "_investigatorName", label: "Investigator Name" },
   { key: "_socialWorkerName", label: "Social Worker Name" },
   { key: "_todayDate", label: "Today's Date" },
@@ -8073,7 +8073,7 @@ function getCaseFieldValue(c, key, parties) {
   if (key === "_todayDate") return new Date().toLocaleDateString();
   if (key === "_assignedAttorneyName") return USERS.find(u => u.id === c.assignedAttorney)?.name || "";
   if (key === "_secondAttorneyName") return USERS.find(u => u.id === c.secondAttorney)?.name || "";
-  if (key === "_paralegalName") return USERS.find(u => u.id === c.paralegal)?.name || "";
+  if (key === "_trialCoordinatorName") return USERS.find(u => u.id === c.trialCoordinator)?.name || "";
   if (key === "_investigatorName") return USERS.find(u => u.id === c.investigator)?.name || "";
   if (key === "_socialWorkerName") return USERS.find(u => u.id === c.socialWorker)?.name || "";
   if (key.startsWith("_party_") && parties) {
@@ -8196,8 +8196,8 @@ function getPlaceholderSuggestions(token, caseData, parties, experts) {
       if (name) suggestions.push({ label: `Expert: ${name}`, value: name });
     });
     if (!suggestions.length && caseData.expert) suggestions.push({ label: "Expert", value: caseData.expert });
-  } else if (/^(paralegal|paralegal_name)/.test(key)) {
-    const para = USERS.find(u => u.id === caseData.paralegal);
+  } else if (/^(trial_coordinator|paralegal|paralegal_name)/.test(key)) {
+    const para = USERS.find(u => u.id === caseData.trialCoordinator);
     if (para) suggestions.push({ label: "Trial Coordinator", value: para.name });
   } else if (/^(investigator|investigator_name)/.test(key)) {
     const inv = USERS.find(u => u.id === caseData.investigator);
@@ -8306,7 +8306,7 @@ function buildAllCaseFields(caseData, parties, experts) {
   add("Dates", "Today's Date", new Date().toLocaleDateString());
   const lead = USERS.find(u => u.id === caseData.assignedAttorney);
   const second = USERS.find(u => u.id === caseData.secondAttorney);
-  const para = USERS.find(u => u.id === caseData.paralegal);
+  const para = USERS.find(u => u.id === caseData.trialCoordinator);
   const inv = USERS.find(u => u.id === caseData.investigator);
   const sw = USERS.find(u => u.id === caseData.socialWorker);
   if (lead) { add("Staff", "Assigned Attorney", lead.name); add("Staff", "Assigned Attorney Email", lead.email); add("Staff", "Assigned Attorney Phone", lead.phone); }
@@ -9267,7 +9267,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
       <div className="content">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
           {filteredStaff.map(u => {
-            const mine = allCases.filter(c => c.assignedAttorney === u.id || c.secondAttorney === u.id || c.paralegal === u.id || c.investigator === u.id || c.socialWorker === u.id);
+            const mine = allCases.filter(c => c.assignedAttorney === u.id || c.secondAttorney === u.id || c.trialCoordinator === u.id || c.investigator === u.id || c.socialWorker === u.id);
             const offices = userOffices[u.id] || [];
             const isConfirming = confirmDeleteId === u.id;
             const isExpanded = expandedStaffId === u.id;
