@@ -141,8 +141,8 @@ router.get("/case-counts/batch", requireAuth, async (req, res) => {
          FROM contacts c
          JOIN cases cs ON cs.adjuster ILIKE c.name AND cs.deleted_at IS NULL
          WHERE c.category = 'Adjuster' AND c.deleted_at IS NULL AND c.name != ''
-       ) sub
-       GROUP BY sub.id`
+       ) sub(contact_id, case_id)
+       GROUP BY sub.contact_id`
     );
     const miscCounts = await pool.query(
       `SELECT c.id AS contact_id, COUNT(DISTINCT mc.case_id) AS cnt
@@ -179,9 +179,14 @@ router.get("/:id/associated-cases", requireAuth, async (req, res) => {
       caseIds = rows.map(r => r.case_id);
     } else if (contact.category === "Adjuster") {
       const { rows } = await pool.query(
-        `SELECT DISTINCT ci.case_id FROM case_insurance ci
-         JOIN cases c ON c.id = ci.case_id AND c.deleted_at IS NULL
-         WHERE ci.data->>'adjusterName' ILIKE $1`,
+        `SELECT DISTINCT case_id FROM (
+           SELECT ci.case_id FROM case_insurance ci
+           JOIN cases c ON c.id = ci.case_id AND c.deleted_at IS NULL
+           WHERE ci.data->>'adjusterName' ILIKE $1
+           UNION
+           SELECT cs.id AS case_id FROM cases cs
+           WHERE cs.adjuster ILIKE $1 AND cs.deleted_at IS NULL
+         ) sub`,
         [contact.name]
       );
       caseIds = rows.map(r => r.case_id);
