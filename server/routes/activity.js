@@ -15,6 +15,26 @@ const toFrontend = (row) => ({
   detail: row.detail,
 });
 
+router.get("/", requireAuth, async (req, res) => {
+  const { userId, limit } = req.query;
+  try {
+    const lim = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+    let q, vals;
+    if (userId) {
+      q = `SELECT a.*, c.title AS case_title FROM case_activity a LEFT JOIN cases c ON c.id = a.case_id WHERE a.user_id = $1 ORDER BY a.ts DESC LIMIT $2`;
+      vals = [Number(userId), lim];
+    } else {
+      q = `SELECT a.*, c.title AS case_title FROM case_activity a LEFT JOIN cases c ON c.id = a.case_id ORDER BY a.ts DESC LIMIT $1`;
+      vals = [lim];
+    }
+    const { rows } = await pool.query(q, vals);
+    return res.json(rows.map(r => ({ ...toFrontend(r), caseTitle: r.case_title || "" })));
+  } catch (err) {
+    console.error("Activity list error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.get("/:caseId", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(

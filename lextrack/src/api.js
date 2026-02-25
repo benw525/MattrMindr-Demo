@@ -70,8 +70,9 @@ export const apiCreateLink  = (data)   => apiFetch("/api/links",     { method: "
 export const apiDeleteLink  = (id)     => apiFetch(`/api/links/${id}`, { method: "DELETE" });
 
 // Activity
-export const apiGetActivity    = (caseId) => apiFetch(`/api/activity/${caseId}`);
-export const apiCreateActivity = (data)   => apiFetch("/api/activity", { method: "POST", body: data });
+export const apiGetActivity       = (caseId) => apiFetch(`/api/activity/${caseId}`);
+export const apiGetRecentActivity = (userId, limit) => apiFetch(`/api/activity?userId=${userId}&limit=${limit || 20}`);
+export const apiCreateActivity    = (data)   => apiFetch("/api/activity", { method: "POST", body: data });
 
 // Contacts
 export const apiGetContacts        = ()         => apiFetch("/api/contacts");

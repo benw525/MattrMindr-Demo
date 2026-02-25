@@ -8,7 +8,7 @@ import {
   apiGetUsers, apiCreateUser, apiDeleteUser, apiGetDeletedUsers, apiRestoreUser, apiUpdateUserOffices, apiUpdateUserRoles, apiUpdateUser,
   apiGetNotes, apiCreateNote, apiUpdateNote, apiDeleteNote,
   apiGetLinks, apiCreateLink, apiDeleteLink,
-  apiGetActivity, apiCreateActivity,
+  apiGetActivity, apiGetRecentActivity, apiCreateActivity,
   apiGetContacts, apiGetDeletedContacts, apiCreateContact, apiUpdateContact, apiDeleteContact, apiRestoreContact, apiMergeContacts,
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
   apiGetContactStaff, apiCreateContactStaff, apiUpdateContactStaff, apiDeleteContactStaff,
@@ -1750,52 +1750,239 @@ function EscalateBox({ on, onChange, basePriority, mediumDays, highDays, urgentD
   );
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+// ─── Dashboard Widget System ─────────────────────────────────────────────────
+const DASHBOARD_WIDGETS = [
+  { id: "stat-active", label: "Active Records", size: "quarter", icon: "📊" },
+  { id: "stat-deadlines", label: "Upcoming Deadlines Count", size: "quarter", icon: "📅" },
+  { id: "stat-tasks", label: "My Open Tasks Count", size: "quarter", icon: "✅" },
+  { id: "stat-trials", label: "Trials in 90 Days Count", size: "quarter", icon: "⚖️" },
+  { id: "deadlines", label: "Upcoming Deadlines", size: "half", icon: "📋" },
+  { id: "trials", label: "Trials Within 90 Days", size: "half", icon: "🏛️" },
+  { id: "tasks", label: "My Tasks", size: "full", icon: "📝" },
+  { id: "pinned", label: "Pinned Cases", size: "full", icon: "📌" },
+  { id: "recent-activity", label: "Recent Activity", size: "half", icon: "🕐" },
+  { id: "overdue", label: "Overdue Tasks", size: "half", icon: "⚠️" },
+  { id: "my-time", label: "My Time", size: "half", icon: "⏱️" },
+];
+const DEFAULT_LAYOUT = ["stat-active", "stat-deadlines", "stat-tasks", "stat-trials", "deadlines", "trials", "tasks"];
+const getDashboardLayout = (userId) => { try { return JSON.parse(localStorage.getItem(`dashboard_layout_${userId}`)) || DEFAULT_LAYOUT; } catch { return DEFAULT_LAYOUT; } };
+const saveDashboardLayout = (userId, layout) => localStorage.setItem(`dashboard_layout_${userId}`, JSON.stringify(layout));
+
+function CustomizeDashboardModal({ layout, setLayout, userId, onClose }) {
+  const available = DASHBOARD_WIDGETS.filter(w => !layout.includes(w.id));
+  const moveUp = (i) => { if (i <= 0) return; const n = [...layout]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; setLayout(n); saveDashboardLayout(userId, n); };
+  const moveDown = (i) => { if (i >= layout.length - 1) return; const n = [...layout]; [n[i], n[i + 1]] = [n[i + 1], n[i]]; setLayout(n); saveDashboardLayout(userId, n); };
+  const remove = (id) => { const n = layout.filter(x => x !== id); setLayout(n); saveDashboardLayout(userId, n); };
+  const add = (id) => { const n = [...layout, id]; setLayout(n); saveDashboardLayout(userId, n); };
+  const reset = () => { setLayout([...DEFAULT_LAYOUT]); saveDashboardLayout(userId, DEFAULT_LAYOUT); };
+  const sizeLabel = (s) => s === "quarter" ? "¼" : s === "half" ? "½" : "Full";
+  const sizeColor = (s) => s === "quarter" ? "#4F7393" : s === "half" ? "#2F7A5F" : "#B67A18";
+  return (
+    <div className="login-bg" style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
+      <div className="login-box" style={{ width: 480, maxHeight: "80vh", overflow: "auto" }}>
+        <div className="login-title" style={{ fontSize: 20, marginBottom: 4 }}>Customize Dashboard</div>
+        <div className="login-sub" style={{ marginBottom: 20 }}>Add, remove, and reorder widgets</div>
+        <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--c-text2)", marginBottom: 8 }}>Your Dashboard</div>
+        {layout.length === 0 && <div style={{ fontSize: 13, color: "#8A9096", padding: "8px 0" }}>No widgets added yet</div>}
+        {layout.map((id, i) => {
+          const w = DASHBOARD_WIDGETS.find(x => x.id === id);
+          if (!w) return null;
+          return (
+            <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--c-border)" }}>
+              <span style={{ fontSize: 16, width: 24, textAlign: "center" }}>{w.icon}</span>
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "var(--c-text)" }}>{w.label}</span>
+              <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: sizeColor(w.size), color: "#fff", fontWeight: 600 }}>{sizeLabel(w.size)}</span>
+              <button onClick={() => moveUp(i)} disabled={i === 0} style={{ background: "none", border: "none", cursor: i === 0 ? "default" : "pointer", opacity: i === 0 ? 0.3 : 1, fontSize: 14, color: "var(--c-text2)", padding: "2px 4px" }} title="Move up">▲</button>
+              <button onClick={() => moveDown(i)} disabled={i === layout.length - 1} style={{ background: "none", border: "none", cursor: i === layout.length - 1 ? "default" : "pointer", opacity: i === layout.length - 1 ? 0.3 : 1, fontSize: 14, color: "var(--c-text2)", padding: "2px 4px" }} title="Move down">▼</button>
+              <button onClick={() => remove(id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#B24A4A", padding: "2px 4px" }} title="Remove">✕</button>
+            </div>
+          );
+        })}
+        {available.length > 0 && (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--c-text2)", marginTop: 20, marginBottom: 8 }}>Available Widgets</div>
+            {available.map(w => (
+              <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--c-border)" }}>
+                <span style={{ fontSize: 16, width: 24, textAlign: "center" }}>{w.icon}</span>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "var(--c-text)" }}>{w.label}</span>
+                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: sizeColor(w.size), color: "#fff", fontWeight: 600 }}>{sizeLabel(w.size)}</span>
+                <button onClick={() => add(w.id)} className="btn" style={{ fontSize: 11, padding: "3px 10px" }}>+ Add</button>
+              </div>
+            ))}
+          </>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+          <button onClick={reset} className="btn" style={{ fontSize: 12 }}>Reset to Default</button>
+          <button onClick={onClose} className="btn btn-gold" style={{ fontSize: 12 }}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MyTimeWidget({ currentUser }) {
+  const [period, setPeriod] = useState("Week");
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const getRange = useCallback((p) => {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+    const toStr = (dt) => dt.toISOString().split("T")[0];
+    const endDate = toStr(now);
+    let startDate;
+    if (p === "Day") startDate = endDate;
+    else if (p === "Week") { const s = new Date(y, m, d - now.getDay()); startDate = toStr(s); }
+    else if (p === "Month") startDate = toStr(new Date(y, m, 1));
+    else if (p === "Quarter") { const qm = m - (m % 3); startDate = toStr(new Date(y, qm, 1)); }
+    else startDate = toStr(new Date(y, 0, 1));
+    return { from: startDate, to: endDate };
+  }, []);
+  useEffect(() => {
+    setLoading(true);
+    const { from, to } = getRange(period);
+    apiGetTimeEntries(currentUser.id, from, to)
+      .then(data => setEntries(data))
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, [period, currentUser.id, getRange]);
+  const totalHours = useMemo(() => entries.reduce((s, e) => s + (parseFloat(e.time) || 0), 0), [entries]);
+  const byCase = useMemo(() => {
+    const map = {};
+    entries.forEach(e => {
+      const key = e.caseTitle || "Unknown";
+      map[key] = (map[key] || 0) + (parseFloat(e.time) || 0);
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [entries]);
+  const periods = ["Day", "Week", "Month", "Quarter", "Year"];
+  return (
+    <div className="card">
+      <div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card-title">My Time</div>
+        <div style={{ display: "flex", gap: 2 }}>
+          {periods.map(p => (
+            <button key={p} onClick={() => setPeriod(p)} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: period === p ? "var(--c-brand)" : "transparent", color: period === p ? "#fff" : "var(--c-text2)", cursor: "pointer", fontWeight: period === p ? 600 : 400 }}>{p}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ padding: "16px 20px" }}>
+        {loading ? <div style={{ fontSize: 13, color: "#8A9096" }}>Loading...</div> : (
+          <>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 36, fontWeight: 700, color: "var(--c-text-h)" }}>{totalHours.toFixed(1)}</span>
+              <span style={{ fontSize: 13, color: "#8A9096" }}>hours this {period.toLowerCase()}</span>
+            </div>
+            {byCase.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: "#8A9096", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Top Cases</div>
+                {byCase.map(([name, hrs]) => (
+                  <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 12 }}>
+                    <span style={{ color: "var(--c-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>{name}</span>
+                    <span style={{ fontWeight: 600, color: "var(--c-text-h)", flexShrink: 0 }}>{hrs.toFixed(1)}h</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {byCase.length === 0 && <div style={{ fontSize: 12, color: "#8A9096" }}>No time entries this {period.toLowerCase()}</div>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecentActivityWidget({ currentUser }) {
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    apiGetRecentActivity(currentUser.id, 8)
+      .then(data => setActivities(data))
+      .catch(() => setActivities([]))
+      .finally(() => setLoading(false));
+  }, [currentUser.id]);
+  const timeAgo = (ts) => {
+    const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">Recent Activity</div></div>
+      {loading && <div className="empty">Loading...</div>}
+      {!loading && activities.length === 0 && <div className="empty">No recent activity</div>}
+      {!loading && activities.map(a => (
+        <div key={a.id} className="deadline-item" style={{ padding: "8px 16px" }}>
+          <div className="dl-info" style={{ flex: 1, minWidth: 0 }}>
+            <div className="dl-title" style={{ fontSize: 12 }}>{a.action}</div>
+            <div className="dl-case">{a.caseTitle || `Case #${a.caseId}`}{a.detail ? ` — ${a.detail}` : ""}</div>
+          </div>
+          <div style={{ fontSize: 11, color: "#8A9096", flexShrink: 0 }}>{timeAgo(a.ts)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAddRecord, onCompleteTask, onUpdateTask, userOffices }) {
   const [showModal, setShowModal] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
   const [expandedTask, setExpandedTask] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [layout, setLayout] = useState(() => getDashboardLayout(currentUser.id));
+  const [pinnedIds, setPinnedIds] = useState(() => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]"); } catch { return []; } });
+  useEffect(() => { setLayout(getDashboardLayout(currentUser.id)); try { setPinnedIds(JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]")); } catch { setPinnedIds([]); } }, [currentUser.id]);
+  useEffect(() => {
+    const onStorage = (e) => { if (e.key === `pinned_cases_${currentUser.id}`) { try { setPinnedIds(JSON.parse(e.newValue || "[]")); } catch { setPinnedIds([]); } } };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [currentUser.id]);
   const activeCases = allCases.filter(c => c.status === "Active");
   const upcomingDl = deadlines.filter(d => { const n = daysUntil(d.date); return n !== null && n >= 0 && n <= 30; }).sort((a, b) => new Date(a.date) - new Date(b.date));
   const trialSoon = allCases.filter(c => c.trialDate && daysUntil(c.trialDate) >= 0 && daysUntil(c.trialDate) <= 90).sort((a, b) => new Date(a.trialDate) - new Date(b.trialDate));
   const myTasks = tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed");
   const myCompleted = tasks.filter(t => t.assigned === currentUser.id && t.status === "Completed").sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+  const overdueTasks = myTasks.filter(t => daysUntil(t.due) !== null && daysUntil(t.due) < 0);
+  const pinnedCases = useMemo(() => pinnedIds.map(id => allCases.find(c => c.id === id)).filter(Boolean), [pinnedIds, allCases]);
 
-  return (
-    <>
-      {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} userOffices={userOffices} />}
-      <div className="topbar">
-        <div>
-          <div className="topbar-title">Good morning, {currentUser.name.split(" ")[0]}</div>
-          <div className="topbar-subtitle">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
-        </div>
-        <button className="btn btn-gold" onClick={() => setShowModal(true)}>+ New Case / Matter</button>
-      </div>
-      <div className="content">
-        <div className="grid4" style={{ marginBottom: 20 }}>
-          <div className="stat-card">
+  const renderWidget = (widgetId) => {
+    switch (widgetId) {
+      case "stat-active":
+        return (
+          <div className="stat-card" key={widgetId}>
             <div className="stat-label">Active Records</div>
             <div className="stat-value">{activeCases.length}</div>
             <div className="stat-sub">{activeCases.filter(c => isFiled(c)).length} cases · {activeCases.filter(c => !isFiled(c)).length} matters</div>
           </div>
-          <div className="stat-card">
+        );
+      case "stat-deadlines":
+        return (
+          <div className="stat-card" key={widgetId}>
             <div className="stat-label">Upcoming Deadlines</div>
             <div className="stat-value" style={{ color: upcomingDl.length > 5 ? "#e07a30" : "var(--c-text-h)" }}>{upcomingDl.length}</div>
             <div className="stat-sub">Next 30 days</div>
           </div>
-          <div className="stat-card">
+        );
+      case "stat-tasks":
+        return (
+          <div className="stat-card" key={widgetId}>
             <div className="stat-label">My Open Tasks</div>
             <div className="stat-value" style={{ color: myTasks.filter(t => daysUntil(t.due) < 0).length > 0 ? "#e05252" : "var(--c-text-h)" }}>{myTasks.length}</div>
             <div className="stat-sub">{myTasks.filter(t => daysUntil(t.due) < 0).length} overdue</div>
           </div>
-          <div className="stat-card">
+        );
+      case "stat-trials":
+        return (
+          <div className="stat-card" key={widgetId}>
             <div className="stat-label">Trials in 90 Days</div>
             <div className="stat-value" style={{ color: trialSoon.length > 0 ? "#1E2A3A" : "var(--c-text-h)" }}>{trialSoon.length}</div>
             <div className="stat-sub">{allCases.filter(c => c.trialDate).length} with trial dates</div>
           </div>
-        </div>
-        <div className="grid2" style={{ marginBottom: 20 }}>
-          <div className="card">
+        );
+      case "deadlines":
+        return (
+          <div className="card" key={widgetId}>
             <div className="card-header"><div className="card-title">Upcoming Deadlines</div><span style={{ fontSize: 12, color: "#8A9096" }}>30 days</span></div>
             {upcomingDl.length === 0 && <div className="empty">No upcoming deadlines</div>}
             {upcomingDl.slice(0, 7).map(d => {
@@ -1813,7 +2000,10 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
               );
             })}
           </div>
-          <div className="card">
+        );
+      case "trials":
+        return (
+          <div className="card" key={widgetId}>
             <div className="card-header"><div className="card-title">Trials Within 90 Days</div></div>
             {trialSoon.length === 0 && <div className="empty">No trials in the next 90 days</div>}
             {trialSoon.slice(0, 6).map(c => {
@@ -1830,9 +2020,10 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
               );
             })}
           </div>
-        </div>
-        {(myTasks.length > 0 || myCompleted.length > 0) && (
-          <div className="card">
+        );
+      case "tasks":
+        return (myTasks.length > 0 || myCompleted.length > 0) ? (
+          <div className="card" key={widgetId}>
             <div className="card-header"><div className="card-title">My Tasks</div><Badge label={`${myTasks.length} open`} /></div>
             {myTasks.length === 0 && <div className="empty" style={{ padding: "12px 16px", fontSize: 13, color: "#8A9096" }}>No open tasks</div>}
             {myTasks.slice(0, 10).map(t => {
@@ -1911,7 +2102,104 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
               </>
             )}
           </div>
-        )}
+        ) : null;
+      case "pinned":
+        return pinnedCases.length > 0 ? (
+          <div className="card" key={widgetId}>
+            <div className="card-header"><div className="card-title">Pinned Cases</div><Badge label={`${pinnedCases.length}`} /></div>
+            {pinnedCases.map(c => (
+              <div key={c.id} className="deadline-item" style={{ cursor: "pointer", padding: "10px 16px" }} onClick={() => onSelectCase(c)}>
+                <span style={{ fontSize: 14, marginRight: 6 }}>📌</span>
+                <div className="dl-info" style={{ flex: 1, minWidth: 0 }}>
+                  <div className="dl-title" style={{ fontSize: 13 }}>{c.title}</div>
+                  <div className="dl-case">{c.caseNum || "Matter"}{c.client ? ` · ${c.client}` : ""}</div>
+                </div>
+                <div style={{ fontSize: 11, color: "#8A9096", flexShrink: 0 }}>{c.status}</div>
+              </div>
+            ))}
+          </div>
+        ) : null;
+      case "recent-activity":
+        return <RecentActivityWidget key={widgetId} currentUser={currentUser} />;
+      case "overdue":
+        return (
+          <div className="card" key={widgetId}>
+            <div className="card-header"><div className="card-title">Overdue Tasks</div><Badge label={`${overdueTasks.length}`} /></div>
+            {overdueTasks.length === 0 && <div className="empty">No overdue tasks</div>}
+            {overdueTasks.sort((a, b) => daysUntil(a.due) - daysUntil(b.due)).slice(0, 8).map(t => {
+              const days = daysUntil(t.due);
+              const cs = allCases.find(c => c.id === t.caseId);
+              return (
+                <div key={t.id} className="deadline-item" style={{ padding: "8px 16px" }}>
+                  <div className="checkbox" onClick={() => onCompleteTask(t.id)} title="Mark complete" />
+                  <div className="dl-dot" style={{ background: "#e05252", flexShrink: 0 }} />
+                  <div className="dl-info" style={{ flex: 1, minWidth: 0 }}>
+                    <div className="dl-title">{t.title}</div>
+                    <div className="dl-case">{cs?.title?.slice(0, 40) || `#${t.caseId}`}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#e05252", fontWeight: 700, flexShrink: 0 }}>{Math.abs(days)}d overdue</div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      case "my-time":
+        return <MyTimeWidget key={widgetId} currentUser={currentUser} />;
+      default:
+        return null;
+    }
+  };
+
+  const renderedGroups = useMemo(() => {
+    const sized = layout.map(id => { const w = DASHBOARD_WIDGETS.find(x => x.id === id); return w ? { id, size: w.size } : null; }).filter(Boolean);
+    const groups = [];
+    sized.forEach(item => {
+      const last = groups[groups.length - 1];
+      if (last && last.size === item.size && item.size !== "full") {
+        last.ids.push(item.id);
+      } else {
+        groups.push({ size: item.size, ids: [item.id] });
+      }
+    });
+    return groups;
+  }, [layout]);
+
+  return (
+    <>
+      {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} userOffices={userOffices} />}
+      {showCustomize && <CustomizeDashboardModal layout={layout} setLayout={setLayout} userId={currentUser.id} onClose={() => setShowCustomize(false)} />}
+      <div className="topbar">
+        <div>
+          <div className="topbar-title">Good morning, {currentUser.name.split(" ")[0]}</div>
+          <div className="topbar-subtitle">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={() => setShowCustomize(true)} style={{ fontSize: 12 }}>⚙ Customize</button>
+          <button className="btn btn-gold" onClick={() => setShowModal(true)}>+ New Case / Matter</button>
+        </div>
+      </div>
+      <div className="content">
+        {renderedGroups.map((group, gi) => {
+          if (group.size === "quarter") {
+            return (
+              <div className="grid4" style={{ marginBottom: 20 }} key={`g${gi}`}>
+                {group.ids.map(id => renderWidget(id))}
+              </div>
+            );
+          }
+          if (group.size === "half") {
+            return (
+              <div className="grid2" style={{ marginBottom: 20 }} key={`g${gi}`}>
+                {group.ids.map(id => renderWidget(id))}
+              </div>
+            );
+          }
+          return (
+            <div style={{ marginBottom: 20 }} key={`g${gi}`}>
+              {group.ids.map(id => renderWidget(id))}
+            </div>
+          );
+        })}
       </div>
     </>
   );

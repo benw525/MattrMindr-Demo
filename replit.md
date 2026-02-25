@@ -38,7 +38,7 @@ server/
     deadlines.js    — GET/POST /api/deadlines
     notes.js        — GET/POST/DELETE /api/notes
     links.js        — GET/POST/DELETE /api/links
-    activity.js     — GET/POST /api/activity
+    activity.js     — GET /api/activity (recent across all cases), GET/POST /api/activity/:caseId
     contacts.js     — CRUD /api/contacts (soft-delete/restore, 30-day retention)
     contact-notes.js — GET/POST/DELETE /api/contact-notes
     contact-staff.js — CRUD /api/contact-staff (staff under attorney/court contacts)
@@ -67,7 +67,7 @@ lextrack/
 ```
 
 ## Key Features
-- Dashboard with upcoming deadlines, trials, and personal task list
+- Customizable Dashboard: per-user widget system with add/remove/reorder via Customize modal; widgets: stat cards (Active Records, Upcoming Deadlines, My Open Tasks, Trials in 90 Days), Upcoming Deadlines list, Trials Within 90 Days, My Tasks, Pinned Cases, Recent Activity, Overdue Tasks, My Time (period toggle: Day/Week/Month/Quarter/Year); layout stored in `localStorage` as `dashboard_layout_${userId}`; widget registry in `DASHBOARD_WIDGETS` array; grid grouping: adjacent quarter-sized → grid4, adjacent half-sized → grid2, full → own row
 - Cases & Matters view with filtering, sorting, pagination
 - Case Detail Overlay: editable fields (plaintiff, defendant, opposing counsel, short case number, county, court, etc.), task/note/link management, activity log, correspondence tab
 - Deadline Tracker: calendar grid, list view, iCal feed import, court rules calculator
