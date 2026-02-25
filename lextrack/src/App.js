@@ -2347,7 +2347,7 @@ function EditField({ fieldKey, label, type, options, value, onChange, onBlur, on
   );
 }
 
-const CONTACT_LINKABLE_KEYS = new Set(["client", "insured", "plaintiff", "claimSpec", "judge", "mediator", "expert"]);
+const CONTACT_LINKABLE_KEYS = new Set(["client", "insured", "plaintiff", "claimSpec", "judge", "mediator", "expert", "opposingCounsel"]);
 
 function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, userOffices, onAddDeadline }) {
   const [draft, setDraft] = useState({ ...c });
