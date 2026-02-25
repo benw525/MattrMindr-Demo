@@ -1,7 +1,9 @@
 const express = require("express");
 const session = require("express-session");
+const pgSession = require("connect-pg-simple")(session);
 const cors = require("cors");
 const path = require("path");
+const pool = require("./db");
 
 const authRoutes     = require("./routes/auth");
 const usersRoutes    = require("./routes/users");
@@ -34,6 +36,11 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "30mb" }));
 
 app.use(session({
+  store: new pgSession({
+    pool,
+    tableName: "user_sessions",
+    createTableIfMissing: true,
+  }),
   name: "lextrack.sid",
   secret: process.env.SESSION_SECRET || "lextrack-dev-secret-change-in-prod",
   resave: false,
