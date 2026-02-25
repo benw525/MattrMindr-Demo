@@ -17,6 +17,7 @@ import {
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
   apiGetInsurance, apiCreateInsurance, apiUpdateInsurance, apiDeleteInsurance,
   apiGetExperts, apiCreateExpert, apiUpdateExpert, apiDeleteExpert,
+  apiGetMiscContacts, apiCreateMiscContact, apiUpdateMiscContact, apiDeleteMiscContact,
   apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument, apiDetectPleadingSections,
   apiGetTimeEntries, apiCreateTimeEntry, apiUpdateTimeEntry, apiDeleteTimeEntry,
 } from "./api.js";
@@ -2819,6 +2820,13 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [newExpertType, setNewExpertType] = useState("Treating Physician");
   const expertTimers = useRef({});
   const expertPendingData = useRef({});
+  const [miscContacts, setMiscContacts] = useState([]);
+  const [miscContactsLoading, setMiscContactsLoading] = useState(false);
+  const [expandedMiscContact, setExpandedMiscContact] = useState(null);
+  const [addingMiscContact, setAddingMiscContact] = useState(false);
+  const [newMiscContactType, setNewMiscContactType] = useState("Other");
+  const miscContactTimers = useRef({});
+  const miscContactPendingData = useRef({});
   const [showOfficePopup, setShowOfficePopup] = useState(false);
   const [showTeamPopup, setShowTeamPopup] = useState(false);
   const [showDocGen, setShowDocGen] = useState(false);
@@ -2842,6 +2850,8 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       apiGetInsurance(c.id).then(setInsurance).catch(() => {}).finally(() => setInsuranceLoading(false));
       setExpertsLoading(true);
       apiGetExperts(c.id).then(setExperts).catch(() => {}).finally(() => setExpertsLoading(false));
+      setMiscContactsLoading(true);
+      apiGetMiscContacts(c.id).then(setMiscContacts).catch(() => {}).finally(() => setMiscContactsLoading(false));
     }
     const timersRef = partyTimers.current;
     const pendingRef = partyPendingData.current;
@@ -2849,6 +2859,8 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     const insPendingRef = insurancePendingData.current;
     const expTimersRef = expertTimers.current;
     const expPendingRef = expertPendingData.current;
+    const miscTimersRef = miscContactTimers.current;
+    const miscPendingRef = miscContactPendingData.current;
     return () => {
       Object.entries(timersRef).forEach(([key, timer]) => {
         clearTimeout(timer);
@@ -2877,6 +2889,15 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         }
       });
       expertTimers.current = {};
+      Object.entries(miscTimersRef).forEach(([key, timer]) => {
+        clearTimeout(timer);
+        const pendingData = miscPendingRef[key];
+        if (pendingData) {
+          apiUpdateMiscContact(parseInt(key), { data: pendingData }).catch(() => {});
+          delete miscPendingRef[key];
+        }
+      });
+      miscContactTimers.current = {};
     };
   }, [activeTab, c.id]);
 
@@ -4288,6 +4309,198 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                               log("Expert Removed", `Removed ${exp.expertType}: ${displayName}`);
                             } catch (err) { alert("Failed: " + err.message); }
                           }}>Remove Expert</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              </div>
+
+              <div style={{ marginTop: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 600, color: "var(--c-text-h)" }}>Miscellaneous Contacts</div>
+                  <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => setAddingMiscContact(true)}>+ Add</button>
+                </div>
+
+              {addingMiscContact && (
+                <div style={{ border: "1px solid var(--c-border)", borderRadius: 8, padding: 12, marginBottom: 10, background: "var(--c-bg2)" }}>
+                  <label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 3 }}>Contact Type</label>
+                  <select style={{ width: "100%", fontSize: 13, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box", marginBottom: 10 }} value={newMiscContactType} onChange={e => setNewMiscContactType(e.target.value)}>
+                    {["Police Officer","Witness","Consultant","Investigator","Process Server","Court Reporter","Guardian ad Litem","Mediator","Other"].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => { setAddingMiscContact(false); setNewMiscContactType("Other"); }}>Cancel</button>
+                    <button className="btn btn-gold btn-sm" onClick={async () => {
+                      try {
+                        const created = await apiCreateMiscContact({ caseId: c.id, contactType: newMiscContactType, data: {} });
+                        setMiscContacts(p => [...p, created]);
+                        setExpandedMiscContact(created.id);
+                        setAddingMiscContact(false);
+                        log("Misc Contact Added", `Added ${newMiscContactType} contact`);
+                        setNewMiscContactType("Other");
+                      } catch (err) { alert("Failed to add contact: " + err.message); }
+                    }}>Add</button>
+                  </div>
+                </div>
+              )}
+
+              {miscContactsLoading && <div style={{ fontSize: 13, color: "#8A9096", padding: "12px 0" }}>Loading contacts...</div>}
+
+              {!miscContactsLoading && miscContacts.length === 0 && !addingMiscContact && (
+                <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic", padding: "12px 0" }}>No miscellaneous contacts added yet.</div>
+              )}
+
+              {!miscContactsLoading && miscContacts.map(mc => {
+                const isExp = expandedMiscContact === mc.id;
+                const d = mc.data || {};
+                const displayName = d.name || "Unnamed Contact";
+                const MISC_TYPE_COLORS = {
+                  "Police Officer": { bg: "#E0ECFF", text: "#1A4D8F" },
+                  "Witness": { bg: "#FFF3E0", text: "#8A5A1E" },
+                  "Consultant": { bg: "#E6F5ED", text: "#2F6A3A" },
+                  "Investigator": { bg: "#F3E8FF", text: "#6B21A8" },
+                  "Process Server": { bg: "#E8F0FD", text: "#1A5FA0" },
+                  "Court Reporter": { bg: "#FDE8E8", text: "#9B2C2C" },
+                  "Guardian ad Litem": { bg: "#E0F7FA", text: "#00695C" },
+                  "Mediator": { bg: "#FFF8E1", text: "#F57F17" },
+                };
+                const typeColor = MISC_TYPE_COLORS[mc.contactType] || { bg: "#EDEFF2", text: "#5D6268" };
+
+                const updateField = (field, value) => {
+                  const newData = { ...(miscContactPendingData.current[mc.id] || d), [field]: value };
+                  miscContactPendingData.current[mc.id] = newData;
+                  setMiscContacts(p => p.map(x => x.id === mc.id ? { ...x, data: newData } : x));
+                  const timerKey = `${mc.id}`;
+                  if (miscContactTimers.current[timerKey]) clearTimeout(miscContactTimers.current[timerKey]);
+                  miscContactTimers.current[timerKey] = setTimeout(async () => {
+                    const dataToSave = miscContactPendingData.current[mc.id];
+                    delete miscContactPendingData.current[mc.id];
+                    try { await apiUpdateMiscContact(mc.id, { data: dataToSave }); } catch (err) { console.error(err); }
+                  }, 600);
+                };
+
+                const inputStyle = { width: "100%", fontSize: 13, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" };
+                const labelStyle = { fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 3 };
+                const fieldGroup = { marginBottom: 10 };
+
+                const assocOptions = [];
+                parties.forEach(p => {
+                  const pd = p.data || {};
+                  const pName = p.entityKind === "corporation" ? (pd.entityName || "Unnamed Entity") : [pd.firstName, pd.lastName].filter(Boolean).join(" ") || "Unnamed Party";
+                  assocOptions.push({ type: "party", id: p.id, label: `Party: ${pName} (${p.partyType})`, name: pName });
+                });
+                experts.forEach(ex => {
+                  const eName = ex.data?.fullName || "Unnamed Expert";
+                  assocOptions.push({ type: "expert", id: ex.id, label: `Expert: ${eName} (${ex.expertType})`, name: eName });
+                });
+                miscContacts.filter(x => x.id !== mc.id).forEach(x => {
+                  const xName = x.data?.name || "Unnamed Contact";
+                  assocOptions.push({ type: "misc", id: x.id, label: `Contact: ${xName} (${x.contactType})`, name: xName });
+                });
+
+                const assocValue = d.associatedWith ? `${d.associatedWith.type}:${d.associatedWith.id}` : "";
+                const assocMatch = d.associatedWith ? assocOptions.find(o => o.type === d.associatedWith.type && o.id === d.associatedWith.id) : null;
+                const assocDisplay = assocMatch ? assocMatch.label : (d.associatedWith ? `${d.associatedWith.type}: ${d.associatedWith.name}` : "");
+
+                return (
+                  <div key={mc.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 8, overflow: "hidden" }}>
+                    <div
+                      onClick={() => setExpandedMiscContact(isExp ? null : mc.id)}
+                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 14 }}>📋</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>{displayName}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 4, background: typeColor.bg, color: "#1F2428", letterSpacing: "0.02em" }}>{mc.contactType}</span>
+                            {d.company && <span style={{ fontSize: 11, color: "#8A9096" }}>· {d.company}</span>}
+                            {assocDisplay && <span style={{ fontSize: 11, color: "#4F7393" }}>· {assocDisplay}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 12, color: "#8A9096" }}>{isExp ? "▲" : "▼"}</span>
+                    </div>
+
+                    {isExp && (
+                      <div style={{ padding: "12px 14px", borderTop: "1px solid var(--c-border)" }}>
+                        <div style={fieldGroup}>
+                          <label style={labelStyle}>Name</label>
+                          <input style={{ ...inputStyle, fontWeight: 600 }} value={d.name || ""} placeholder="Full name" onChange={e => updateField("name", e.target.value)} />
+                        </div>
+                        <div style={fieldGroup}>
+                          <label style={labelStyle}>{mc.contactType === "Police Officer" ? "Department" : "Company / Agency"}</label>
+                          <input style={inputStyle} value={d.company || ""} placeholder={mc.contactType === "Police Officer" ? "Police department" : "Company or agency"} onChange={e => updateField("company", e.target.value)} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                          <div><label style={labelStyle}>Phone</label><input style={inputStyle} value={d.phone || ""} onChange={e => updateField("phone", e.target.value)} /></div>
+                          <div><label style={labelStyle}>Email</label><input style={inputStyle} value={d.email || ""} onChange={e => updateField("email", e.target.value)} /></div>
+                        </div>
+                        <div style={fieldGroup}>
+                          <label style={labelStyle}>Address</label>
+                          <input style={inputStyle} value={d.address || ""} onChange={e => updateField("address", e.target.value)} />
+                        </div>
+
+                        {mc.contactType === "Police Officer" && (
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                            <div><label style={labelStyle}>Badge / ID #</label><input style={inputStyle} value={d.badgeNumber || ""} onChange={e => updateField("badgeNumber", e.target.value)} /></div>
+                            <div><label style={labelStyle}>Report #</label><input style={inputStyle} value={d.reportNumber || ""} onChange={e => updateField("reportNumber", e.target.value)} /></div>
+                          </div>
+                        )}
+                        {mc.contactType === "Witness" && (
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Relationship to Case</label>
+                            <input style={inputStyle} value={d.relationship || ""} placeholder="e.g., Eyewitness, Bystander, Co-worker" onChange={e => updateField("relationship", e.target.value)} />
+                          </div>
+                        )}
+                        {(mc.contactType === "Consultant" || mc.contactType === "Investigator") && (
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Specialty / Area</label>
+                            <input style={inputStyle} value={d.specialty || ""} placeholder="Area of expertise" onChange={e => updateField("specialty", e.target.value)} />
+                          </div>
+                        )}
+                        {mc.contactType === "Investigator" && (
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>License #</label>
+                            <input style={inputStyle} value={d.licenseNumber || ""} onChange={e => updateField("licenseNumber", e.target.value)} />
+                          </div>
+                        )}
+
+                        <div style={{ borderTop: "1px solid var(--c-border)", margin: "10px 0", paddingTop: 10 }}>
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Associated With</label>
+                            <select style={inputStyle} value={assocValue} onChange={e => {
+                              if (!e.target.value) { updateField("associatedWith", null); return; }
+                              const [aType, aId] = e.target.value.split(":");
+                              const opt = assocOptions.find(o => o.type === aType && String(o.id) === aId);
+                              updateField("associatedWith", opt ? { type: opt.type, id: opt.id, name: opt.name } : null);
+                            }}>
+                              <option value="">— None —</option>
+                              {assocOptions.map(o => <option key={`${o.type}-${o.id}`} value={`${o.type}:${o.id}`}>{o.label}</option>)}
+                            </select>
+                          </div>
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Notes</label>
+                            <textarea
+                              style={{ ...inputStyle, minHeight: 60, resize: "vertical", fontFamily: "inherit" }}
+                              value={d.notes || ""}
+                              placeholder="Notes about this contact..."
+                              onChange={e => updateField("notes", e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                          <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#e05252", borderColor: "#e05252" }} onClick={async () => {
+                            if (!window.confirm(`Remove ${displayName} (${mc.contactType}) from this case?`)) return;
+                            try {
+                              await apiDeleteMiscContact(mc.id);
+                              setMiscContacts(p => p.filter(x => x.id !== mc.id));
+                              setExpandedMiscContact(null);
+                              log("Misc Contact Removed", `Removed ${mc.contactType}: ${displayName}`);
+                            } catch (err) { alert("Failed: " + err.message); }
+                          }}>Remove Contact</button>
                         </div>
                       </div>
                     )}

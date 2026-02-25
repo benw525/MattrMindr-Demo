@@ -23,6 +23,7 @@ const templatesRoutes        = require("./routes/templates");
 const partiesRoutes          = require("./routes/parties");
 const insuranceRoutes        = require("./routes/insurance");
 const expertsRoutes          = require("./routes/experts");
+const miscContactsRoutes     = require("./routes/misc-contacts");
 const timeEntriesRoutes      = require("./routes/time-entries");
 
 const app  = express();
@@ -77,6 +78,7 @@ app.use("/api/templates",      templatesRoutes);
 app.use("/api/parties",        partiesRoutes);
 app.use("/api/insurance",      insuranceRoutes);
 app.use("/api/experts",        expertsRoutes);
+app.use("/api/misc-contacts",  miscContactsRoutes);
 app.use("/api/time-entries",   timeEntriesRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));

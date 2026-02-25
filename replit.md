@@ -49,6 +49,7 @@ server/
     parties.js      — CRUD /api/parties (case parties: individuals & corporations)
     insurance.js    — CRUD /api/insurance (case insurance policies with coverage tracking)
     experts.js      — CRUD /api/experts (case experts with contact card integration)
+    misc-contacts.js — CRUD /api/misc-contacts (case miscellaneous contacts)
     time-entries.js — CRUD /api/time-entries (manual time log entries per user/case)
   system-templates/
     case-header.docx      — Court caption block (auto-prepended to Pleadings)
@@ -81,6 +82,7 @@ lextrack/
 - Case Parties: accordion-style party management on Details tab; Individual (name/address/phones/other contacts/email/represented-by/notes) and Corporation (entity name/type/registered agent/POC/notes) types; any party type selectable; "Our Client" flag (exclusive — only one party at a time) and "Pro Se" flag (hides Represented By); integrated with document generator placeholders
 - Medical Summary: per-party medical treatment tracking tab (between Details and Billing Summary); parties added from Details tab party list; per-entry fields: provider (shared datalist with Billing Summary providers), date of service, collapsible summary textarea; DOB field shared across Details/Medical/Billing tabs; per-party filtering by provider and date range; per-party print view (MedicalPrintView component); persisted in `medical_summary` JSONB column on cases table; autosaved with case data
 - Case Experts: accordion-style expert management on Details tab (right column); Types: Treating Physician, Retained, Rebuttal; auto-links to Expert contact cards by name (creates new if not found); syncs phone/email/fax/address/company to contact card; case-specific fields: assigned party, testimony type (Deposition/Live/Both), notes
+- Miscellaneous Contacts: accordion-style contact management on Details tab (right column, below Experts); Types: Police Officer, Witness, Consultant, Investigator, Process Server, Court Reporter, Guardian ad Litem, Mediator, Other; common fields: name, phone, email, address, company/agency, notes; type-specific fields: Police Officer→Badge/ID#,Report#,Department; Witness→Relationship to Case; Consultant/Investigator→Specialty/Area; Investigator→License#; "Associated With" dropdown links to parties, experts, or other misc contacts on the case
 - Document Generator: upload .docx templates with `<<PLACEHOLDER>>` auto-detection + manual text highlighting; template categories (Pleadings/Letters/Subpoenas/Reports/General); Letter sub-types (Client/Insurance/Attorney/Other) with smart addressee auto-fill; smart placeholder suggestions at generation time (rule-based keyword matching from case/party/insurance data); empty placeholders produce `<<NAME>>` in output; Pleading templates auto-include Case Header (caption block), Signature Block, and optional Certificate of Service; system templates stored in `server/system-templates/`; CoS repeats served-party attorney blocks for each non-client party (looks up attorney contacts via representedBy field, handles Pro Se parties); pleading section detection: when uploading a Pleadings template, the system scans the .docx for existing header/caption, signature block, and CoS sections — if detected, user chooses per-section whether to use the system-provided version or keep the document's own (stored as `use_system_header`, `use_system_signature`, `use_system_cos` on `doc_templates`); visibility (global/personal); full re-edit of placeholders restricted to creator + Shareholders; backward compatible with old mapped templates
 - Email Correspondence: SendGrid Inbound Parse captures emails to case-{id}@mail.mattrmindr.com
 - Authentication: bcrypt passwords, temp password emails, forgot/reset password flow, forced password change on first login
@@ -142,4 +144,5 @@ lextrack/
 | case_parties | Per-case parties (individuals & corporations, JSONB data) |
 | case_insurance | Per-case insurance policies with coverage tracking (JSONB data) |
 | case_experts | Per-case experts with contact card links (JSONB data) |
+| case_misc_contacts | Per-case miscellaneous contacts (JSONB data, typed) |
 | time_entries | Manual time log entries per user/case |

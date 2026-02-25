@@ -172,6 +172,12 @@ export const apiCreateExpert  = (data)   => apiFetch("/api/experts",       { met
 export const apiUpdateExpert  = (id, data) => apiFetch(`/api/experts/${id}`, { method: "PUT",    body: data });
 export const apiDeleteExpert  = (id)     => apiFetch(`/api/experts/${id}`, { method: "DELETE" });
 
+// Misc Contacts
+export const apiGetMiscContacts    = (caseId) => apiFetch(`/api/misc-contacts/${caseId}`);
+export const apiCreateMiscContact  = (data)   => apiFetch("/api/misc-contacts",       { method: "POST",   body: data });
+export const apiUpdateMiscContact  = (id, data) => apiFetch(`/api/misc-contacts/${id}`, { method: "PUT",    body: data });
+export const apiDeleteMiscContact  = (id)     => apiFetch(`/api/misc-contacts/${id}`, { method: "DELETE" });
+
 // Time Entries
 export const apiGetTimeEntries    = (userId, from, to) => apiFetch(`/api/time-entries?userId=${userId}&from=${from}&to=${to}`);
 export const apiCreateTimeEntry   = (data)   => apiFetch("/api/time-entries",       { method: "POST",   body: data });
