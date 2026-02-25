@@ -48,11 +48,17 @@ router.post("/", requireAuth, async (req, res) => {
 });
 
 router.put("/:id", requireAuth, async (req, res) => {
-  const { timeLogged } = req.body;
+  const { timeLogged, body } = req.body;
   try {
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+    if (timeLogged !== undefined) { sets.push(`time_logged = $${idx++}`); vals.push(timeLogged || null); }
+    if (body !== undefined) { sets.push(`body = $${idx++}`); vals.push(body); }
+    if (sets.length === 0) return res.status(400).json({ error: "Nothing to update" });
+    vals.push(req.params.id);
     const { rows } = await pool.query(
-      "UPDATE case_notes SET time_logged = $1 WHERE id = $2 RETURNING *",
-      [timeLogged || null, req.params.id]
+      `UPDATE case_notes SET ${sets.join(", ")} WHERE id = $${idx} RETURNING *`, vals
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     return res.json(toFrontend(rows[0]));

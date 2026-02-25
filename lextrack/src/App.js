@@ -6233,11 +6233,11 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
       });
     });
 
-    const userEmail = (allUsers.find(u => u.id === currentUser.id) || {}).email || "";
+    const myCaseIds = new Set(allCases.filter(c =>
+      [c.leadAttorney, c.secondAttorney, c.paralegal, c.paralegal2, c.legalAssistant].includes(currentUser.id)
+    ).map(c => c.id));
     correspondence.forEach(email => {
-      if (!email.fromEmail) return;
-      const senderIsCurrentUser = userEmail && email.fromEmail.toLowerCase() === userEmail.toLowerCase();
-      if (!senderIsCurrentUser) return;
+      if (!myCaseIds.has(email.caseId)) return;
       if (!inRange(email.receivedAt)) return;
       const cs = allCases.find(c => c.id === email.caseId);
       result.push({
@@ -6264,7 +6264,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
 
     result.sort((a, b) => new Date(b.date) - new Date(a.date));
     return result;
-  }, [tasks, caseNotes, currentUser.id, allCases, fromDate, toDate, correspondence, allUsers, manualEntries]);
+  }, [tasks, caseNotes, currentUser.id, allCases, fromDate, toDate, correspondence, manualEntries]);
 
   const fmtDateTime = (iso) => {
     const d = new Date(iso);
@@ -6272,7 +6272,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
   };
 
   const exportCSV = () => {
-    const headers = ["Date", "Case/Matter", "File Number", "Detail", "Time"];
+    const headers = ["Date", "Case/Matter", "File Number", "Description", "Time"];
     const escapeCell = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
     const csvRows = [
       headers.join(","),
@@ -6307,13 +6307,14 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
         await apiUpdateTimeEntry(row._id, { [field]: editValue });
         setManualEntries(prev => prev.map(e => e.id === row._id ? { ...e, [field]: editValue } : e));
       } catch (err) { console.error(err); }
-    } else if (row._source === "task" && field === "time") {
+    } else if (row._source === "task") {
       try {
-        await apiUpdateTask(row._id, { timeLogged: editValue });
+        const updates = field === "time" ? { timeLogged: editValue } : { title: editValue };
+        await apiUpdateTask(row._id, updates);
       } catch (err) { console.error(err); }
-    } else if (row._source === "note" && field === "time") {
+    } else if (row._source === "note") {
       try {
-        await apiUpdateNote(row._id, { timeLogged: editValue });
+        await apiUpdateNote(row._id, field === "time" ? { timeLogged: editValue } : { body: editValue });
       } catch (err) { console.error(err); }
     }
   };
@@ -6379,7 +6380,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
                   <tr>
                     <th style={{ whiteSpace: "nowrap" }}>Date</th>
                     <th>Case/Matter</th>
-                    <th>Detail</th>
+                    <th>Description</th>
                     <th style={{ whiteSpace: "nowrap", width: 90 }}>Time</th>
                     <th style={{ width: 36 }}></th>
                   </tr>
@@ -6398,10 +6399,10 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
                             onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingCell(null); }}
                             style={{ width: "100%", fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box" }} />
                         ) : (
-                          <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", cursor: r._source === "manual" ? "pointer" : "default", minHeight: 18 }}
-                            onClick={() => r._source === "manual" && startEdit(r._source, r._id, "detail", r.detail)}
-                            title={r._source === "manual" ? "Click to edit" : ""}
-                          >{r.detail || <span style={{ color: "#8A9096", fontStyle: "italic" }}>Click to add detail</span>}</div>
+                          <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", cursor: "pointer", minHeight: 18 }}
+                            onClick={() => startEdit(r._source, r._id, "detail", r.detail)}
+                            title="Click to edit"
+                          >{r.detail || <span style={{ color: "#8A9096", fontStyle: "italic" }}>Click to add description</span>}</div>
                         )}
                       </td>
                       <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>
@@ -6410,9 +6411,9 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
                             onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingCell(null); }}
                             style={{ width: 70, fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
                         ) : (
-                          <span style={{ cursor: (r._source === "manual" || r._source === "task" || r._source === "note") ? "pointer" : "default", color: r.time ? "var(--c-text2)" : "#8A9096" }}
-                            onClick={() => (r._source === "manual" || r._source === "task" || r._source === "note") && startEdit(r._source, r._id, "time", r.time)}
-                            title={(r._source === "manual" || r._source === "task" || r._source === "note") ? "Click to edit" : ""}
+                          <span style={{ cursor: "pointer", color: r.time ? "var(--c-text2)" : "#8A9096" }}
+                            onClick={() => startEdit(r._source, r._id, "time", r.time)}
+                            title="Click to edit"
                           >{r.time || "—"}</span>
                         )}
                       </td>
@@ -6506,99 +6507,101 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
   const selectedCase = allCases.find(c => c.id === caseId);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
-        <div className="modal-header"><span>Add Time Entry</span><button className="modal-close" onClick={onClose}>✕</button></div>
-        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 14, overflow: "auto", flex: 1 }}>
-          <div>
-            <label className="field-label">Case / Matter *</label>
-            {selectedCase ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", fontSize: 13 }}>
-                  <div style={{ fontWeight: 500 }}>{selectedCase.title}</div>
-                  {selectedCase.fileNum && <div style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {selectedCase.fileNum}</div>}
-                </div>
-                <button className="btn btn-outline btn-sm" onClick={() => setCaseId(null)}>Change</button>
+    <div className="case-overlay" style={{ left: 0, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="login-box" style={{ maxWidth: 440, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative", maxHeight: "85vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#1e3a5f", marginBottom: 16 }}>Add Time Entry</div>
+
+        <div className="form-group">
+          <label>Case / Matter</label>
+          {selectedCase ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1px solid #D6D8DB", background: "#F7F8FA", fontSize: 13 }}>
+                <div style={{ fontWeight: 500 }}>{selectedCase.title}</div>
+                {selectedCase.fileNum && <div style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {selectedCase.fileNum}</div>}
               </div>
-            ) : (
-              <>
-                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                  {[
-                    { key: "all", label: "All Cases" },
-                    { key: "myMatters", label: "My Matters" },
-                    ...(myOffices.length > 0 ? [{ key: "myOffice", label: "My Office" }] : []),
-                  ].map(f => (
-                    <button key={f.key}
-                      className={`btn btn-sm ${caseFilter === f.key ? "btn-primary" : "btn-outline"}`}
-                      style={{ fontSize: 11 }}
-                      onClick={() => setCaseFilter(f.key)}
-                    >{f.label}</button>
-                  ))}
-                </div>
-                <input
-                  placeholder="Search cases..."
-                  value={caseSearch}
-                  onChange={e => setCaseSearch(e.target.value)}
-                  style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box", marginBottom: 8 }}
-                />
-                <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--c-border)", borderRadius: 6 }}>
-                  {filteredCases.todayGroup.length > 0 && (
-                    <>
-                      <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, background: "var(--c-bg2)", borderBottom: "1px solid var(--c-border)", position: "sticky", top: 0, zIndex: 1 }}>Touched Today</div>
-                      {filteredCases.todayGroup.map(c => (
-                        <div key={c.id} onClick={() => setCaseId(c.id)}
-                          style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid var(--c-border)", fontSize: 13 }}
-                          onMouseOver={e => e.currentTarget.style.background = "var(--c-hover)"} onMouseOut={e => e.currentTarget.style.background = ""}>
-                          <div style={{ fontWeight: 500 }}>{c.title}</div>
-                          {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  {filteredCases.otherGroup.length > 0 && (
-                    <>
-                      {filteredCases.todayGroup.length > 0 && (
-                        <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, background: "var(--c-bg2)", borderBottom: "1px solid var(--c-border)", position: "sticky", top: 0, zIndex: 1 }}>All Cases</div>
-                      )}
-                      {filteredCases.otherGroup.map(c => (
-                        <div key={c.id} onClick={() => setCaseId(c.id)}
-                          style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid var(--c-border)", fontSize: 13 }}
-                          onMouseOver={e => e.currentTarget.style.background = "var(--c-hover)"} onMouseOut={e => e.currentTarget.style.background = ""}>
-                          <div style={{ fontWeight: 500 }}>{c.title}</div>
-                          {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  {filteredCases.todayGroup.length === 0 && filteredCases.otherGroup.length === 0 && (
-                    <div style={{ padding: 16, fontSize: 12, color: "#8A9096", textAlign: "center" }}>No cases match your filters.</div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div>
-              <label className="field-label">Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: "100%" }} />
+              <button className="btn btn-outline btn-sm" onClick={() => setCaseId(null)}>Change</button>
             </div>
-            <div>
-              <label className="field-label">Time</label>
-              <input placeholder="e.g. 1.5, 0:30" value={time} onChange={e => setTime(e.target.value)}
-                style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box" }} />
-            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                {[
+                  { key: "all", label: "All Cases" },
+                  { key: "myMatters", label: "My Matters" },
+                  ...(myOffices.length > 0 ? [{ key: "myOffice", label: "My Office" }] : []),
+                ].map(f => (
+                  <button key={f.key}
+                    className={`btn btn-sm ${caseFilter === f.key ? "btn-primary" : "btn-outline"}`}
+                    style={{ fontSize: 11 }}
+                    onClick={() => setCaseFilter(f.key)}
+                  >{f.label}</button>
+                ))}
+              </div>
+              <input
+                placeholder="Search cases..."
+                value={caseSearch}
+                onChange={e => setCaseSearch(e.target.value)}
+                style={{ width: "100%", marginBottom: 8 }}
+              />
+              <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #D6D8DB", borderRadius: 6 }}>
+                {filteredCases.todayGroup.length > 0 && (
+                  <>
+                    <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: 0.5, background: "#F7F8FA", borderBottom: "1px solid #D6D8DB", position: "sticky", top: 0, zIndex: 1 }}>Touched Today</div>
+                    {filteredCases.todayGroup.map(c => (
+                      <div key={c.id} onClick={() => setCaseId(c.id)}
+                        style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #D6D8DB", fontSize: 13 }}
+                        onMouseOver={e => e.currentTarget.style.background = "#F7F8FA"} onMouseOut={e => e.currentTarget.style.background = ""}>
+                        <div style={{ fontWeight: 500, color: "#1F2428" }}>{c.title}</div>
+                        {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
+                      </div>
+                    ))}
+                  </>
+                )}
+                {filteredCases.otherGroup.length > 0 && (
+                  <>
+                    {filteredCases.todayGroup.length > 0 && (
+                      <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: 0.5, background: "#F7F8FA", borderBottom: "1px solid #D6D8DB", position: "sticky", top: 0, zIndex: 1 }}>All Cases</div>
+                    )}
+                    {filteredCases.otherGroup.map(c => (
+                      <div key={c.id} onClick={() => setCaseId(c.id)}
+                        style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #D6D8DB", fontSize: 13 }}
+                        onMouseOver={e => e.currentTarget.style.background = "#F7F8FA"} onMouseOut={e => e.currentTarget.style.background = ""}>
+                        <div style={{ fontWeight: 500, color: "#1F2428" }}>{c.title}</div>
+                        {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
+                      </div>
+                    ))}
+                  </>
+                )}
+                {filteredCases.todayGroup.length === 0 && filteredCases.otherGroup.length === 0 && (
+                  <div style={{ padding: 16, fontSize: 12, color: "#8A9096", textAlign: "center" }}>No cases match your filters.</div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div className="form-group">
+            <label>Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </div>
-          <div>
-            <label className="field-label">Detail</label>
-            <textarea value={detail} onChange={e => setDetail(e.target.value)} rows={3}
-              placeholder="Description of work performed..."
-              style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
+          <div className="form-group">
+            <label>Time</label>
+            <input placeholder="e.g. 1.5, 0:30" value={time} onChange={e => setTime(e.target.value)} />
           </div>
         </div>
-        <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" disabled={!caseId} onClick={() => onSave({ caseId, date, detail, time })}>Add Entry</button>
+
+        <div className="form-group">
+          <label>Description</label>
+          <textarea value={detail} onChange={e => setDetail(e.target.value)} rows={3}
+            placeholder="Description of work performed..."
+            style={{ resize: "vertical", fontFamily: "inherit" }} />
         </div>
+
+        <button className="btn btn-gold" style={{ width: "100%", padding: 10 }} disabled={!caseId} onClick={() => onSave({ caseId, date, detail, time })}>
+          Add Entry
+        </button>
+        <button className="btn btn-outline" style={{ width: "100%", marginTop: 10 }} onClick={onClose}>Cancel</button>
       </div>
     </div>
   );
