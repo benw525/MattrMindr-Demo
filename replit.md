@@ -45,6 +45,7 @@ server/
     correspondence.js — GET/DELETE /api/correspondence (per-case email history)
     inbound-email.js — POST /api/inbound-email (SendGrid Inbound Parse webhook, no auth)
     templates.js    — CRUD /api/templates, document generation with docxtemplater
+    parties.js      — CRUD /api/parties (case parties: individuals & corporations)
 
 lextrack/
   src/
@@ -68,7 +69,8 @@ lextrack/
 - Contacts: auto-populated contacts (Clients, Attorneys, Courts + manual Experts/Miscellaneous), with phone/email/fax/address, associated cases, persistent notes, and soft-delete with 30-day recovery
 - AI Search: Natural language search across all case data via OpenAI gpt-5-mini
 - Confidential Cases: access-restricted to assigned team members + App Admin
-- Document Generator: upload .docx templates, define placeholders, auto-fill from case data; visibility (global/personal); full re-edit of placeholders (add/remove/modify fields) restricted to creator + Shareholders
+- Case Parties: accordion-style party management on Details tab; Individual (name/address/phones/other contacts/email/represented-by) and Corporation (entity name/type/registered agent/POC) types; any party type selectable; integrated with document generator placeholders
+- Document Generator: upload .docx templates, define placeholders, auto-fill from case data + party data; visibility (global/personal); full re-edit of placeholders (add/remove/modify fields) restricted to creator + Shareholders
 - Email Correspondence: SendGrid Inbound Parse captures emails to case-{id}@mail.mattrmindr.com
 - Authentication: bcrypt passwords, temp password emails, forgot/reset password flow, forced password change on first login
 
@@ -125,3 +127,4 @@ lextrack/
 | contact_notes | Per-contact notes |
 | case_correspondence | Inbound emails captured via SendGrid |
 | doc_templates | Document templates (.docx with placeholders) |
+| case_parties | Per-case parties (individuals & corporations, JSONB data) |

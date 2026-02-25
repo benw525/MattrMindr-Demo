@@ -206,6 +206,17 @@ async function createSchema() {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS case_parties (
+        id          SERIAL PRIMARY KEY,
+        case_id     INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        party_type  TEXT    NOT NULL DEFAULT 'Plaintiff',
+        entity_kind TEXT    NOT NULL DEFAULT 'individual',
+        data        JSONB   NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
     await client.query("COMMIT");
     console.log("Schema created successfully.");
   } catch (err) {

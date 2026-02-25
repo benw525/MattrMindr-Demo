@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { USERS } from "./firmData.js";
 import {
   apiLogin, apiLogout, apiChangePassword, apiForgotPassword, apiResetPassword, apiSendTempPassword,
@@ -13,6 +13,7 @@ import {
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
   apiAiSearch,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
+  apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
   apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument,
 } from "./api.js";
 
@@ -2360,6 +2361,15 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [expandedEmail, setExpandedEmail] = useState(null);
   const [attachmentPreview, setAttachmentPreview] = useState(null);
   const [corrCopied, setCorrCopied] = useState(false);
+  const [parties, setParties] = useState([]);
+  const [partiesLoading, setPartiesLoading] = useState(false);
+  const [expandedParty, setExpandedParty] = useState(null);
+  const [addingParty, setAddingParty] = useState(false);
+  const [newPartyType, setNewPartyType] = useState("Plaintiff");
+  const [newPartyKind, setNewPartyKind] = useState("individual");
+  const [newPartyCustomType, setNewPartyCustomType] = useState("");
+  const partyTimers = useRef({});
+  const partyPendingData = useRef({});
   const [showDocGen, setShowDocGen] = useState(false);
   const [activityFilter, setActivityFilter] = useState("all");
   const canRemove = isAttorney(currentUser);
@@ -2374,6 +2384,23 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       setCorrLoading(true);
       apiGetCorrespondence(c.id).then(setCorrespondence).catch(() => {}).finally(() => setCorrLoading(false));
     }
+    if (activeTab === "details") {
+      setPartiesLoading(true);
+      apiGetParties(c.id).then(setParties).catch(() => {}).finally(() => setPartiesLoading(false));
+    }
+    const timersRef = partyTimers.current;
+    const pendingRef = partyPendingData.current;
+    return () => {
+      Object.entries(timersRef).forEach(([key, timer]) => {
+        clearTimeout(timer);
+        const pendingData = pendingRef[key];
+        if (pendingData) {
+          apiUpdateParty(parseInt(key), { data: pendingData }).catch(() => {});
+          delete pendingRef[key];
+        }
+      });
+      partyTimers.current = {};
+    };
   }, [activeTab, c.id]);
 
   const handleContactClick = async (name) => {
@@ -2591,7 +2618,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         <BillingPrintView c={draft} billingParties={billingParties} onClose={() => setShowBillingPrint(false)} />
       )}
       {showDocGen && (
-        <GenerateDocumentModal caseData={draft} currentUser={currentUser} onClose={() => setShowDocGen(false)} />
+        <GenerateDocumentModal caseData={draft} currentUser={currentUser} onClose={() => setShowDocGen(false)} parties={parties} />
       )}
       {showDeleteConfirm && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
@@ -2720,7 +2747,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               onClick={() => setEditMode(e => !e)}
             >{editMode ? "✓ Done" : "✎ Edit"}</button>
             <button className="btn btn-outline btn-sm" onClick={() => setShowPrint(true)}>🖨 Print</button>
-            <button className="btn btn-outline btn-sm" onClick={() => setShowDocGen(true)}>📄 Generate</button>
+            <button className="btn btn-outline btn-sm" onClick={() => { if (parties.length === 0) apiGetParties(c.id).then(setParties).catch(() => {}); setShowDocGen(true); }}>📄 Generate</button>
             {canDelete && (
               <button className="btn btn-outline btn-sm" style={{ color: "#e05252", borderColor: "#fca5a5" }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
             )}
@@ -3006,6 +3033,228 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   {(draft.offices || []).length > 0 ? (draft.offices || []).join(", ") : "—"}
                 </div>
               )}
+            </div>
+
+            {/* Parties */}
+            <div className="case-overlay-section">
+              <div className="case-overlay-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Parties ({parties.length})</span>
+                <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 11, padding: "2px 10px" }} onClick={() => setAddingParty(true)}>+ Add Party</button>
+              </div>
+
+              {addingParty && (
+                  <div style={{ background: "var(--c-bg2)", border: "1px solid var(--c-border)", borderRadius: 8, padding: 16, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 12 }}>New Party</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>Party Type</label>
+                        <select value={newPartyType} onChange={e => setNewPartyType(e.target.value)} style={{ width: "100%", fontSize: 13, padding: "6px 8px" }}>
+                          {["Plaintiff", "Defendant", "Cross-Defendant", "Third-Party Defendant", "Third-Party Plaintiff", "Intervenor", "Garnishee"].map(t => <option key={t} value={t}>{t}</option>)}
+                          <option value="_custom">Custom...</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>Entity Kind</label>
+                        <select value={newPartyKind} onChange={e => setNewPartyKind(e.target.value)} style={{ width: "100%", fontSize: 13, padding: "6px 8px" }}>
+                          <option value="individual">Individual</option>
+                          <option value="corporation">Corporation / Entity</option>
+                        </select>
+                      </div>
+                    </div>
+                    {newPartyType === "_custom" && (
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>Custom Type</label>
+                        <input value={newPartyCustomType} onChange={e => setNewPartyCustomType(e.target.value)} type="text" placeholder="e.g. Cross-Claimant" style={{ width: "100%", fontSize: 13, padding: "6px 8px" }} />
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setAddingParty(false); setNewPartyType("Plaintiff"); setNewPartyKind("individual"); setNewPartyCustomType(""); }}>Cancel</button>
+                      <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={async () => {
+                        let partyType = newPartyType === "_custom" ? (newPartyCustomType || "Other").trim() : newPartyType;
+                        if (!partyType) partyType = "Other";
+                        try {
+                          const saved = await apiCreateParty({ caseId: c.id, partyType, entityKind: newPartyKind, data: {} });
+                          setParties(p => [...p, saved]);
+                          setAddingParty(false);
+                          setExpandedParty(saved.id);
+                          setNewPartyType("Plaintiff"); setNewPartyKind("individual"); setNewPartyCustomType("");
+                          log("Party Added", `Added ${newPartyKind === "corporation" ? "entity" : "individual"} ${partyType}`);
+                        } catch (err) { alert("Failed to add party: " + err.message); }
+                      }}>Add</button>
+                    </div>
+                  </div>
+              )}
+
+              {partiesLoading && <div style={{ fontSize: 13, color: "#8A9096", padding: "12px 0" }}>Loading parties...</div>}
+
+              {!partiesLoading && parties.length === 0 && !addingParty && (
+                <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic", padding: "12px 0" }}>No parties added yet.</div>
+              )}
+
+              {!partiesLoading && parties.map(party => {
+                const isExp = expandedParty === party.id;
+                const d = party.data || {};
+                const displayName = party.entityKind === "corporation"
+                  ? (d.entityName || "Unnamed Entity")
+                  : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ") || "Unnamed Party";
+                const repContact = d.representedById ? allContacts.find(ct => ct.id === d.representedById) : null;
+
+                const updateField = (field, value) => {
+                  const newData = { ...(partyPendingData.current[party.id] || d), [field]: value };
+                  partyPendingData.current[party.id] = newData;
+                  setParties(p => p.map(x => x.id === party.id ? { ...x, data: newData } : x));
+                  const timerKey = `${party.id}`;
+                  if (partyTimers.current[timerKey]) clearTimeout(partyTimers.current[timerKey]);
+                  partyTimers.current[timerKey] = setTimeout(async () => {
+                    const dataToSave = partyPendingData.current[party.id];
+                    delete partyPendingData.current[party.id];
+                    try { await apiUpdateParty(party.id, { data: dataToSave }); } catch (err) { console.error(err); }
+                  }, 600);
+                };
+
+                const inputStyle = { width: "100%", fontSize: 13, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" };
+                const labelStyle = { fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 3 };
+                const fieldGroup = { marginBottom: 10 };
+
+                return (
+                  <div key={party.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 8, overflow: "hidden" }}>
+                    <div
+                      onClick={() => setExpandedParty(isExp ? null : party.id)}
+                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 14 }}>{party.entityKind === "corporation" ? "🏢" : "👤"}</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>{displayName}</div>
+                          <div style={{ fontSize: 11, color: "#8A9096" }}>{party.partyType}{repContact ? ` · Rep: ${repContact.name}` : ""}</div>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 12, color: "#8A9096" }}>{isExp ? "▲" : "▼"}</span>
+                    </div>
+
+                    {isExp && (
+                      <div style={{ padding: "12px 14px", borderTop: "1px solid var(--c-border)" }}>
+                        {party.entityKind === "individual" ? (
+                          <>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                              <div style={fieldGroup}><label style={labelStyle}>First Name</label><input style={inputStyle} value={d.firstName || ""} onChange={e => updateField("firstName", e.target.value)} /></div>
+                              <div style={fieldGroup}><label style={labelStyle}>Middle Name</label><input style={inputStyle} value={d.middleName || ""} onChange={e => updateField("middleName", e.target.value)} /></div>
+                              <div style={fieldGroup}><label style={labelStyle}>Last Name</label><input style={inputStyle} value={d.lastName || ""} onChange={e => updateField("lastName", e.target.value)} /></div>
+                            </div>
+                            <div style={fieldGroup}><label style={labelStyle}>Street Address</label><input style={inputStyle} value={d.address || ""} onChange={e => updateField("address", e.target.value)} /></div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px 100px", gap: 10, marginBottom: 10 }}>
+                              <div><label style={labelStyle}>City</label><input style={inputStyle} value={d.city || ""} onChange={e => updateField("city", e.target.value)} /></div>
+                              <div><label style={labelStyle}>State</label><input style={inputStyle} value={d.state || ""} onChange={e => updateField("state", e.target.value)} /></div>
+                              <div><label style={labelStyle}>Zip</label><input style={inputStyle} value={d.zip || ""} onChange={e => updateField("zip", e.target.value)} /></div>
+                              <div><label style={labelStyle}>Email</label><input style={inputStyle} value={d.email || ""} onChange={e => updateField("email", e.target.value)} /></div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                              <div style={fieldGroup}><label style={labelStyle}>Entity Name</label><input style={inputStyle} value={d.entityName || ""} onChange={e => updateField("entityName", e.target.value)} /></div>
+                              <div style={fieldGroup}>
+                                <label style={labelStyle}>Entity Type</label>
+                                <select style={inputStyle} value={d.entityType || ""} onChange={e => updateField("entityType", e.target.value)}>
+                                  <option value="">—</option>
+                                  {["LLC", "Corp", "Inc.", "Partnership", "LP", "LLP", "Trust", "Association", "Government", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                            <div style={fieldGroup}><label style={labelStyle}>Registered Agent</label><input style={inputStyle} value={d.registeredAgent || ""} onChange={e => updateField("registeredAgent", e.target.value)} /></div>
+                            <div style={fieldGroup}><label style={labelStyle}>Street Address</label><input style={inputStyle} value={d.address || ""} onChange={e => updateField("address", e.target.value)} /></div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px 100px", gap: 10, marginBottom: 10 }}>
+                              <div><label style={labelStyle}>City</label><input style={inputStyle} value={d.city || ""} onChange={e => updateField("city", e.target.value)} /></div>
+                              <div><label style={labelStyle}>State</label><input style={inputStyle} value={d.state || ""} onChange={e => updateField("state", e.target.value)} /></div>
+                              <div><label style={labelStyle}>Zip</label><input style={inputStyle} value={d.zip || ""} onChange={e => updateField("zip", e.target.value)} /></div>
+                              <div><label style={labelStyle}>Email</label><input style={inputStyle} value={d.email || ""} onChange={e => updateField("email", e.target.value)} /></div>
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 12, marginBottom: 6 }}>Point of Contact</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                              <div><label style={labelStyle}>Name</label><input style={inputStyle} value={d.pocName || ""} onChange={e => updateField("pocName", e.target.value)} /></div>
+                              <div><label style={labelStyle}>Title</label><input style={inputStyle} value={d.pocTitle || ""} onChange={e => updateField("pocTitle", e.target.value)} /></div>
+                              <div><label style={labelStyle}>Phone</label><input style={inputStyle} value={d.pocPhone || ""} onChange={e => updateField("pocPhone", e.target.value)} /></div>
+                              <div><label style={labelStyle}>Email</label><input style={inputStyle} value={d.pocEmail || ""} onChange={e => updateField("pocEmail", e.target.value)} /></div>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Phone Numbers */}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 12, marginBottom: 6 }}>Phone Numbers</div>
+                        {(d.phones || []).map((ph, idx) => (
+                          <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                            <select style={{ ...inputStyle, width: 100, flex: "0 0 100px" }} value={ph.label || "Mobile"} onChange={e => {
+                              const phones = [...(d.phones || [])];
+                              phones[idx] = { ...phones[idx], label: e.target.value };
+                              updateField("phones", phones);
+                            }}>
+                              {["Mobile", "Home", "Work", "Fax", "Other"].map(l => <option key={l}>{l}</option>)}
+                            </select>
+                            <input style={{ ...inputStyle, flex: 1 }} value={ph.number || ""} placeholder="Phone number" onChange={e => {
+                              const phones = [...(d.phones || [])];
+                              phones[idx] = { ...phones[idx], number: e.target.value };
+                              updateField("phones", phones);
+                            }} />
+                            <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--c-text3)", whiteSpace: "nowrap", cursor: "pointer" }}>
+                              <input type="checkbox" checked={!!ph.lastKnown} onChange={e => {
+                                const phones = [...(d.phones || [])];
+                                phones[idx] = { ...phones[idx], lastKnown: e.target.checked };
+                                updateField("phones", phones);
+                              }} /> Last Known
+                            </label>
+                            <button onClick={() => { const phones = (d.phones || []).filter((_, i) => i !== idx); updateField("phones", phones); }} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
+                          </div>
+                        ))}
+                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: 12 }} onClick={() => updateField("phones", [...(d.phones || []), { label: "Mobile", number: "", lastKnown: false }])}>+ Add Phone</button>
+
+                        {/* Other Contacts */}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Other Contacts</div>
+                        {(d.otherContacts || []).map((oc, idx) => (
+                          <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                            <input style={{ ...inputStyle, flex: 1 }} value={oc.name || ""} placeholder="Name" onChange={e => {
+                              const ocs = [...(d.otherContacts || [])];
+                              ocs[idx] = { ...ocs[idx], name: e.target.value };
+                              updateField("otherContacts", ocs);
+                            }} />
+                            <input style={{ ...inputStyle, flex: 1 }} value={oc.phone || ""} placeholder="Phone" onChange={e => {
+                              const ocs = [...(d.otherContacts || [])];
+                              ocs[idx] = { ...ocs[idx], phone: e.target.value };
+                              updateField("otherContacts", ocs);
+                            }} />
+                            <input style={{ ...inputStyle, flex: 1 }} value={oc.relationship || ""} placeholder="Relationship" onChange={e => {
+                              const ocs = [...(d.otherContacts || [])];
+                              ocs[idx] = { ...ocs[idx], relationship: e.target.value };
+                              updateField("otherContacts", ocs);
+                            }} />
+                            <button onClick={() => { const ocs = (d.otherContacts || []).filter((_, i) => i !== idx); updateField("otherContacts", ocs); }} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
+                          </div>
+                        ))}
+                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: 12 }} onClick={() => updateField("otherContacts", [...(d.otherContacts || []), { name: "", phone: "", relationship: "" }])}>+ Add Contact</button>
+
+                        {/* Represented By */}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Represented By</div>
+                        <select style={{ ...inputStyle, maxWidth: 350, marginBottom: 12 }} value={d.representedById || ""} onChange={e => updateField("representedById", e.target.value ? parseInt(e.target.value) : null)}>
+                          <option value="">— None —</option>
+                          {allContacts.filter(ct => ct.category === "Attorneys" || ct.category === "Attorney").map(ct => <option key={ct.id} value={ct.id}>{ct.name}</option>)}
+                        </select>
+
+                        {/* Delete */}
+                        <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                          <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#e05252", borderColor: "#e05252" }} onClick={async () => {
+                            if (!window.confirm(`Remove ${displayName} (${party.partyType}) from this case?`)) return;
+                            try {
+                              await apiDeleteParty(party.id);
+                              setParties(p => p.filter(x => x.id !== party.id));
+                              setExpandedParty(null);
+                              log("Party Removed", `Removed ${party.partyType}: ${displayName}`);
+                            } catch (err) { alert("Failed: " + err.message); }
+                          }}>Remove Party</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Team */}
@@ -6538,17 +6787,94 @@ const CASE_FIELD_MAP = [
   { key: "_todayDate", label: "Today's Date" },
 ];
 
-function getCaseFieldValue(c, key) {
+function buildPartyFieldMap(parties) {
+  const map = [];
+  const grouped = {};
+  for (const p of parties) {
+    if (!grouped[p.partyType]) grouped[p.partyType] = [];
+    grouped[p.partyType].push(p);
+  }
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/_+$/, "");
+  for (const [type, arr] of Object.entries(grouped)) {
+    const typeSlug = slug(type);
+    arr.forEach((party, idx) => {
+      const n = idx + 1;
+      const prefix = `_party_${typeSlug}_${n}`;
+      const label = `${type} #${n}`;
+      if (party.entityKind === "individual") {
+        map.push({ key: `${prefix}_full_name`, label: `${label} — Full Name` });
+        map.push({ key: `${prefix}_first_name`, label: `${label} — First Name` });
+        map.push({ key: `${prefix}_middle_name`, label: `${label} — Middle Name` });
+        map.push({ key: `${prefix}_last_name`, label: `${label} — Last Name` });
+      } else {
+        map.push({ key: `${prefix}_entity_name`, label: `${label} — Entity Name` });
+        map.push({ key: `${prefix}_entity_type`, label: `${label} — Entity Type` });
+        map.push({ key: `${prefix}_registered_agent`, label: `${label} — Registered Agent` });
+        map.push({ key: `${prefix}_poc_name`, label: `${label} — POC Name` });
+        map.push({ key: `${prefix}_poc_title`, label: `${label} — POC Title` });
+        map.push({ key: `${prefix}_poc_phone`, label: `${label} — POC Phone` });
+        map.push({ key: `${prefix}_poc_email`, label: `${label} — POC Email` });
+      }
+      map.push({ key: `${prefix}_address`, label: `${label} — Address` });
+      map.push({ key: `${prefix}_full_address`, label: `${label} — Full Address` });
+      map.push({ key: `${prefix}_city`, label: `${label} — City` });
+      map.push({ key: `${prefix}_state`, label: `${label} — State` });
+      map.push({ key: `${prefix}_zip`, label: `${label} — Zip` });
+      map.push({ key: `${prefix}_email`, label: `${label} — Email` });
+      map.push({ key: `${prefix}_phone`, label: `${label} — Phone (Primary)` });
+    });
+  }
+  return map;
+}
+
+function getCaseFieldValue(c, key, parties) {
   if (key === "_todayDate") return new Date().toLocaleDateString();
   if (key === "_leadAttorneyName") return USERS.find(u => u.id === c.leadAttorney)?.name || "";
   if (key === "_secondAttorneyName") return USERS.find(u => u.id === c.secondAttorney)?.name || "";
   if (key === "_paralegalName") return USERS.find(u => u.id === c.paralegal)?.name || "";
   if (key === "_paralegal2Name") return USERS.find(u => u.id === c.paralegal2)?.name || "";
   if (key === "_legalAssistantName") return USERS.find(u => u.id === c.legalAssistant)?.name || "";
+  if (key.startsWith("_party_") && parties) {
+    const m = key.match(/^_party_(.+?)_(\d+)_(.+)$/);
+    if (m) {
+      const [, typeSlug, numStr, field] = m;
+      const idx = parseInt(numStr) - 1;
+      const grouped = {};
+      for (const p of parties) {
+        const s = p.partyType.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/_+$/, "");
+        if (!grouped[s]) grouped[s] = [];
+        grouped[s].push(p);
+      }
+      const party = (grouped[typeSlug] || [])[idx];
+      if (!party) return "";
+      const d = party.data || {};
+      switch (field) {
+        case "full_name": return [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+        case "first_name": return d.firstName || "";
+        case "middle_name": return d.middleName || "";
+        case "last_name": return d.lastName || "";
+        case "entity_name": return d.entityName || "";
+        case "entity_type": return d.entityType || "";
+        case "registered_agent": return d.registeredAgent || "";
+        case "poc_name": return d.pocName || "";
+        case "poc_title": return d.pocTitle || "";
+        case "poc_phone": return d.pocPhone || "";
+        case "poc_email": return d.pocEmail || "";
+        case "address": return d.address || "";
+        case "full_address": return [d.address, d.city, d.state, d.zip].filter(Boolean).join(", ");
+        case "city": return d.city || "";
+        case "state": return d.state || "";
+        case "zip": return d.zip || "";
+        case "email": return d.email || "";
+        case "phone": return (d.phones || [])[0]?.number || "";
+        default: return "";
+      }
+    }
+  }
   return c[key] || "";
 }
 
-function GenerateDocumentModal({ caseData, currentUser, onClose }) {
+function GenerateDocumentModal({ caseData, currentUser, onClose, parties }) {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -6576,7 +6902,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose }) {
     const v = {};
     for (const ph of tmpl.placeholders) {
       if (ph.mapping && ph.mapping !== "_manual") {
-        v[ph.token] = getCaseFieldValue(caseData, ph.mapping);
+        v[ph.token] = getCaseFieldValue(caseData, ph.mapping, parties || []);
       } else {
         v[ph.token] = "";
       }
@@ -6663,7 +6989,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose }) {
                 <div key={ph.token} style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 4 }}>
                     {ph.label}
-                    {ph.mapping && ph.mapping !== "_manual" && <span style={{ fontWeight: 400, color: "#1E2A3A", marginLeft: 6, fontSize: 10 }}>auto-filled from {CASE_FIELD_MAP.find(f => f.key === ph.mapping)?.label || ph.mapping}</span>}
+                    {ph.mapping && ph.mapping !== "_manual" && <span style={{ fontWeight: 400, color: "#1E2A3A", marginLeft: 6, fontSize: 10 }}>auto-filled from {[...CASE_FIELD_MAP, ...buildPartyFieldMap(parties || [])].find(f => f.key === ph.mapping)?.label || ph.mapping}</span>}
                   </label>
                   <input
                     value={values[ph.token] || ""}
@@ -6934,7 +7260,39 @@ function DocumentsView({ currentUser }) {
                     style={{ fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", minWidth: 220, flexShrink: 0 }}
                   >
                     <option value="_manual">Ask me each time</option>
-                    {CASE_FIELD_MAP.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    <optgroup label="Case Fields">
+                      {CASE_FIELD_MAP.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </optgroup>
+                    <optgroup label="Party Fields">
+                      {[
+                        { key: "_party_plaintiff_1_full_name", label: "Plaintiff #1 — Full Name" },
+                        { key: "_party_plaintiff_1_first_name", label: "Plaintiff #1 — First Name" },
+                        { key: "_party_plaintiff_1_last_name", label: "Plaintiff #1 — Last Name" },
+                        { key: "_party_plaintiff_1_address", label: "Plaintiff #1 — Address" },
+                        { key: "_party_plaintiff_1_full_address", label: "Plaintiff #1 — Full Address" },
+                        { key: "_party_plaintiff_1_email", label: "Plaintiff #1 — Email" },
+                        { key: "_party_plaintiff_1_phone", label: "Plaintiff #1 — Phone" },
+                        { key: "_party_plaintiff_1_entity_name", label: "Plaintiff #1 — Entity Name" },
+                        { key: "_party_plaintiff_2_full_name", label: "Plaintiff #2 — Full Name" },
+                        { key: "_party_plaintiff_2_entity_name", label: "Plaintiff #2 — Entity Name" },
+                        { key: "_party_defendant_1_full_name", label: "Defendant #1 — Full Name" },
+                        { key: "_party_defendant_1_first_name", label: "Defendant #1 — First Name" },
+                        { key: "_party_defendant_1_last_name", label: "Defendant #1 — Last Name" },
+                        { key: "_party_defendant_1_address", label: "Defendant #1 — Address" },
+                        { key: "_party_defendant_1_full_address", label: "Defendant #1 — Full Address" },
+                        { key: "_party_defendant_1_email", label: "Defendant #1 — Email" },
+                        { key: "_party_defendant_1_phone", label: "Defendant #1 — Phone" },
+                        { key: "_party_defendant_1_entity_name", label: "Defendant #1 — Entity Name" },
+                        { key: "_party_defendant_2_full_name", label: "Defendant #2 — Full Name" },
+                        { key: "_party_defendant_2_entity_name", label: "Defendant #2 — Entity Name" },
+                        { key: "_party_cross_defendant_1_full_name", label: "Cross-Defendant #1 — Full Name" },
+                        { key: "_party_cross_defendant_1_entity_name", label: "Cross-Defendant #1 — Entity Name" },
+                        { key: "_party_third_party_defendant_1_full_name", label: "Third-Party Defendant #1 — Full Name" },
+                        { key: "_party_third_party_plaintiff_1_full_name", label: "Third-Party Plaintiff #1 — Full Name" },
+                        { key: "_party_intervenor_1_full_name", label: "Intervenor #1 — Full Name" },
+                        { key: "_party_garnishee_1_full_name", label: "Garnishee #1 — Full Name" },
+                      ].map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </optgroup>
                   </select>
                 </div>
               ))}
