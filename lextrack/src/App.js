@@ -3774,14 +3774,35 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--c-text2)", cursor: "pointer" }}>
                             <input type="checkbox" checked={!!d.isProSe} onChange={e => updateField("isProSe", e.target.checked)} /> Pro Se
                           </label>
+                          {party.entityKind === "individual" && (
+                            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--c-text2)", cursor: "pointer" }}>
+                              <input type="checkbox" checked={!!d.isMinor} onChange={e => updateField("isMinor", e.target.checked)} /> Minor
+                            </label>
+                          )}
                         </div>
                         {party.entityKind === "individual" ? (
                           <>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 140px", gap: 10, marginBottom: 10 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
                               <div style={fieldGroup}><label style={labelStyle}>First Name</label><input style={inputStyle} value={d.firstName || ""} onChange={e => updateField("firstName", e.target.value)} /></div>
                               <div style={fieldGroup}><label style={labelStyle}>Middle Name</label><input style={inputStyle} value={d.middleName || ""} onChange={e => updateField("middleName", e.target.value)} /></div>
                               <div style={fieldGroup}><label style={labelStyle}>Last Name</label><input style={inputStyle} value={d.lastName || ""} onChange={e => updateField("lastName", e.target.value)} /></div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "140px 100px 160px 1fr 1fr", gap: 10, marginBottom: 10 }}>
                               <div style={fieldGroup}><label style={labelStyle}>Date of Birth</label><input type="date" style={inputStyle} value={d.dob || ""} onChange={e => updateField("dob", e.target.value)} /></div>
+                              <div style={fieldGroup}><label style={labelStyle}>SSN (last 4)</label><input style={inputStyle} value={d.ssnLast4 || ""} maxLength={4} placeholder="••••" onChange={e => updateField("ssnLast4", e.target.value.replace(/\D/g, "").slice(0, 4))} /></div>
+                              <div style={fieldGroup}><label style={labelStyle}>Driver's License #</label><input style={inputStyle} value={d.driversLicense || ""} onChange={e => updateField("driversLicense", e.target.value)} /></div>
+                              <div style={fieldGroup}>
+                                <label style={labelStyle}>Marital Status</label>
+                                <select style={inputStyle} value={d.maritalStatus || ""} onChange={e => updateField("maritalStatus", e.target.value)}>
+                                  <option value="">—</option>
+                                  {["Single", "Married", "Divorced", "Widowed", "Separated", "Unknown"].map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </div>
+                              <div style={fieldGroup}><label style={labelStyle}>Date of Death</label><input type="date" style={inputStyle} value={d.dateOfDeath || ""} onChange={e => updateField("dateOfDeath", e.target.value)} /></div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                              <div style={fieldGroup}><label style={labelStyle}>Employer</label><input style={inputStyle} value={d.employer || ""} onChange={e => updateField("employer", e.target.value)} /></div>
+                              <div style={fieldGroup}><label style={labelStyle}>Occupation</label><input style={inputStyle} value={d.occupation || ""} onChange={e => updateField("occupation", e.target.value)} /></div>
                             </div>
                             <div style={fieldGroup}><label style={labelStyle}>Street Address</label><input style={inputStyle} value={d.address || ""} onChange={e => updateField("address", e.target.value)} /></div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px 100px", gap: 10, marginBottom: 10 }}>
@@ -3802,6 +3823,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                                   {["LLC", "Corp", "Inc.", "Partnership", "LP", "LLP", "Trust", "Association", "Government", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                               </div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                              <div style={fieldGroup}><label style={labelStyle}>State of Incorporation</label><input style={inputStyle} value={d.stateOfIncorporation || ""} onChange={e => updateField("stateOfIncorporation", e.target.value)} /></div>
+                              <div style={fieldGroup}><label style={labelStyle}>Principal Place of Business</label><input style={inputStyle} value={d.principalPlaceOfBusiness || ""} onChange={e => updateField("principalPlaceOfBusiness", e.target.value)} /></div>
                             </div>
                             <div style={fieldGroup}><label style={labelStyle}>Registered Agent</label><input style={inputStyle} value={d.registeredAgent || ""} onChange={e => updateField("registeredAgent", e.target.value)} /></div>
                             <div style={fieldGroup}><label style={labelStyle}>Street Address</label><input style={inputStyle} value={d.address || ""} onChange={e => updateField("address", e.target.value)} /></div>
@@ -4088,15 +4113,34 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: 12 }} onClick={() => updateInsField("coverages", [...(d.coverages || []), { type: "Bodily Injury", amount: "" }])}>+ Add Coverage</button>
 
                         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Adjuster</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
                           <div><label style={labelStyle}>Name</label><input style={inputStyle} value={d.adjusterName || ""} onChange={e => updateInsField("adjusterName", e.target.value)} /></div>
                           <div><label style={labelStyle}>Phone</label><input style={inputStyle} value={d.adjusterPhone || ""} onChange={e => updateInsField("adjusterPhone", e.target.value)} /></div>
                           <div><label style={labelStyle}>Email</label><input style={inputStyle} value={d.adjusterEmail || ""} onChange={e => updateInsField("adjusterEmail", e.target.value)} /></div>
+                          <div><label style={labelStyle}>Fax</label><input style={inputStyle} value={d.adjusterFax || ""} onChange={e => updateInsField("adjusterFax", e.target.value)} /></div>
                         </div>
+                        <div style={fieldGroup}><label style={labelStyle}>Adjuster Address</label><input style={inputStyle} value={d.adjusterAddress || ""} onChange={e => updateInsField("adjusterAddress", e.target.value)} /></div>
 
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                           <div><label style={labelStyle}>Policy Start</label><input type="date" style={inputStyle} value={d.policyStart || ""} onChange={e => updateInsField("policyStart", e.target.value)} /></div>
                           <div><label style={labelStyle}>Policy End</label><input type="date" style={inputStyle} value={d.policyEnd || ""} onChange={e => updateInsField("policyEnd", e.target.value)} /></div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 10, marginBottom: 10 }}>
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Reservation of Rights</label>
+                            <select style={inputStyle} value={d.reservationOfRights || ""} onChange={e => updateInsField("reservationOfRights", e.target.value)}>
+                              <option value="">—</option>
+                              {["No", "Yes", "Pending"].map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div style={fieldGroup}><label style={labelStyle}>ROR Date</label><input type="date" style={inputStyle} value={d.rorDate || ""} onChange={e => updateInsField("rorDate", e.target.value)} /></div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                          <div style={fieldGroup}><label style={labelStyle}>Tender Date</label><input type="date" style={inputStyle} value={d.tenderDate || ""} onChange={e => updateInsField("tenderDate", e.target.value)} /></div>
+                          <div style={fieldGroup}><label style={labelStyle}>Denial Date</label><input type="date" style={inputStyle} value={d.denialDate || ""} onChange={e => updateInsField("denialDate", e.target.value)} /></div>
+                          <div style={fieldGroup}><label style={labelStyle}>SIR/Deductible Amount</label><input style={inputStyle} value={d.sirAmount || ""} placeholder="$0.00" onChange={e => updateInsField("sirAmount", e.target.value)} /></div>
                         </div>
 
                         <div style={fieldGroup}><label style={labelStyle}>Notes</label><textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} value={d.notes || ""} onChange={e => updateInsField("notes", e.target.value)} placeholder="Additional notes..." /></div>
@@ -4254,9 +4298,15 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                           />
                           {d.contactId && <div style={{ fontSize: 10, color: "#2F7A5F", marginTop: 2 }}>Linked to contact card</div>}
                         </div>
-                        <div style={fieldGroup}>
-                          <label style={labelStyle}>Company / Practice</label>
-                          <input style={inputStyle} value={d.company || ""} placeholder="Company or practice name" onChange={e => syncContactFromExpert("company", e.target.value)} />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Company / Practice</label>
+                            <input style={inputStyle} value={d.company || ""} placeholder="Company or practice name" onChange={e => syncContactFromExpert("company", e.target.value)} />
+                          </div>
+                          <div style={fieldGroup}>
+                            <label style={labelStyle}>Specialty / Area of Expertise</label>
+                            <input style={inputStyle} value={d.specialty || ""} placeholder="e.g., Orthopedic Surgery" onChange={e => updateField("specialty", e.target.value)} />
+                          </div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                           <div><label style={labelStyle}>Phone</label><input style={inputStyle} value={d.phone || ""} onChange={e => syncContactFromExpert("phone", e.target.value)} /></div>
@@ -4272,21 +4322,38 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         </div>
 
                         <div style={{ borderTop: "1px solid var(--c-border)", margin: "10px 0", paddingTop: 10 }}>
-                          <div style={fieldGroup}>
-                            <label style={labelStyle}>Assigned Party</label>
-                            <select style={inputStyle} value={d.assignedParty || ""} onChange={e => updateField("assignedParty", e.target.value)}>
-                              <option value="">— None —</option>
-                              {partyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                            <div style={fieldGroup}>
+                              <label style={labelStyle}>Assigned Party</label>
+                              <select style={inputStyle} value={d.assignedParty || ""} onChange={e => updateField("assignedParty", e.target.value)}>
+                                <option value="">— None —</option>
+                                {partyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            </div>
+                            <div style={fieldGroup}>
+                              <label style={labelStyle}>Testimony</label>
+                              <select style={inputStyle} value={d.testimony || ""} onChange={e => updateField("testimony", e.target.value)}>
+                                <option value="">— Select —</option>
+                                <option value="Deposition">Deposition</option>
+                                <option value="Live Testimony">Live Testimony</option>
+                                <option value="Both">Both</option>
+                              </select>
+                            </div>
                           </div>
-                          <div style={fieldGroup}>
-                            <label style={labelStyle}>Testimony</label>
-                            <select style={inputStyle} value={d.testimony || ""} onChange={e => updateField("testimony", e.target.value)}>
-                              <option value="">— Select —</option>
-                              <option value="Deposition">Deposition</option>
-                              <option value="Live Testimony">Live Testimony</option>
-                              <option value="Both">Both</option>
-                            </select>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                            <div style={fieldGroup}><label style={labelStyle}>Rate</label><input style={inputStyle} value={d.rate || ""} placeholder="Hourly/deposition/trial rates" onChange={e => updateField("rate", e.target.value)} /></div>
+                            <div style={fieldGroup}>
+                              <label style={labelStyle}>CV / Resume Link</label>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <input style={{ ...inputStyle, flex: 1 }} value={d.cvLink || ""} placeholder="https://..." onChange={e => updateField("cvLink", e.target.value)} />
+                                {d.cvLink && <a href={d.cvLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "var(--c-accent)", whiteSpace: "nowrap" }}>Open</a>}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                            <div style={fieldGroup}><label style={labelStyle}>Retained Date</label><input type="date" style={inputStyle} value={d.retainedDate || ""} onChange={e => updateField("retainedDate", e.target.value)} /></div>
+                            <div style={fieldGroup}><label style={labelStyle}>Report Date</label><input type="date" style={inputStyle} value={d.reportDate || ""} onChange={e => updateField("reportDate", e.target.value)} /></div>
+                            <div style={fieldGroup}><label style={labelStyle}>Deposition Date</label><input type="date" style={inputStyle} value={d.depositionDate || ""} onChange={e => updateField("depositionDate", e.target.value)} /></div>
                           </div>
                           <div style={fieldGroup}>
                             <label style={labelStyle}>Notes</label>
@@ -8920,6 +8987,19 @@ function buildAllCaseFields(caseData, parties, insurance, experts) {
     if (d.email) add("Parties", `${prefix} — Email`, d.email);
     if (d.representedBy) add("Parties", `${prefix} — Represented By`, d.representedBy);
     if (d.isOurClient) add("Parties", "Our Client", name);
+    if (p.entityKind === "individual") {
+      if (d.ssnLast4) add("Parties", `${prefix} — SSN (last 4)`, d.ssnLast4);
+      if (d.driversLicense) add("Parties", `${prefix} — Driver's License #`, d.driversLicense);
+      if (d.employer) add("Parties", `${prefix} — Employer`, d.employer);
+      if (d.occupation) add("Parties", `${prefix} — Occupation`, d.occupation);
+      if (d.maritalStatus) add("Parties", `${prefix} — Marital Status`, d.maritalStatus);
+      if (d.dob) add("Parties", `${prefix} — Date of Birth`, fmt(d.dob));
+      if (d.dateOfDeath) add("Parties", `${prefix} — Date of Death`, fmt(d.dateOfDeath));
+      if (d.isMinor) add("Parties", `${prefix} — Minor`, "Yes");
+    } else {
+      if (d.stateOfIncorporation) add("Parties", `${prefix} — State of Incorporation`, d.stateOfIncorporation);
+      if (d.principalPlaceOfBusiness) add("Parties", `${prefix} — Principal Place of Business`, d.principalPlaceOfBusiness);
+    }
   });
   (insurance || []).forEach(ins => {
     const d = ins.data || {};
@@ -8928,10 +9008,17 @@ function buildAllCaseFields(caseData, parties, insurance, experts) {
     if (d.adjusterName) add("Insurance", `${label} — Adjuster`, d.adjusterName);
     if (d.adjusterPhone) add("Insurance", `${label} — Adjuster Phone`, d.adjusterPhone);
     if (d.adjusterEmail) add("Insurance", `${label} — Adjuster Email`, d.adjusterEmail);
+    if (d.adjusterFax) add("Insurance", `${label} — Adjuster Fax`, d.adjusterFax);
+    if (d.adjusterAddress) add("Insurance", `${label} — Adjuster Address`, d.adjusterAddress);
     if (d.policyNum) add("Insurance", `${label} — Policy #`, d.policyNum);
     if (d.claimNum) add("Insurance", `${label} — Claim #`, d.claimNum);
     if (d.coverageType) add("Insurance", `${label} — Coverage Type`, d.coverageType);
     if (d.policyLimit) add("Insurance", `${label} — Policy Limit`, `$${d.policyLimit}`);
+    if (d.reservationOfRights) add("Insurance", `${label} — Reservation of Rights`, d.reservationOfRights);
+    if (d.rorDate) add("Insurance", `${label} — ROR Date`, fmt(d.rorDate));
+    if (d.tenderDate) add("Insurance", `${label} — Tender Date`, fmt(d.tenderDate));
+    if (d.denialDate) add("Insurance", `${label} — Denial Date`, fmt(d.denialDate));
+    if (d.sirAmount) add("Insurance", `${label} — SIR/Deductible`, d.sirAmount);
   });
   (experts || []).forEach(ex => {
     const d = ex.data || {};
@@ -8940,8 +9027,13 @@ function buildAllCaseFields(caseData, parties, insurance, experts) {
     add("Experts", `${prefix} — Name`, d.name);
     if (d.type) add("Experts", `${prefix} — Type`, d.type);
     if (d.company) add("Experts", `${prefix} — Company`, d.company);
+    if (d.specialty) add("Experts", `${prefix} — Specialty`, d.specialty);
     if (d.phone) add("Experts", `${prefix} — Phone`, d.phone);
     if (d.email) add("Experts", `${prefix} — Email`, d.email);
+    if (d.rate) add("Experts", `${prefix} — Rate`, d.rate);
+    if (d.retainedDate) add("Experts", `${prefix} — Retained Date`, fmt(d.retainedDate));
+    if (d.reportDate) add("Experts", `${prefix} — Report Date`, fmt(d.reportDate));
+    if (d.depositionDate) add("Experts", `${prefix} — Deposition Date`, fmt(d.depositionDate));
   });
   return fields;
 }
