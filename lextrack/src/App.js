@@ -4022,9 +4022,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         return (
                           <div key={entry.id} style={{ border: "1px solid var(--c-border)", borderRadius: 6, marginBottom: 8, overflow: "hidden" }}>
                             <div onClick={() => setExpandedMedEntry(isExp ? null : entry.id)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent" }}>
-                              <div style={{ display: "flex", gap: 16, alignItems: "center", flex: 1 }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text)", minWidth: 180 }}>{entry.provider || "No provider"}</span>
-                                <span style={{ fontSize: 12, color: "var(--c-text2)" }}>{entry.dateOfService ? fmt(entry.dateOfService) : "No date"}</span>
+                              <div style={{ display: "flex", gap: 16, alignItems: "center", flex: 1, minWidth: 0 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text)", minWidth: 140, flexShrink: 0 }}>{entry.provider || "No provider"}</span>
+                                <span style={{ fontSize: 12, color: "var(--c-text2)", flexShrink: 0 }}>{entry.dateOfService ? fmt(entry.dateOfService) : "No date"}</span>
+                                {entry.shortDesc && <span style={{ fontSize: 12, color: "var(--c-text2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>— {entry.shortDesc}</span>}
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                 <button onClick={e => { e.stopPropagation(); setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: m.entries.filter(x => x.id !== entry.id) } : m)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A9096", fontSize: 13, padding: "2px 4px" }}>✕</button>
@@ -4033,7 +4034,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                             </div>
                             {isExp && (
                               <div style={{ padding: "10px 12px", borderTop: "1px solid var(--c-border)" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 1fr", gap: 10, marginBottom: 10 }}>
                                   <div>
                                     <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Provider</div>
                                     <div style={{ position: "relative" }}>
@@ -4047,6 +4048,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                                     <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Date of Service</div>
                                     <input type="date" value={entry.dateOfService || ""} onChange={e => updEntry(entry.id, "dateOfService", e.target.value)} style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
                                   </div>
+                                  <div>
+                                    <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Description</div>
+                                    <input value={entry.shortDesc || ""} onChange={e => updEntry(entry.id, "shortDesc", e.target.value)} placeholder="Brief description" style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
+                                  </div>
                                 </div>
                                 <div>
                                   <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Summary</div>
@@ -4058,7 +4063,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         );
                       })}
                       <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginTop: 4 }} onClick={() => {
-                        const newEntry = { id: newId(), provider: "", dateOfService: "", summary: "" };
+                        const newEntry = { id: newId(), provider: "", dateOfService: "", shortDesc: "", summary: "" };
                         setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: [...m.entries, newEntry] } : m));
                         setExpandedMedEntry(newEntry.id);
                       }}>+ Add Treatment</button>
@@ -4920,6 +4925,7 @@ function MedicalPrintView({ c, medParty, onClose }) {
           <div style={{ display: "flex", gap: 24, marginBottom: 8 }}>
             <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Provider:</span> <span style={{ fontSize: 13, fontWeight: 600, color: "#1F2428" }}>{entry.provider || "—"}</span></div>
             <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Date of Service:</span> <span style={{ fontSize: 13, color: "#1F2428" }}>{entry.dateOfService ? fmt(entry.dateOfService) : "—"}</span></div>
+            {entry.shortDesc && <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Description:</span> <span style={{ fontSize: 13, color: "#1F2428" }}>{entry.shortDesc}</span></div>}
           </div>
           <div style={{ fontSize: 12, color: "#1F2428", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{entry.summary || "No summary provided."}</div>
         </div>
