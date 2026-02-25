@@ -130,12 +130,19 @@ router.get("/case-counts/batch", requireAuth, async (req, res) => {
        GROUP BY c.id`
     );
     const adjusterCounts = await pool.query(
-      `SELECT c.id AS contact_id, COUNT(DISTINCT ci.case_id) AS cnt
-       FROM contacts c
-       JOIN case_insurance ci ON ci.data->>'adjusterName' ILIKE c.name
-       JOIN cases cs ON cs.id = ci.case_id AND cs.deleted_at IS NULL
-       WHERE c.category = 'Adjuster' AND c.deleted_at IS NULL
-       GROUP BY c.id`
+      `SELECT c.id AS contact_id, COUNT(DISTINCT case_id) AS cnt FROM (
+         SELECT c.id, ci.case_id
+         FROM contacts c
+         JOIN case_insurance ci ON ci.data->>'adjusterName' ILIKE c.name
+         JOIN cases cs ON cs.id = ci.case_id AND cs.deleted_at IS NULL
+         WHERE c.category = 'Adjuster' AND c.deleted_at IS NULL
+         UNION
+         SELECT c.id, cs.id AS case_id
+         FROM contacts c
+         JOIN cases cs ON cs.adjuster ILIKE c.name AND cs.deleted_at IS NULL
+         WHERE c.category = 'Adjuster' AND c.deleted_at IS NULL AND c.name != ''
+       ) sub
+       GROUP BY sub.id`
     );
     const miscCounts = await pool.query(
       `SELECT c.id AS contact_id, COUNT(DISTINCT mc.case_id) AS cnt
