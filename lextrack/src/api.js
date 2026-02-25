@@ -92,6 +92,7 @@ export const apiDeleteContactNote  = (id)        => apiFetch(`/api/contact-notes
 // Correspondence
 export const apiGetCorrespondence    = (caseId) => apiFetch(`/api/correspondence/${caseId}`);
 export const apiDeleteCorrespondence = (id)     => apiFetch(`/api/correspondence/${id}`, { method: "DELETE" });
+export const apiGetAllCorrespondence = ()       => apiFetch("/api/correspondence/all/summary");
 // Templates
 export const apiGetTemplates      = ()         => apiFetch("/api/templates");
 export const apiDeleteTemplate    = (id)       => apiFetch(`/api/templates/${id}`, { method: "DELETE" });

@@ -12,7 +12,7 @@ import {
   apiGetContacts, apiGetDeletedContacts, apiCreateContact, apiUpdateContact, apiDeleteContact, apiRestoreContact, apiMergeContacts,
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
   apiAiSearch,
-  apiGetCorrespondence, apiDeleteCorrespondence,
+  apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
   apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument,
 } from "./api.js";
 
@@ -808,6 +808,7 @@ export default function App() {
   const [caseNotes,    setCaseNotes]    = useState({});
   const [caseLinks,    setCaseLinks]    = useState({});
   const [caseActivity, setCaseActivity] = useState({});
+  const [allCorrespondence, setAllCorrespondence] = useState([]);
   const [deletedCases, setDeletedCases] = useState(null); // null = not yet loaded
   const [userOffices,  setUserOffices]  = useState({}); // { [userId]: string[] }
   const [allUsers,     setAllUsers]     = useState(USERS);
@@ -840,13 +841,15 @@ export default function App() {
       apiGetTasks(),
       apiGetDeadlines(),
       apiGetUsers(),
+      apiGetAllCorrespondence(),
     ];
     if (isAdmin) fetches.push(apiGetDeletedUsers());
     Promise.all(fetches)
-      .then(([cases, fetchedTasks, deadlines, users, deletedUsersResult]) => {
+      .then(([cases, fetchedTasks, deadlines, users, corr, deletedUsersResult]) => {
         setAllCases(cases);
         setTasks(fetchedTasks);
         setAllDeadlines(deadlines);
+        setAllCorrespondence(corr || []);
         const allU = [...users, ...(deletedUsersResult || []).map(u => ({ ...u, deletedAt: u.deletedAt || u.deleted_at }))];
         USERS.splice(0, USERS.length, ...users);
         setAllUsers(allU);
@@ -1330,7 +1333,7 @@ export default function App() {
         {view === "documents" && <DocumentsView currentUser={currentUser} allCases={allCases} />}
         {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} userOffices={userOffices} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} userOffices={userOffices} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} />}
-        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} />}
+        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} />}
         {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} />}
         {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} userOffices={userOffices} setUserOffices={setUserOffices} allUsers={allUsers} setAllUsers={setAllUsers} />}
       </div>
@@ -5333,7 +5336,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
 
 // ─── Staff View ───────────────────────────────────────────────────────────────
 // ─── Time Log View ────────────────────────────────────────────────────────────
-function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
+function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [] }) {
   const thisMonth = today.slice(0, 7); // "YYYY-MM"
   const [fromDate, setFromDate] = useState(thisMonth + "-01");
   const [toDate,   setToDate]   = useState(today);
@@ -5418,10 +5421,29 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
       });
     });
 
+    // Correspondence — attribute to sender if they're a firm user
+    const userEmail = (allUsers.find(u => u.id === currentUser.id) || {}).email || "";
+    correspondence.forEach(email => {
+      if (!email.fromEmail) return;
+      const senderIsCurrentUser = userEmail && email.fromEmail.toLowerCase() === userEmail.toLowerCase();
+      if (!senderIsCurrentUser) return;
+      if (!inRange(email.receivedAt)) return;
+      const cs = allCases.find(c => c.id === email.caseId);
+      result.push({
+        date:     email.receivedAt,
+        type:     "Email Sent",
+        caseTitle: cs?.title || `Case #${email.caseId}`,
+        fileNum:  cs?.fileNum || "",
+        detail:   email.subject || "(no subject)",
+        category: "",
+        time:     "",
+      });
+    });
+
     // Sort newest first
     result.sort((a, b) => new Date(b.date) - new Date(a.date));
     return result;
-  }, [tasks, caseNotes, currentUser.id, allCases, fromDate, toDate]);
+  }, [tasks, caseNotes, currentUser.id, allCases, fromDate, toDate, correspondence, allUsers]);
 
   const fmtDateTime = (iso) => {
     const d = new Date(iso);
@@ -5454,13 +5476,14 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes }) {
 
   const taskCount = rows.filter(r => r.type === "Task Completed").length;
   const noteCount = rows.filter(r => r.type === "Note Added").length;
+  const emailCount = rows.filter(r => r.type === "Email Sent").length;
 
   return (
     <>
       <div className="topbar">
         <div>
           <div className="topbar-title">Time Log</div>
-          <div className="topbar-subtitle">{currentUser.name} · {taskCount} task{taskCount !== 1 ? "s" : ""} completed · {noteCount} note{noteCount !== 1 ? "s" : ""} added</div>
+          <div className="topbar-subtitle">{currentUser.name} · {taskCount} task{taskCount !== 1 ? "s" : ""} completed · {noteCount} note{noteCount !== 1 ? "s" : ""} added{emailCount > 0 ? ` · ${emailCount} email${emailCount !== 1 ? "s" : ""} sent` : ""}</div>
         </div>
         <div className="topbar-actions">
           <button

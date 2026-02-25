@@ -36,6 +36,25 @@ const toFrontend = (row) => {
   };
 };
 
+router.get("/all/summary", requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, case_id, from_email, from_name, subject, received_at FROM case_correspondence ORDER BY received_at DESC"
+    );
+    return res.json(rows.map(r => ({
+      id: r.id,
+      caseId: r.case_id,
+      fromEmail: r.from_email,
+      fromName: r.from_name,
+      subject: r.subject,
+      receivedAt: r.received_at instanceof Date ? r.received_at.toISOString() : r.received_at,
+    })));
+  } catch (err) {
+    console.error("Correspondence summary error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.get("/attachment/:id/:index", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
