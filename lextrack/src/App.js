@@ -1322,7 +1322,7 @@ export default function App() {
             { id: "contacts", icon: "📇", label: "Contacts" },
             { id: "staff", icon: "👥", label: "Staff" },
           ].map(item => (
-            <div key={item.id} className={`nav-item ${view === item.id ? "active" : ""}`} onClick={() => { setView(item.id); if (item.id !== "cases") setSelectedCase(null); }}>
+            <div key={item.id} className={`nav-item ${view === item.id ? "active" : ""}`} onClick={() => { setView(item.id); setSelectedCase(null); }}>
               <span className="nav-icon">{item.icon}</span>
               {item.label}
               {item.badge && <span className="nav-badge">{item.badge}</span>}
