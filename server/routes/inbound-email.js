@@ -71,9 +71,20 @@ router.post("/", upload.any(), async (req, res) => {
       }
     }
 
+    let envelopeTo = "";
+    if (req.body.envelope) {
+      try {
+        const env = JSON.parse(req.body.envelope);
+        envelopeTo = (env.to || []).join(" ");
+        console.log("Envelope to:", envelopeTo);
+      } catch (e) {
+        console.log("Envelope parse error:", e.message);
+      }
+    }
+
     console.log("=== END DEBUG ===");
 
-    const allAddresses = `${to} ${cc}`.toLowerCase();
+    const allAddresses = `${to} ${cc} ${envelopeTo}`.toLowerCase();
     const caseMatch = allAddresses.match(/case-(\d+)@/);
     if (!caseMatch) {
       console.log("Inbound email: no case address found in:", allAddresses);
