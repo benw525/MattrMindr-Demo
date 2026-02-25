@@ -3050,7 +3050,16 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 const displayName = party.entityKind === "corporation"
                   ? (d.entityName || "Unnamed Entity")
                   : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ") || "Unnamed Party";
-                const repContact = d.representedById ? allContacts.find(ct => ct.id === d.representedById) : null;
+                const PARTY_TYPE_COLORS = {
+                  "Plaintiff": { bg: "#E8F4FD", text: "#1A6FA0", border: "#B3D9F0" },
+                  "Defendant": { bg: "#FDECEA", text: "#9A3030", border: "#F0B8B3" },
+                  "Cross-Defendant": { bg: "#FDF0E6", text: "#8A5A1E", border: "#F0D4A8" },
+                  "Third-Party Defendant": { bg: "#F5E6F5", text: "#7A3080", border: "#D8B0D8" },
+                  "Third-Party Plaintiff": { bg: "#E6F0F5", text: "#306080", border: "#B0C8D8" },
+                  "Intervenor": { bg: "#EAF5EA", text: "#2F6A3A", border: "#B3D8B8" },
+                  "Garnishee": { bg: "#F5F0E6", text: "#6A5A2F", border: "#D8CCA8" },
+                };
+                const typeColor = PARTY_TYPE_COLORS[party.partyType] || { bg: "#EDEFF2", text: "#5D6268", border: "#D6D8DB" };
 
                 const updateField = (field, value) => {
                   const newData = { ...(partyPendingData.current[party.id] || d), [field]: value };
@@ -3079,7 +3088,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         <span style={{ fontSize: 14 }}>{party.entityKind === "corporation" ? "🏢" : "👤"}</span>
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>{displayName}</div>
-                          <div style={{ fontSize: 11, color: "#8A9096" }}>{party.partyType}{repContact ? ` · Rep: ${repContact.name}` : ""}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 4, background: typeColor.bg, color: typeColor.text, border: `1px solid ${typeColor.border}`, letterSpacing: "0.02em" }}>{party.partyType}</span>
+                            {d.representedBy && <span style={{ fontSize: 11, color: "#8A9096" }}>· Rep: {d.representedBy}</span>}
+                          </div>
                         </div>
                       </div>
                       <span style={{ fontSize: 12, color: "#8A9096" }}>{isExp ? "▲" : "▼"}</span>
@@ -3186,10 +3198,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
                         {/* Represented By */}
                         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Represented By</div>
-                        <select style={{ ...inputStyle, maxWidth: 350, marginBottom: 12 }} value={d.representedById || ""} onChange={e => updateField("representedById", e.target.value ? parseInt(e.target.value) : null)}>
-                          <option value="">— None —</option>
-                          {allContacts.filter(ct => ct.category === "Attorneys" || ct.category === "Attorney").map(ct => <option key={ct.id} value={ct.id}>{ct.name}</option>)}
-                        </select>
+                        <input style={{ ...inputStyle, maxWidth: 350, marginBottom: 12 }} value={d.representedBy || ""} placeholder="Attorney / firm name" onChange={e => updateField("representedBy", e.target.value)} />
 
                         {/* Delete */}
                         <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 10, display: "flex", justifyContent: "flex-end" }}>
