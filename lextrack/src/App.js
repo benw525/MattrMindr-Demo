@@ -2714,7 +2714,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: "var(--c-text-h)" }}>Team</div>
               <button onClick={() => setShowTeamPopup(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8A9096", lineHeight: 1, padding: "2px 4px" }}>✕</button>
             </div>
-            {editMode && (draft.offices || []).length > 0 && filteredUsersForTeam.length < USERS.length && (
+            {(draft.offices || []).length > 0 && filteredUsersForTeam.length < USERS.length && (
               <div style={{ fontSize: 11, color: "#1E2A3A", marginBottom: 12, fontStyle: "italic" }}>
                 Showing {filteredUsersForTeam.length} staff in selected office(s)
               </div>
@@ -2729,34 +2729,27 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 onChange={val => setAndLog(f.key, val)}
                 canRemove={false}
                 userList={filteredUsersForTeam}
-                readOnly={!editMode}
+                readOnly={false}
               />
             ))}
             {customTeam.map(m => (
               <div key={m.id} className="edit-field">
                 <div className="edit-field-key" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span>{m.role}</span>
-                  {editMode && canRemove && (
-                    <button onClick={() => setCustomTeam(p => p.filter(t => t.id !== m.id))} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "0 2px" }}>✕</button>
-                  )}
+                  <button onClick={() => setCustomTeam(p => p.filter(t => t.id !== m.id))} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "0 2px" }}>✕</button>
                 </div>
-                {editMode ? (
-                  <select
-                    value={m.userId || 0}
-                    onChange={e => setCustomTeam(p => p.map(t => t.id === m.id ? { ...t, userId: parseInt(e.target.value) } : t))}
-                    className="edit-field-value"
-                  >
-                    <option value={0}>— None —</option>
-                    {filteredUsersForTeam.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
-                ) : (
-                  <div className="edit-field-value">{USERS.find(u => u.id === m.userId)?.name || "—"}</div>
-                )}
+                <select
+                  value={m.userId || 0}
+                  onChange={e => setCustomTeam(p => p.map(t => t.id === m.id ? { ...t, userId: parseInt(e.target.value) } : t))}
+                  className="edit-field-value"
+                >
+                  <option value={0}>— None —</option>
+                  {filteredUsersForTeam.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
               </div>
             ))}
-            {editMode && (
-              <div style={{ marginTop: 10 }}>
-                {addingTeamSlot && (
+            <div style={{ marginTop: 10 }}>
+              {addingTeamSlot && (
                   <div style={{ marginBottom: 8 }}>
                     <input
                       placeholder="Role (e.g. Co-Counsel, Investigator)"
@@ -2789,8 +2782,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 <button className="btn btn-outline btn-sm" style={{ fontSize: 11, width: "100%" }} onClick={() => setAddingTeamSlot(s => !s)}>
                   {addingTeamSlot ? "Cancel" : "+ Add Team Slot"}
                 </button>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -3406,7 +3398,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
             <div style={{ borderTop: "1px solid var(--c-border)", margin: "8px 0 32px" }} />
 
-            {/* Insurance section */}
+            {/* Two-column: Insurance + (right column TBD) */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 48px", marginBottom: 32 }}>
+
+            {/* Left column: Insurance */}
             <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
               <div className="case-overlay-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>Insurance ({insurance.length})</span>
@@ -3589,6 +3584,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               })}
             </div>
 
+              {/* Right column: TBD */}
+              <div />
+
+            </div>
 
           </div>
         )}
