@@ -2373,6 +2373,13 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [showAddParty, setShowAddParty] = useState(false);
   const [newPartyForm, setNewPartyForm] = useState({ name: "", dob: "", collateralSource: false });
   const [caseExpenses, setCaseExpenses] = useState(c.caseExpenses || []);
+  const [medicalSummary, setMedicalSummary] = useState(c.medicalSummary || []);
+  const [showAddMedParty, setShowAddMedParty] = useState(false);
+  const [medPartySelect, setMedPartySelect] = useState("");
+  const [medPartyDob, setMedPartyDob] = useState("");
+  const [expandedMedEntry, setExpandedMedEntry] = useState(null);
+  const [showMedPrint, setShowMedPrint] = useState(null);
+  const [medFilters, setMedFilters] = useState({});
   const [expenseServiceFilter, setExpenseServiceFilter] = useState("");
   const [expensePaidFilter, setExpensePaidFilter] = useState("all");
   const [customTeam, setCustomTeam] = useState(c._customTeam || []);
@@ -2502,10 +2509,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   // Auto-save on draft/customFields/customDates/billing/expenses change (debounced)
   useEffect(() => {
     const t = setTimeout(() => {
-      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, _hiddenFields: hiddenFields, billingParties, caseExpenses, _customTeam: customTeam });
+      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, _hiddenFields: hiddenFields, billingParties, caseExpenses, medicalSummary, _customTeam: customTeam });
     }, 400);
     return () => clearTimeout(t);
-  }, [draft, customFields, customDates, billingParties, caseExpenses, customTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft, customFields, customDates, billingParties, caseExpenses, medicalSummary, customTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Field label lookup for human-readable log entries
   const fieldLabel = (key) => {
@@ -2934,6 +2941,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         <div className="case-overlay-tabs">
           <div className={`case-overlay-tab ${activeTab === "overview" ? "active" : ""}`} onClick={() => setActiveTab("overview")}>Overview</div>
           <div className={`case-overlay-tab ${activeTab === "details" ? "active" : ""}`} onClick={() => setActiveTab("details")}>Details</div>
+          <div className={`case-overlay-tab ${activeTab === "medical" ? "active" : ""}`} onClick={() => setActiveTab("medical")}>Medical Summary</div>
           <div className={`case-overlay-tab ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>Billing Summary</div>
           <div className={`case-overlay-tab ${activeTab === "expenses" ? "active" : ""}`} onClick={() => setActiveTab("expenses")}>Case Expenses</div>
           <div className={`case-overlay-tab ${activeTab === "correspondence" ? "active" : ""}`} onClick={() => setActiveTab("correspondence")}>
@@ -3299,10 +3307,11 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         </div>
                         {party.entityKind === "individual" ? (
                           <>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 140px", gap: 10, marginBottom: 10 }}>
                               <div style={fieldGroup}><label style={labelStyle}>First Name</label><input style={inputStyle} value={d.firstName || ""} onChange={e => updateField("firstName", e.target.value)} /></div>
                               <div style={fieldGroup}><label style={labelStyle}>Middle Name</label><input style={inputStyle} value={d.middleName || ""} onChange={e => updateField("middleName", e.target.value)} /></div>
                               <div style={fieldGroup}><label style={labelStyle}>Last Name</label><input style={inputStyle} value={d.lastName || ""} onChange={e => updateField("lastName", e.target.value)} /></div>
+                              <div style={fieldGroup}><label style={labelStyle}>Date of Birth</label><input type="date" style={inputStyle} value={d.dob || ""} onChange={e => updateField("dob", e.target.value)} /></div>
                             </div>
                             <div style={fieldGroup}><label style={labelStyle}>Street Address</label><input style={inputStyle} value={d.address || ""} onChange={e => updateField("address", e.target.value)} /></div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px 100px", gap: 10, marginBottom: 10 }}>
@@ -3842,6 +3851,189 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
           </div>
         )}
+
+        {/* ── Medical Summary Tab ── */}
+        {activeTab === "medical" && (() => {
+          const fmt = (d) => { if (!d) return ""; const [y, m, dy] = d.split("-"); return `${m}/${dy}/${y}`; };
+          const allProviders = [...new Set([
+            ...medicalSummary.flatMap(mp => (mp.entries || []).map(e => e.provider).filter(Boolean)),
+            ...billingParties.flatMap(bp => (bp.medRows || []).map(r => r.provider).filter(Boolean)),
+          ])].sort();
+          return (
+            <div className="case-overlay-body">
+              {showAddMedParty && (
+                <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAddMedParty(false)}>
+                  <div className="modal-box" style={{ maxWidth: 380 }}>
+                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 16 }}>Add Party to Medical Summary</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Select Party</div>
+                        <select value={medPartySelect} onChange={e => {
+                          setMedPartySelect(e.target.value);
+                          const p = parties.find(x => String(x.id) === e.target.value);
+                          setMedPartyDob(p?.data?.dob || "");
+                        }} style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }}>
+                          <option value="">— Select a party —</option>
+                          {parties.filter(p => !medicalSummary.some(ms => ms.partyId === p.id)).map(p => {
+                            const n = p.entityKind === "corporation" ? (p.data?.entityName || "Unnamed") : [p.data?.firstName, p.data?.middleName, p.data?.lastName].filter(Boolean).join(" ") || "Unnamed";
+                            return <option key={p.id} value={p.id}>{n} ({p.partyType})</option>;
+                          })}
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Date of Birth</div>
+                        <input type="date" value={medPartyDob} onChange={e => setMedPartyDob(e.target.value)} style={{ width: "100%", boxSizing: "border-box", fontSize: 13, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setShowAddMedParty(false); setMedPartySelect(""); setMedPartyDob(""); }}>Cancel</button>
+                      <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} disabled={!medPartySelect} onClick={async () => {
+                        const p = parties.find(x => String(x.id) === medPartySelect);
+                        if (!p) return;
+                        const n = p.entityKind === "corporation" ? (p.data?.entityName || "Unnamed") : [p.data?.firstName, p.data?.middleName, p.data?.lastName].filter(Boolean).join(" ") || "Unnamed";
+                        if (medPartyDob && !p.data?.dob) {
+                          try {
+                            await apiUpdateParty(p.id, { data: { ...p.data, dob: medPartyDob } });
+                            setParties(prev => prev.map(x => x.id === p.id ? { ...x, data: { ...x.data, dob: medPartyDob } } : x));
+                          } catch (err) { console.error("Failed to update party DOB:", err); }
+                          const bp = billingParties.find(b => b.name.toLowerCase() === n.toLowerCase());
+                          if (bp && !bp.dob) {
+                            setBillingParties(prev => prev.map(b => b.id === bp.id ? { ...b, dob: medPartyDob } : b));
+                          }
+                        }
+                        setMedicalSummary(prev => [...prev, { id: newId(), partyId: p.id, name: n, dob: medPartyDob || p.data?.dob || "", entries: [] }]);
+                        log("Medical Summary Party Added", `Added ${n} to medical summary`);
+                        setShowAddMedParty(false);
+                        setMedPartySelect("");
+                        setMedPartyDob("");
+                      }}>Add Party</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showMedPrint && (() => {
+                const mp = medicalSummary.find(m => m.id === showMedPrint);
+                if (!mp) return null;
+                return <MedicalPrintView c={c} medParty={mp} onClose={() => setShowMedPrint(null)} />;
+              })()}
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+                <div style={{ fontSize: 13, color: "var(--c-text2)" }}>{medicalSummary.length} {medicalSummary.length === 1 ? "party" : "parties"}</div>
+                <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={() => {
+                  if (parties.length === 0) { alert("Add parties in the Details tab first."); return; }
+                  setShowAddMedParty(true);
+                }}>+ Add Party</button>
+              </div>
+
+              {medicalSummary.length === 0 && (
+                <div style={{ textAlign: "center", padding: "60px 0", color: "#8A9096", fontSize: 13 }}>No parties added yet. Click "+ Add Party" to begin tracking medical treatment summaries.</div>
+              )}
+
+              {medicalSummary.map(mp => {
+                const entries = mp.entries || [];
+                const providerOptions = [...new Set([...entries.map(e => e.provider).filter(Boolean), ...allProviders])].sort();
+                const mf = medFilters[mp.id] || {};
+                const provFilter = mf.provider || "";
+                const dateFrom = mf.dateFrom || "";
+                const dateTo = mf.dateTo || "";
+                const setMF = (key, val) => setMedFilters(prev => ({ ...prev, [mp.id]: { ...prev[mp.id], [key]: val } }));
+                const filtered = entries.filter(e => {
+                  if (provFilter && e.provider !== provFilter) return false;
+                  if (dateFrom && e.dateOfService < dateFrom) return false;
+                  if (dateTo && e.dateOfService > dateTo) return false;
+                  return true;
+                });
+                const updEntry = (eId, key, val) => setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: m.entries.map(e => e.id === eId ? { ...e, [key]: val } : e) } : m));
+                return (
+                  <div key={mp.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 24, overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--c-bg2)", borderBottom: "1px solid var(--c-border)" }}>
+                      <div>
+                        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 600, color: "var(--c-text-h)" }}>{mp.name}</div>
+                        <div style={{ fontSize: 12, color: "#8A9096", marginTop: 2 }}>
+                          {mp.dob ? `DOB: ${fmt(mp.dob)}` : "No DOB on file"} · {entries.length} treatment{entries.length !== 1 ? "s" : ""}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => setShowMedPrint(mp.id)}>Print</button>
+                        <button onClick={() => { log("Medical Summary Party Removed", `Removed ${mp.name} from medical summary`); setMedicalSummary(prev => prev.filter(m => m.id !== mp.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#e05252", fontSize: 18, lineHeight: 1 }}>✕</button>
+                      </div>
+                    </div>
+                    <div style={{ padding: 16 }}>
+                      {entries.length > 0 && (
+                        <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: "#8A9096", marginBottom: 2 }}>Provider</div>
+                            <select value={provFilter} onChange={e => setMF("provider", e.target.value)} style={{ fontSize: 12, padding: "4px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }}>
+                              <option value="">All Providers</option>
+                              {providerOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: "#8A9096", marginBottom: 2 }}>From</div>
+                            <input type="date" value={dateFrom} onChange={e => setMF("dateFrom", e.target.value)} style={{ fontSize: 12, padding: "4px 6px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: "#8A9096", marginBottom: 2 }}>To</div>
+                            <input type="date" value={dateTo} onChange={e => setMF("dateTo", e.target.value)} style={{ fontSize: 12, padding: "4px 6px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
+                          </div>
+                          {(provFilter || dateFrom || dateTo) && (
+                            <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => setMedFilters(prev => ({ ...prev, [mp.id]: {} }))}>Clear</button>
+                          )}
+                        </div>
+                      )}
+                      {filtered.map(entry => {
+                        const isExp = expandedMedEntry === entry.id;
+                        return (
+                          <div key={entry.id} style={{ border: "1px solid var(--c-border)", borderRadius: 6, marginBottom: 8, overflow: "hidden" }}>
+                            <div onClick={() => setExpandedMedEntry(isExp ? null : entry.id)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent" }}>
+                              <div style={{ display: "flex", gap: 16, alignItems: "center", flex: 1 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text)", minWidth: 180 }}>{entry.provider || "No provider"}</span>
+                                <span style={{ fontSize: 12, color: "var(--c-text2)" }}>{entry.dateOfService ? fmt(entry.dateOfService) : "No date"}</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <button onClick={e => { e.stopPropagation(); setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: m.entries.filter(x => x.id !== entry.id) } : m)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A9096", fontSize: 13, padding: "2px 4px" }}>✕</button>
+                                <span style={{ fontSize: 11, color: "#8A9096" }}>{isExp ? "▲" : "▼"}</span>
+                              </div>
+                            </div>
+                            {isExp && (
+                              <div style={{ padding: "10px 12px", borderTop: "1px solid var(--c-border)" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                                  <div>
+                                    <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Provider</div>
+                                    <div style={{ position: "relative" }}>
+                                      <input list={`prov-list-${entry.id}`} value={entry.provider || ""} onChange={e => updEntry(entry.id, "provider", e.target.value)} placeholder="Provider name" style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
+                                      <datalist id={`prov-list-${entry.id}`}>
+                                        {allProviders.map(p => <option key={p} value={p} />)}
+                                      </datalist>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Date of Service</div>
+                                    <input type="date" value={entry.dateOfService || ""} onChange={e => updEntry(entry.id, "dateOfService", e.target.value)} style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Summary</div>
+                                  <textarea value={entry.summary || ""} onChange={e => updEntry(entry.id, "summary", e.target.value)} placeholder="Enter treatment summary..." style={{ width: "100%", boxSizing: "border-box", minHeight: 120, fontSize: 12, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", fontFamily: "inherit", resize: "vertical", lineHeight: 1.5 }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginTop: 4 }} onClick={() => {
+                        const newEntry = { id: newId(), provider: "", dateOfService: "", summary: "" };
+                        setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: [...m.entries, newEntry] } : m));
+                        setExpandedMedEntry(newEntry.id);
+                      }}>+ Add Treatment</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* ── Billing Summary Tab ── */}
         {activeTab === "billing" && (() => {
@@ -4665,6 +4857,38 @@ function BillingPrintView({ c, billingParties, onClose }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function MedicalPrintView({ c, medParty, onClose }) {
+  const handlePrint = () => { window.print(); };
+  const fmt = (d) => { if (!d) return ""; const [y, m, dy] = d.split("-"); return `${m}/${dy}/${y}`; };
+  const entries = (medParty.entries || []).filter(e => e.provider || e.dateOfService || e.summary);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 2000, overflow: "auto", padding: "40px 60px" }}>
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700 }}>Medical Summary — {medParty.name}</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={handlePrint}>Print</button>
+          <button className="btn btn-outline" onClick={onClose}>Close</button>
+        </div>
+      </div>
+      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{c.title}</div>
+      {c.caseNum && <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 8 }}>Case No. {c.caseNum}</div>}
+      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, marginBottom: 2, marginTop: 16 }}>{medParty.name}</div>
+      <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 20 }}>{medParty.dob ? `DOB: ${fmt(medParty.dob)}` : ""}</div>
+      {entries.length === 0 && <p style={{ color: "#8A9096", fontStyle: "italic" }}>No treatment entries on file.</p>}
+      {entries.map(entry => (
+        <div key={entry.id} style={{ marginBottom: 24, pageBreakInside: "avoid", borderBottom: "1px solid #e2e8f0", paddingBottom: 16 }}>
+          <div style={{ display: "flex", gap: 24, marginBottom: 8 }}>
+            <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Provider:</span> <span style={{ fontSize: 13, fontWeight: 600, color: "#1F2428" }}>{entry.provider || "—"}</span></div>
+            <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Date of Service:</span> <span style={{ fontSize: 13, color: "#1F2428" }}>{entry.dateOfService ? fmt(entry.dateOfService) : "—"}</span></div>
+          </div>
+          <div style={{ fontSize: 12, color: "#1F2428", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{entry.summary || "No summary provided."}</div>
+        </div>
+      ))}
     </div>
   );
 }
