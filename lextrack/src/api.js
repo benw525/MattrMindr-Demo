@@ -127,11 +127,11 @@ export async function apiSaveTemplate(file, name, tags, placeholders, visibility
   return res.json();
 }
 
-export async function apiGenerateDocument(templateId, values) {
+export async function apiGenerateDocument(templateId, values, caseId, includeCoS) {
   const res = await fetch(`/api/templates/${templateId}/generate`, {
     method: "POST", credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ values }),
+    body: JSON.stringify({ values, caseId: caseId || null, includeCoS: !!includeCoS }),
   });
   if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `Generate error ${res.status}`); }
   return res.blob();

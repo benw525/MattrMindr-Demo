@@ -3,11 +3,95 @@ const multer = require("multer");
 const mammoth = require("mammoth");
 const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
+const path = require("path");
+const fs = require("fs");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+const SYSTEM_TEMPLATES_DIR = path.join(__dirname, "..", "system-templates");
+
+function loadSystemTemplate(filename) {
+  const filePath = path.join(SYSTEM_TEMPLATES_DIR, filename);
+  if (!fs.existsSync(filePath)) return null;
+  return fs.readFileSync(filePath);
+}
+
+function extractBodyXml(buffer) {
+  const zip = new PizZip(buffer);
+  const docFile = zip.file("word/document.xml");
+  if (!docFile) return "";
+  const xml = docFile.asText();
+  const bodyMatch = xml.match(/<w:body>([\s\S]*)<\/w:body>/);
+  if (!bodyMatch) return "";
+  let body = bodyMatch[1];
+  body = body.replace(/<w:sectPr[\s\S]*?<\/w:sectPr>/g, "");
+  return body.trim();
+}
+
+function escapeXml(str) {
+  return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
+function buildCoSXml(cosBuffer, servedParties) {
+  const bodyXml = extractBodyXml(cosBuffer);
+  if (!bodyXml) return "";
+  const paragraphs = bodyXml.match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>|<w:p\/>/g) || [];
+  const partyTokens = ["ATTORNEY", "ATTORNEY_FIRM", "ATTORNEY_ADDRESS", "ATTORNEY_PHONE", "ATTORNEY_EMAIL"];
+  const headerPs = [];
+  const partyPs = [];
+  const footerPs = [];
+  let inPartyBlock = false;
+  for (const p of paragraphs) {
+    const hasPartyPh = partyTokens.some(t => p.includes(`{{${t}}}`));
+    if (hasPartyPh) {
+      partyPs.push(p);
+      inPartyBlock = true;
+    } else if (!inPartyBlock) {
+      headerPs.push(p);
+    } else {
+      footerPs.push(p);
+    }
+  }
+  let result = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+  result += headerPs.join("");
+  for (let i = 0; i < servedParties.length; i++) {
+    const party = servedParties[i];
+    for (const p of partyPs) {
+      let filled = p;
+      filled = filled.replace(/\{\{ATTORNEY\}\}/g, escapeXml(party.attorney));
+      filled = filled.replace(/\{\{ATTORNEY_FIRM\}\}/g, escapeXml(party.firm));
+      filled = filled.replace(/\{\{ATTORNEY_ADDRESS\}\}/g, escapeXml(party.address));
+      filled = filled.replace(/\{\{ATTORNEY_PHONE\}\}/g, escapeXml(party.phone));
+      filled = filled.replace(/\{\{ATTORNEY_EMAIL\}\}/g, escapeXml(party.email));
+      result += filled;
+    }
+    if (i < servedParties.length - 1) result += '<w:p/>';
+  }
+  result += footerPs.join("");
+  return result;
+}
+
+function assemblePleading(mainBuffer, headerXml, signatureXml, cosXml) {
+  const zip = new PizZip(mainBuffer);
+  const docFile = zip.file("word/document.xml");
+  let xml = docFile.asText();
+  const bodyMatch = xml.match(/(<w:body>)([\s\S]*)(<\/w:body>)/);
+  if (!bodyMatch) return mainBuffer;
+  let bodyContent = bodyMatch[2];
+  let sectPr = "";
+  const sectPrMatch = bodyContent.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/);
+  if (sectPrMatch) {
+    sectPr = sectPrMatch[0];
+    bodyContent = bodyContent.replace(sectPr, "");
+  }
+  const assembled = (headerXml || "") + bodyContent + (signatureXml || "") + (cosXml || "") + sectPr;
+  xml = xml.replace(/(<w:body>)[\s\S]*(<\/w:body>)/, `$1${assembled}$2`);
+  zip.file("word/document.xml", xml);
+  return zip.generate({ type: "nodebuffer" });
+}
 
 const TEMPLATE_FIELDS = "id, name, tags, created_by, created_by_name, placeholders, visibility, category, sub_type, created_at, updated_at";
 
@@ -395,7 +479,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
 });
 
 router.post("/:id/generate", requireAuth, async (req, res) => {
-  const { values } = req.body;
+  const { values, caseId, includeCoS } = req.body;
   if (!values || typeof values !== "object") return res.status(400).json({ error: "Values required" });
 
   try {
@@ -403,10 +487,22 @@ router.post("/:id/generate", requireAuth, async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: "Template not found" });
 
     const template = rows[0];
-    const phs = template.placeholders || [];
+    const isPleading = (template.category || "General") === "Pleadings";
+    const allPhs = [...(template.placeholders || [])];
+
+    const HEADER_TOKENS = ["COURT", "COUNTY", "STATE", "PLAINTIFFS", "CASE_NUMBER", "DEFENDANTS"];
+    const SIG_TOKENS = ["SIGNATURE", "ATTORNEY_NAME", "ATTORNEY_CODE", "CLIENT_TYPE", "CLIENT_NAME", "ATTORNEY_FIRM", "ATTORNEY_ADDRESS", "ATTORNEY_PHONE", "ATTORNEY_EMAIL"];
+    if (isPleading) {
+      const existing = new Set(allPhs.map(p => p.token));
+      for (const token of [...HEADER_TOKENS, ...SIG_TOKENS]) {
+        if (!existing.has(token)) {
+          allPhs.push({ token, label: token.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) });
+        }
+      }
+    }
 
     const resolvedValues = {};
-    for (const ph of phs) {
+    for (const ph of allPhs) {
       const val = values[ph.token];
       if (val === undefined || val === null || val === "") {
         resolvedValues[ph.token] = `<<${ph.token}>>`;
@@ -414,14 +510,84 @@ router.post("/:id/generate", requireAuth, async (req, res) => {
         resolvedValues[ph.token] = val;
       }
     }
-
     for (const [k, v] of Object.entries(values)) {
       if (!(k in resolvedValues)) {
         resolvedValues[k] = v || `<<${k}>>`;
       }
     }
 
-    const zip = new PizZip(template.docx_data);
+    let docxBuffer = template.docx_data;
+
+    if (isPleading) {
+      const headerBuf = loadSystemTemplate("case-header.docx");
+      const sigBuf = loadSystemTemplate("case-signature.docx");
+      const cosBuf = includeCoS ? loadSystemTemplate("certificate-of-service.docx") : null;
+
+      const headerXml = headerBuf ? extractBodyXml(headerBuf) : "";
+      const sigXml = sigBuf ? extractBodyXml(sigBuf) : "";
+
+      let cosXml = "";
+      if (includeCoS && cosBuf && caseId) {
+        const { rows: partyRows } = await pool.query(
+          "SELECT * FROM case_parties WHERE case_id = $1 ORDER BY created_at", [caseId]
+        );
+        const servedParties = [];
+        for (const p of partyRows) {
+          const d = p.data || {};
+          if (d.isOurClient) continue;
+          if (d.isProSe) {
+            const name = p.entity_kind === "corporation"
+              ? (d.entityName || "")
+              : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+            servedParties.push({
+              attorney: name + " (Pro Se)",
+              firm: "",
+              address: [d.address, d.city, d.state, d.zip].filter(Boolean).join(", "),
+              phone: (d.phones || [])[0]?.number || "",
+              email: d.email || "",
+            });
+          } else {
+            const repBy = d.representedBy || "";
+            if (repBy) {
+              const { rows: contactRows } = await pool.query(
+                "SELECT * FROM contacts WHERE name ILIKE $1 AND category = 'Attorney' AND deleted_at IS NULL LIMIT 1", [repBy]
+              );
+              const contact = contactRows[0];
+              if (contact) {
+                servedParties.push({
+                  attorney: contact.name || repBy,
+                  firm: contact.firm || "",
+                  address: contact.address || "",
+                  phone: contact.phone || "",
+                  email: contact.email || "",
+                });
+              } else {
+                servedParties.push({ attorney: repBy, firm: "", address: "", phone: "", email: "" });
+              }
+            } else {
+              const name = p.entity_kind === "corporation"
+                ? (d.entityName || "")
+                : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+              if (name) {
+                servedParties.push({
+                  attorney: name,
+                  firm: "",
+                  address: [d.address, d.city, d.state, d.zip].filter(Boolean).join(", "),
+                  phone: (d.phones || [])[0]?.number || "",
+                  email: d.email || "",
+                });
+              }
+            }
+          }
+        }
+        if (servedParties.length > 0 && cosBuf) {
+          cosXml = buildCoSXml(cosBuf, servedParties);
+        }
+      }
+      docxBuffer = assemblePleading(docxBuffer, headerXml, sigXml, cosXml);
+    }
+
+    const zip = new PizZip(docxBuffer);
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,

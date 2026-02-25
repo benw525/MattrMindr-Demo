@@ -7571,23 +7571,34 @@ const TEMPLATE_CATEGORIES = ["Pleadings", "Letters", "Subpoenas", "Reports", "Ge
 const LETTER_SUB_TYPES = ["Client", "Insurance", "Attorney", "Other"];
 const CATEGORY_COLORS = { Pleadings: "#dbeafe", Letters: "#fef3c7", Subpoenas: "#fce7f3", Reports: "#d1fae5", General: "#E4E7EB" };
 
+function getPartyName(p) {
+  const d = p.data || {};
+  return p.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+}
+
 function getPlaceholderSuggestions(token, caseData, parties, insurance, experts) {
   const key = token.toLowerCase();
   const suggestions = [];
   const allParties = parties || [];
   const ourClient = allParties.find(p => p.data?.isOurClient);
 
-  if (/^(defendant|def_name|def$)/.test(key)) {
+  if (/^plaintiffs$/.test(key)) {
+    const names = allParties.filter(p => /plaintiff/i.test(p.partyType)).map(getPartyName).filter(Boolean);
+    if (names.length) suggestions.push({ label: "All Plaintiffs", value: names.join(",\n") });
+    if (!names.length && caseData.plaintiff) suggestions.push({ label: "Plaintiff", value: caseData.plaintiff });
+  } else if (/^defendants$/.test(key)) {
+    const names = allParties.filter(p => /defendant/i.test(p.partyType)).map(getPartyName).filter(Boolean);
+    if (names.length) suggestions.push({ label: "All Defendants", value: names.join(",\n") });
+    if (!names.length && caseData.defendant) suggestions.push({ label: "Defendant", value: caseData.defendant });
+  } else if (/^(defendant|def_name|def$)/.test(key)) {
     allParties.filter(p => /defendant/i.test(p.partyType)).forEach(p => {
-      const d = p.data || {};
-      const name = p.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+      const name = getPartyName(p);
       if (name) suggestions.push({ label: `${p.partyType}: ${name}`, value: name });
     });
     if (!suggestions.length && caseData.defendant) suggestions.push({ label: "Defendant", value: caseData.defendant });
   } else if (/^(plaintiff|pl_name|pl$)/.test(key)) {
     allParties.filter(p => /plaintiff/i.test(p.partyType)).forEach(p => {
-      const d = p.data || {};
-      const name = p.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+      const name = getPartyName(p);
       if (name) suggestions.push({ label: `${p.partyType}: ${name}`, value: name });
     });
     if (!suggestions.length && caseData.plaintiff) suggestions.push({ label: "Plaintiff", value: caseData.plaintiff });
@@ -7622,7 +7633,7 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
     if (second) suggestions.push({ label: "2nd Attorney", value: second.name });
   } else if (/^(opposing_counsel|opp_counsel)/.test(key)) {
     if (caseData.opposingCounsel) suggestions.push({ label: "Opposing Counsel", value: caseData.opposingCounsel });
-  } else if (/^(case_title|case_name|title$|style)/.test(key)) {
+  } else if (/^(case_title|case_style|case_name|title$|style)/.test(key)) {
     if (caseData.title) suggestions.push({ label: "Case Title", value: caseData.title });
   } else if (/^(insured|insured_name)/.test(key)) {
     if (caseData.insured) suggestions.push({ label: "Insured", value: caseData.insured });
@@ -7672,9 +7683,62 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
       const d = ins.data || {};
       if (d.company) suggestions.push({ label: `Insurance: ${d.company}`, value: d.company });
     });
+  } else if (/^(state$|state_name)/.test(key)) {
+    suggestions.push({ label: "Alabama", value: "Alabama" });
+  } else if (/^(signature$)/.test(key)) {
+    const lead = USERS.find(u => u.id === caseData.leadAttorney);
+    if (lead) suggestions.push({ label: `${lead.name}`, value: lead.name });
+  } else if (/^(client_type)/.test(key)) {
+    if (ourClient) {
+      suggestions.push({ label: ourClient.partyType, value: ourClient.partyType });
+    }
+  } else if (/^(attorney_code|bar_number|bar_num)/.test(key)) {
+  } else if (/^(attorney_firm|firm_name|firm$)/.test(key)) {
+    suggestions.push({ label: "Webster Henry", value: "Webster Henry" });
+  } else if (/^(attorney_address)/.test(key)) {
+    const lead = USERS.find(u => u.id === caseData.leadAttorney);
+    if (lead) {
+      const offices = { "Mobile": "51 St. Joseph Street, Suite 1510, Mobile, AL 36602", "Birmingham": "2100 Southbridge Pkwy., Suite 530, Birmingham, AL 35209", "Montgomery": "445 Dexter Avenue, Suite 4050, Montgomery, AL 36104" };
+      Object.entries(offices).forEach(([name, addr]) => {
+        suggestions.push({ label: `${name} Office`, value: addr });
+      });
+    }
+  } else if (/^(attorney_phone)/.test(key)) {
+    const lead = USERS.find(u => u.id === caseData.leadAttorney);
+    if (lead?.phone) suggestions.push({ label: `${lead.name}`, value: lead.phone });
+  } else if (/^(attorney_email)/.test(key)) {
+    const lead = USERS.find(u => u.id === caseData.leadAttorney);
+    if (lead?.email) suggestions.push({ label: `${lead.name}`, value: lead.email });
+  } else if (/^(today_date|todays_date)/.test(key)) {
+    suggestions.push({ label: "Today", value: new Date().toLocaleDateString() });
+  } else if (/addressee.*last|last.*name/.test(key)) {
+    if (ourClient) {
+      const d = ourClient.data || {};
+      if (d.lastName) suggestions.push({ label: "Client Last Name", value: d.lastName });
+    }
   }
   return suggestions;
 }
+
+const PLEADING_HEADER_PLACEHOLDERS = [
+  { token: "COURT", label: "Court" },
+  { token: "COUNTY", label: "County" },
+  { token: "STATE", label: "State" },
+  { token: "PLAINTIFFS", label: "Plaintiff(s)" },
+  { token: "DEFENDANTS", label: "Defendant(s)" },
+  { token: "CASE_NUMBER", label: "Case Number" },
+];
+const PLEADING_SIGNATURE_PLACEHOLDERS = [
+  { token: "SIGNATURE", label: "Signature" },
+  { token: "ATTORNEY_NAME", label: "Attorney Name" },
+  { token: "ATTORNEY_CODE", label: "Attorney Code (Bar #)" },
+  { token: "CLIENT_TYPE", label: "Client Type" },
+  { token: "CLIENT_NAME", label: "Client Name" },
+  { token: "ATTORNEY_FIRM", label: "Attorney Firm" },
+  { token: "ATTORNEY_ADDRESS", label: "Attorney Address" },
+  { token: "ATTORNEY_PHONE", label: "Attorney Phone" },
+  { token: "ATTORNEY_EMAIL", label: "Attorney Email" },
+];
 
 function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insurance, experts }) {
   const [templates, setTemplates] = useState([]);
@@ -7706,7 +7770,15 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
   const handleSelect = (tmpl) => {
     setSelected(tmpl);
     const v = {};
-    for (const ph of tmpl.placeholders) {
+    const isPleading = tmpl.category === "Pleadings";
+    const allPhs = [...tmpl.placeholders];
+    if (isPleading) {
+      const existing = new Set(allPhs.map(p => p.token));
+      for (const sys of [...PLEADING_HEADER_PLACEHOLDERS, ...PLEADING_SIGNATURE_PLACEHOLDERS]) {
+        if (!existing.has(sys.token)) allPhs.push(sys);
+      }
+    }
+    for (const ph of allPhs) {
       if (ph.mapping && ph.mapping !== "_manual") {
         v[ph.token] = getCaseFieldValue(caseData, ph.mapping, parties || []);
       } else {
@@ -7751,7 +7823,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const blob = await apiGenerateDocument(selected.id, values);
+      const blob = await apiGenerateDocument(selected.id, values, caseData.id, selected.category === "Pleadings" ? includeCoS : false);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -7827,52 +7899,69 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
             </>
           )}
 
-          {!loading && selected && (
-            <>
-              <div style={{ fontSize: 13, color: "var(--c-text2)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-                <span>Template: <strong>{selected.name}</strong></span>
-                <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: CATEGORY_COLORS[selected.category] || "#E4E7EB", color: "#1F2428" }}>{selected.category || "General"}</span>
-              </div>
-              <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 16 }}>Fill in fields below. Empty fields will appear as {"<<PLACEHOLDER>>"} in the document.</div>
-              {selected.placeholders.map(ph => {
-                const sugs = getPlaceholderSuggestions(ph.token, caseData, parties, insurance, experts);
-                return (
-                  <div key={ph.token} style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 4 }}>
-                      {ph.label}
-                    </label>
-                    {sugs.length > 0 && (
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
-                        {sugs.map((s, i) => (
-                          <button key={i} onClick={() => setValues(v => ({ ...v, [ph.token]: s.value }))}
-                            style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid var(--c-border)", background: values[ph.token] === s.value ? "#1E2A3A" : "var(--c-bg2)", color: values[ph.token] === s.value ? "#fff" : "var(--c-text)", cursor: "pointer" }}
-                          >{s.label}</button>
-                        ))}
-                      </div>
-                    )}
-                    <input
-                      value={values[ph.token] || ""}
-                      onChange={e => setValues(v => ({ ...v, [ph.token]: e.target.value }))}
-                      style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box" }}
-                      placeholder={`Leave empty for <<${ph.token}>>`}
-                    />
-                  </div>
-                );
-              })}
-              {selected.category === "Pleadings" && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--c-text2)", padding: "12px 0", borderTop: "1px solid var(--c-border)", marginTop: 8, cursor: "pointer" }}>
-                  <input type="checkbox" checked={includeCoS} onChange={e => setIncludeCoS(e.target.checked)} />
-                  Include Certificate of Service
-                </label>
-              )}
-              <button
-                className="btn btn-primary"
-                style={{ width: "100%", padding: "10px", fontSize: 14, marginTop: 8 }}
-                disabled={generating}
-                onClick={handleGenerate}
-              >{generating ? "Generating..." : "Generate & Download"}</button>
-            </>
-          )}
+          {!loading && selected && (() => {
+            const isPleading = selected.category === "Pleadings";
+            const headerTokens = new Set(PLEADING_HEADER_PLACEHOLDERS.map(p => p.token));
+            const sigTokens = new Set(PLEADING_SIGNATURE_PLACEHOLDERS.map(p => p.token));
+            const bodyPhs = selected.placeholders.filter(ph => !isPleading || (!headerTokens.has(ph.token) && !sigTokens.has(ph.token)));
+            const sectionLabel = (label) => (
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 0 4px", borderTop: "1px solid var(--c-border)", marginTop: 10 }}>{label}</div>
+            );
+            const renderPh = (ph) => {
+              const sugs = getPlaceholderSuggestions(ph.token, caseData, parties, insurance, experts);
+              return (
+                <div key={ph.token} style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 4 }}>{ph.label}</label>
+                  {sugs.length > 0 && (
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
+                      {sugs.map((s, i) => (
+                        <button key={i} onClick={() => setValues(v => ({ ...v, [ph.token]: s.value }))}
+                          style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid var(--c-border)", background: values[ph.token] === s.value ? "#1E2A3A" : "var(--c-bg2)", color: values[ph.token] === s.value ? "#fff" : "var(--c-text)", cursor: "pointer" }}
+                        >{s.label}</button>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    value={values[ph.token] || ""}
+                    onChange={e => setValues(v => ({ ...v, [ph.token]: e.target.value }))}
+                    style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box" }}
+                    placeholder={`Leave empty for <<${ph.token}>>`}
+                  />
+                </div>
+              );
+            };
+            return (
+              <>
+                <div style={{ fontSize: 13, color: "var(--c-text2)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>Template: <strong>{selected.name}</strong></span>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: CATEGORY_COLORS[selected.category] || "#E4E7EB", color: "#1F2428" }}>{selected.category || "General"}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 16 }}>
+                  Fill in fields below. Empty fields will appear as {"<<PLACEHOLDER>>"} in the document.
+                  {isPleading && <span style={{ display: "block", marginTop: 4, color: "var(--c-text2)" }}>Case Header and Signature Block will be automatically included.</span>}
+                </div>
+                {isPleading && sectionLabel("Case Caption")}
+                {isPleading && PLEADING_HEADER_PLACEHOLDERS.map(renderPh)}
+                {bodyPhs.length > 0 && isPleading && sectionLabel("Document Body")}
+                {bodyPhs.map(renderPh)}
+                {isPleading && sectionLabel("Signature Block")}
+                {isPleading && PLEADING_SIGNATURE_PLACEHOLDERS.map(renderPh)}
+                {!isPleading && selected.placeholders.map(renderPh)}
+                {isPleading && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--c-text2)", padding: "12px 0", borderTop: "1px solid var(--c-border)", marginTop: 8, cursor: "pointer" }}>
+                    <input type="checkbox" checked={includeCoS} onChange={e => setIncludeCoS(e.target.checked)} />
+                    Include Certificate of Service
+                  </label>
+                )}
+                <button
+                  className="btn btn-primary"
+                  style={{ width: "100%", padding: "10px", fontSize: 14, marginTop: 8 }}
+                  disabled={generating}
+                  onClick={handleGenerate}
+                >{generating ? "Generating..." : "Generate & Download"}</button>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
