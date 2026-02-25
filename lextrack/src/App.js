@@ -1935,6 +1935,18 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const [aiResults, setAiResults] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [pinnedIds, setPinnedIds] = useState(() => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]"); } catch { return []; } });
+  const [pinnedExpanded, setPinnedExpanded] = useState(true);
+
+  const togglePin = (caseId) => {
+    setPinnedIds(prev => {
+      const next = prev.includes(caseId) ? prev.filter(id => id !== caseId) : [...prev, caseId];
+      localStorage.setItem(`pinned_cases_${currentUser.id}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const pinnedCases = useMemo(() => pinnedIds.map(id => allCases.find(c => c.id === id)).filter(Boolean), [pinnedIds, allCases]);
 
   const runAiSearch = async () => {
     if (!aiQuery.trim()) return;
@@ -2152,6 +2164,63 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
             )}
           </div>
         )}
+        {pinnedCases.length > 0 && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div
+              onClick={() => setPinnedExpanded(!pinnedExpanded)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", cursor: "pointer", borderBottom: pinnedExpanded ? "1px solid var(--c-border)" : "none" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "#8A9096" }}>{pinnedExpanded ? "▼" : "▶"}</span>
+                <span style={{ fontSize: 14, color: "#B67A18" }}>📌</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>Pinned Cases</span>
+                <Badge label={`${pinnedCases.length}`} />
+              </div>
+            </div>
+            {pinnedExpanded && (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 32 }}></th>
+                      <th>Type</th>
+                      <th>Case Number</th>
+                      <th>Style</th>
+                      <th>File #</th>
+                      <th>Client</th>
+                      <th>Stage</th>
+                      <th>Trial Date</th>
+                      <th>Lead</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pinnedCases.map(c => (
+                      <tr key={c.id} className={`clickable-row ${selectedCase?.id === c.id ? "selected-row" : ""}`} onClick={() => setSelectedCase(selectedCase?.id === c.id ? null : c)}>
+                        <td style={{ textAlign: "center", padding: "6px 4px" }}>
+                          <button onClick={e => { e.stopPropagation(); togglePin(c.id); }} title="Unpin" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#B67A18", padding: 0, lineHeight: 1 }}>📌</button>
+                        </td>
+                        <td><Badge label={recordType(c)} /></td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <div style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A" }}>{c.caseNum || "—"}</div>
+                          {c.claimNum && <div style={{ fontFamily: "monospace", fontSize: 10, color: "#5D6268", marginTop: 2 }}>Claim: {c.claimNum}</div>}
+                        </td>
+                        <td>
+                          <div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>
+                          {c.plaintiff && <div style={{ fontSize: 12, color: "#1F2428", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>{c.plaintiff}</div>}
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
+                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.client || "—"}</td>
+                        <td><Badge label={c.stage} /></td>
+                        <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#8A9096", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
+                        <td><Avatar userId={c.leadAttorney} size={26} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
         <div className="tabs">
           {["All", "Active", "Monitoring", "Closed"].map(s => <div key={s} className={`tab ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>{s}</div>)}
           <div className={`tab ${statusFilter === "Deleted" ? "active" : ""}`} style={{ color: statusFilter === "Deleted" ? "#e05252" : undefined }} onClick={() => setStatusFilter("Deleted")}>Deleted</div>
@@ -2205,6 +2274,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                 <table>
                   <thead>
                     <tr>
+                      <th style={{ width: 32 }}></th>
                       <SortTh col="type" label="Type" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="caseNum" label="Case Number" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="title" label="Style" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -2218,6 +2288,9 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                   <tbody>
                     {paged.map(c => (
                       <tr key={c.id} className={`clickable-row ${selectedCase?.id === c.id ? "selected-row" : ""}`} onClick={() => setSelectedCase(selectedCase?.id === c.id ? null : c)}>
+                        <td style={{ textAlign: "center", padding: "6px 4px" }}>
+                          <button onClick={e => { e.stopPropagation(); togglePin(c.id); }} title={pinnedIds.includes(c.id) ? "Unpin" : "Pin"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: pinnedIds.includes(c.id) ? "#B67A18" : "#D6D8DB", padding: 0, lineHeight: 1, opacity: pinnedIds.includes(c.id) ? 1 : 0.5, transition: "opacity 0.15s" }} onMouseEnter={e => e.currentTarget.style.opacity = "1"} onMouseLeave={e => { if (!pinnedIds.includes(c.id)) e.currentTarget.style.opacity = "0.5"; }}>📌</button>
+                        </td>
                         <td><Badge label={recordType(c)} /></td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           <div style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A" }}>{c.caseNum || "—"}</div>
