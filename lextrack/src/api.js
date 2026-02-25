@@ -38,6 +38,7 @@ export const apiUpdateUser        = (id, data)      => apiFetch(`/api/users/${id
 // Cases
 export const apiGetCases        = ()         => apiFetch("/api/cases");
 export const apiGetDeletedCases = ()         => apiFetch("/api/cases?deleted=true");
+export const apiGetCasesAll     = ()         => apiFetch("/api/cases?includeDeleted=true");
 export const apiGetCase         = (id)       => apiFetch(`/api/cases/${id}`);
 export const apiCreateCase      = (data)     => apiFetch("/api/cases",           { method: "POST",   body: data });
 export const apiUpdateCase      = (id, data) => apiFetch(`/api/cases/${id}`,     { method: "PUT",    body: data });

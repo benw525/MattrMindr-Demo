@@ -8,6 +8,8 @@ const toFrontend = (row) => ({
   id: row.id,
   userId: row.user_id,
   caseId: row.case_id,
+  caseTitle: row.case_title || "",
+  fileNum: row.file_num || "",
   date: row.date instanceof Date ? row.date.toISOString() : row.date,
   detail: row.detail,
   time: row.time || "",
@@ -39,10 +41,15 @@ router.post("/", requireAuth, async (req, res) => {
   const { caseId, date, detail, time } = req.body;
   if (!caseId) return res.status(400).json({ error: "Case is required" });
   try {
+    const { rows: caseRows } = await pool.query(
+      "SELECT title, file_num FROM cases WHERE id = $1", [caseId]
+    );
+    const caseTitle = caseRows.length > 0 ? caseRows[0].title : "";
+    const fileNum = caseRows.length > 0 ? caseRows[0].file_num : "";
     const { rows } = await pool.query(
-      `INSERT INTO time_entries (user_id, case_id, date, detail, time)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [req.session.userId, caseId, date || new Date().toISOString(), detail || "", time || null]
+      `INSERT INTO time_entries (user_id, case_id, case_title, file_num, date, detail, time)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [req.session.userId, caseId, caseTitle, fileNum, date || new Date().toISOString(), detail || "", time || null]
     );
     return res.status(201).json(toFrontend(rows[0]));
   } catch (err) {
@@ -62,8 +69,15 @@ router.put("/:id", requireAuth, async (req, res) => {
     let idx = 1;
     if (detail !== undefined) { sets.push(`detail = $${idx++}`); vals.push(detail); }
     if (time !== undefined) { sets.push(`time = $${idx++}`); vals.push(time || null); }
-    if (caseId !== undefined) { sets.push(`case_id = $${idx++}`); vals.push(caseId); }
     if (date !== undefined) { sets.push(`date = $${idx++}`); vals.push(date); }
+    if (caseId !== undefined) {
+      sets.push(`case_id = $${idx++}`); vals.push(caseId);
+      const { rows: caseRows } = await pool.query("SELECT title, file_num FROM cases WHERE id = $1", [caseId]);
+      if (caseRows.length > 0) {
+        sets.push(`case_title = $${idx++}`); vals.push(caseRows[0].title);
+        sets.push(`file_num = $${idx++}`); vals.push(caseRows[0].file_num);
+      }
+    }
     vals.push(req.params.id);
     const { rows } = await pool.query(
       `UPDATE time_entries SET ${sets.join(", ")} WHERE id = $${idx} RETURNING *`, vals

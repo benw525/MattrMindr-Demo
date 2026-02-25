@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "rea
 import { USERS } from "./firmData.js";
 import {
   apiLogin, apiLogout, apiChangePassword, apiForgotPassword, apiResetPassword, apiSendTempPassword,
-  apiGetCases, apiGetDeletedCases, apiCreateCase, apiUpdateCase, apiDeleteCase, apiRestoreCase,
+  apiGetCases, apiGetDeletedCases, apiGetCasesAll, apiCreateCase, apiUpdateCase, apiDeleteCase, apiRestoreCase,
   apiGetTasks, apiGetCaseTasks, apiCreateTask, apiCreateTasks, apiUpdateTask, apiCompleteTask, apiReassignTasksByRole,
   apiGetDeadlines, apiCreateDeadline,
   apiGetUsers, apiCreateUser, apiDeleteUser, apiGetDeletedUsers, apiRestoreUser, apiUpdateUserOffices, apiUpdateUserRoles, apiUpdateUser,
@@ -6153,6 +6153,11 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
   const [editingCell, setEditingCell] = useState(null);
   const [editValue, setEditValue] = useState("");
   const editRef = useRef(null);
+  const [allCasesForLog, setAllCasesForLog] = useState([]);
+
+  useEffect(() => {
+    apiGetCasesAll().then(setAllCasesForLog).catch(() => setAllCasesForLog(allCases));
+  }, [allCases]);
 
   useEffect(() => {
     apiGetTimeEntries(currentUser.id, fromDate, toDate)
@@ -6199,12 +6204,14 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
       return d >= from && d <= to;
     };
 
+    const findCase = (id) => allCasesForLog.find(c => c.id === id);
+
     tasks.forEach(t => {
       const creditId = t.timeLogUser || t.completedBy || t.assigned;
       if (creditId !== currentUser.id) return;
       if (t.status !== "Completed" || !t.completedAt) return;
       if (!inRange(t.completedAt)) return;
-      const cs = allCases.find(c => c.id === t.caseId);
+      const cs = findCase(t.caseId);
       result.push({
         _source: "task", _id: t.id,
         date: t.completedAt,
@@ -6220,7 +6227,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
         const creditId = note.timeLogUser || note.authorId;
         if (creditId !== currentUser.id) return;
         if (!inRange(note.createdAt)) return;
-        const cs = allCases.find(c => c.id === Number(caseId));
+        const cs = findCase(Number(caseId));
         const summary = (note.body || "").slice(0, 100).replace(/\n/g, " ") + (note.body?.length > 100 ? "…" : "");
         result.push({
           _source: "note", _id: note.id,
@@ -6233,13 +6240,13 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
       });
     });
 
-    const myCaseIds = new Set(allCases.filter(c =>
+    const myCaseIds = new Set(allCasesForLog.filter(c =>
       [c.leadAttorney, c.secondAttorney, c.paralegal, c.paralegal2, c.legalAssistant].includes(currentUser.id)
     ).map(c => c.id));
     correspondence.forEach(email => {
       if (!myCaseIds.has(email.caseId)) return;
       if (!inRange(email.receivedAt)) return;
-      const cs = allCases.find(c => c.id === email.caseId);
+      const cs = findCase(email.caseId);
       result.push({
         _source: "email", _id: email.id,
         date: email.receivedAt,
@@ -6251,12 +6258,11 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
     });
 
     manualEntries.forEach(me => {
-      const cs = allCases.find(c => c.id === me.caseId);
       result.push({
         _source: "manual", _id: me.id,
         date: me.date,
-        caseTitle: cs?.title || `Case #${me.caseId}`,
-        fileNum: cs?.fileNum || "",
+        caseTitle: me.caseTitle || `Case #${me.caseId || "?"}`,
+        fileNum: me.fileNum || "",
         detail: me.detail,
         time: me.time || "",
       });
@@ -6264,7 +6270,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
 
     result.sort((a, b) => new Date(b.date) - new Date(a.date));
     return result;
-  }, [tasks, caseNotes, currentUser.id, allCases, fromDate, toDate, correspondence, manualEntries]);
+  }, [tasks, caseNotes, currentUser.id, allCasesForLog, fromDate, toDate, correspondence, manualEntries]);
 
   const fmtDateTime = (iso) => {
     const d = new Date(iso);

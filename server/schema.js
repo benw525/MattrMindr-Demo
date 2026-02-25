@@ -259,7 +259,9 @@ async function createSchema() {
       CREATE TABLE IF NOT EXISTS time_entries (
         id         SERIAL PRIMARY KEY,
         user_id    INTEGER NOT NULL REFERENCES users(id),
-        case_id    INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        case_id    INTEGER REFERENCES cases(id) ON DELETE SET NULL,
+        case_title VARCHAR(255),
+        file_num   VARCHAR(100),
         date       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         detail     TEXT    NOT NULL DEFAULT '',
         time       VARCHAR(50),

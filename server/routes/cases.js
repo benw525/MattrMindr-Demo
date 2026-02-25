@@ -77,6 +77,10 @@ router.get("/", requireAuth, async (req, res) => {
       );
       return res.json(rows.filter(r => canAccessCase(r, req)).map(toFrontend));
     }
+    if (req.query.includeDeleted === "true") {
+      const { rows } = await pool.query("SELECT * FROM cases ORDER BY title");
+      return res.json(rows.filter(r => canAccessCase(r, req)).map(toFrontend));
+    }
     const { rows } = await pool.query(
       "SELECT * FROM cases WHERE deleted_at IS NULL ORDER BY title"
     );
