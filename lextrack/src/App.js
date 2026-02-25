@@ -7639,6 +7639,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
     ? activeUsers
     : activeUsers.filter(u => (userOffices[u.id] || []).includes(officeFilter));
   const [showDeletedStaff, setShowDeletedStaff] = useState(false);
+  const [expandedStaffId, setExpandedStaffId] = useState(null);
 
   const handleToggleOffice = async (userId, office) => {
     const current = userOffices[userId] || [];
@@ -7670,6 +7671,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
       await apiDeleteUser(userId);
       setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, deletedAt: new Date().toISOString() } : u));
       setConfirmDeleteId(null);
+      setExpandedStaffId(null);
     } catch (err) {
       alert("Failed to remove staff: " + err.message);
     }
@@ -7677,8 +7679,12 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
 
   const handleRestoreStaff = async (userId) => {
     try {
-      await apiRestoreUser(userId);
-      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, deletedAt: null } : u));
+      const restored = await apiRestoreUser(userId);
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, ...restored, deletedAt: null } : u));
+      const existing = USERS.find(u => u.id === userId);
+      if (!existing) {
+        USERS.push({ ...restored, deletedAt: null });
+      }
     } catch (err) {
       alert("Failed to restore staff: " + err.message);
     }
@@ -7743,10 +7749,11 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
             const mine = allCases.filter(c => c.leadAttorney === u.id || c.secondAttorney === u.id || c.paralegal === u.id || c.paralegal2 === u.id || c.legalAssistant === u.id);
             const offices = userOffices[u.id] || [];
             const isConfirming = confirmDeleteId === u.id;
+            const isExpanded = expandedStaffId === u.id;
             return (
-              <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative" }}>
-                {(canAdmin || currentUser.id === u.id) && (
-                  <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center" }}>
+              <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative", cursor: "pointer" }} onClick={() => setExpandedStaffId(isExpanded ? null : u.id)}>
+                {isExpanded && (canAdmin || currentUser.id === u.id) && (
+                  <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
                     {isConfirming ? (
                       <>
                         <span style={{ fontSize: 11, color: "#e05252" }}>Remove?</span>
@@ -7766,63 +7773,68 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
                     )}
                   </div>
                 )}
-                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: isExpanded ? 14 : 0 }}>
                   <div style={{ width: 48, height: 48, borderRadius: "50%", background: u.avatar, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{u.initials}</div>
-                  <div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: "var(--c-text-h)", fontWeight: 600 }}>{u.name}</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
                       {(u.roles && u.roles.length ? u.roles : [u.role]).map(r => <Badge key={r} label={r} />)}
                     </div>
                   </div>
+                  <span style={{ fontSize: 12, color: "#8A9096", flexShrink: 0 }}>{isExpanded ? "▾" : "▸"}</span>
                 </div>
-                {[
-                  ["Extension", u.ext || "—"],
-                  ["Direct Line", u.phone || "—"],
-                  ["Cell", u.cell || "—"],
-                  ["Email", u.email || "—"],
-                  ["Active Cases", `${mine.filter(c => c.status === "Active").length} (${mine.length} total)`]
-                ].map(([k, v]) => (
-                  <div key={k} className="info-row"><span className="info-key">{k}</span><span className="info-val" style={{ fontSize: 12 }}>{v}</span></div>
-                ))}
-                {canAdmin && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
-                    <div style={{ fontSize: 11, color: "#8A9096", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                      Roles <span style={{ fontWeight: 400, color: "var(--c-border)" }}>— click to toggle</span>
+                {isExpanded && (
+                  <>
+                    {[
+                      ["Extension", u.ext || "—"],
+                      ["Direct Line", u.phone || "—"],
+                      ["Cell", u.cell || "—"],
+                      ["Email", u.email || "—"],
+                      ["Active Cases", `${mine.filter(c => c.status === "Active").length} (${mine.length} total)`]
+                    ].map(([k, v]) => (
+                      <div key={k} className="info-row"><span className="info-key">{k}</span><span className="info-val" style={{ fontSize: 12 }}>{v}</span></div>
+                    ))}
+                    {canAdmin && (
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }} onClick={e => e.stopPropagation()}>
+                        <div style={{ fontSize: 11, color: "#8A9096", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                          Roles <span style={{ fontWeight: 400, color: "var(--c-border)" }}>— click to toggle</span>
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {STAFF_ROLES.map(r => {
+                            const on = (u.roles && u.roles.length ? u.roles : [u.role]).includes(r);
+                            return (
+                              <button
+                                key={r}
+                                onClick={() => handleToggleRole(u.id, r, u.roles && u.roles.length ? u.roles : [u.role])}
+                                style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none", background: on ? "#fef3c7" : "transparent", color: on ? "#1F2428" : "var(--c-border)", transition: "all 0.15s" }}
+                              >{r}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }} onClick={e => e.stopPropagation()}>
+                      <div style={{ fontSize: 11, color: "#8A9096", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                        Offices {canAdmin && <span style={{ fontWeight: 400, color: "var(--c-border)" }}>— click to toggle</span>}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {OFFICES.map(o => {
+                          const on = offices.includes(o);
+                          return canAdmin ? (
+                            <button
+                              key={o}
+                              onClick={() => handleToggleOffice(u.id, o)}
+                              style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none", background: on ? "#fef3c7" : "transparent", color: on ? "#1F2428" : "var(--c-border)", transition: "all 0.15s" }}
+                            >{o}</button>
+                          ) : on ? (
+                            <span key={o} style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, background: "#fef3c7", color: "#1F2428" }}>{o}</span>
+                          ) : null;
+                        })}
+                        {!canAdmin && offices.length === 0 && <span style={{ fontSize: 12, color: "var(--c-border)", fontStyle: "italic" }}>None assigned</span>}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {STAFF_ROLES.map(r => {
-                        const on = (u.roles && u.roles.length ? u.roles : [u.role]).includes(r);
-                        return (
-                          <button
-                            key={r}
-                            onClick={() => handleToggleRole(u.id, r, u.roles && u.roles.length ? u.roles : [u.role])}
-                            style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none", background: on ? "#fef3c7" : "transparent", color: on ? "#1F2428" : "var(--c-border)", transition: "all 0.15s" }}
-                          >{r}</button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  </>
                 )}
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
-                  <div style={{ fontSize: 11, color: "#8A9096", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                    Offices {canAdmin && <span style={{ fontWeight: 400, color: "var(--c-border)" }}>— click to toggle</span>}
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {OFFICES.map(o => {
-                      const on = offices.includes(o);
-                      return canAdmin ? (
-                        <button
-                          key={o}
-                          onClick={() => handleToggleOffice(u.id, o)}
-                          style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none", background: on ? "#fef3c7" : "transparent", color: on ? "#1F2428" : "var(--c-border)", transition: "all 0.15s" }}
-                        >{o}</button>
-                      ) : on ? (
-                        <span key={o} style={{ padding: "2px 10px", borderRadius: 3, fontSize: 11, fontWeight: 600, background: "#fef3c7", color: "#1F2428" }}>{o}</span>
-                      ) : null;
-                    })}
-                    {!canAdmin && offices.length === 0 && <span style={{ fontSize: 12, color: "var(--c-border)", fontStyle: "italic" }}>None assigned</span>}
-                  </div>
-                </div>
               </div>
             );
           })}
