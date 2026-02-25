@@ -178,9 +178,13 @@ function detectPleadingSections(buffer) {
 
     const cosTokenPatterns = ["{{attorney}}", "{{attorney_firm}}", "{{attorney_address}}"];
     const cosTextPatterns = [/certificate of service/i, /i hereby certify/i, /served upon/i,
-      /was served/i, /mailing a copy/i, /electronic.{0,20}service/i];
+      /was served/i, /mailing a copy/i, /electronic.{0,20}service/i,
+      /certif.{0,30}(mail|serv|deliver|filing)/i, /true and correct copy/i,
+      /undersigned.{0,30}certif/i, /hand.{0,10}deliver/i, /first.class mail/i,
+      /u\.?\s*s\.?\s*mail/i, /cm.{0,5}ecf/i, /efiling/i, /e-fil/i];
+    const cosTokenHits = cosTokenPatterns.filter(t => xml.toLowerCase().includes(t)).length;
     const cosTextHits = cosTextPatterns.filter(p => p.test(textContent)).length;
-    const hasCos = cosTextHits >= 2;
+    const hasCos = cosTextHits >= 1 || cosTokenHits >= 1;
 
     return { hasHeader, hasSignature, hasCos };
   } catch (err) {
