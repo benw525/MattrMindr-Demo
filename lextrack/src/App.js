@@ -2794,6 +2794,8 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             {canDelete && (
               <button className="btn btn-outline btn-sm" style={{ color: "#e05252", borderColor: "#fca5a5" }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
             )}
+            <button className="btn btn-outline btn-sm" onClick={() => setShowOfficePopup(true)}>📍 Office ({(draft.offices || []).length})</button>
+            <button className="btn btn-outline btn-sm" onClick={() => setShowTeamPopup(true)}>👥 Team</button>
             <button className="btn btn-outline btn-sm" style={{ fontSize: 16, lineHeight: 1, padding: "4px 10px" }} onClick={onClose}>✕</button>
           </div>
         </div>
@@ -3291,11 +3293,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             {/* Insurance section */}
             <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
               <div className="case-overlay-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span>Insurance ({insurance.length})</span>
-                  <button onClick={() => setShowOfficePopup(true)} style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text2)", cursor: "pointer" }}>📍 Office ({(draft.offices || []).length})</button>
-                  <button onClick={() => setShowTeamPopup(true)} style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text2)", cursor: "pointer" }}>👥 Team</button>
-                </div>
+                <span>Insurance ({insurance.length})</span>
                 <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 11, padding: "2px 10px" }} onClick={() => setAddingInsurance(true)}>+ Add Policy</button>
               </div>
 
