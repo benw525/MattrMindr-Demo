@@ -8605,6 +8605,12 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
     if (ourClient) {
       suggestions.push({ label: ourClient.partyType, value: ourClient.partyType });
     }
+  } else if (/^(defendant_name)/.test(key)) {
+    allParties.filter(p => /defendant/i.test(p.partyType)).forEach(p => {
+      const name = getPartyName(p);
+      if (name) suggestions.push({ label: `${p.partyType}: ${name}`, value: name });
+    });
+    if (!suggestions.length && caseData.defendant) suggestions.push({ label: "Defendant", value: caseData.defendant });
   } else if (/^(attorney_code|bar_number|bar_num)/.test(key)) {
   } else if (/^(attorney_firm|firm_name|firm$)/.test(key)) {
     suggestions.push({ label: "Webster Henry", value: "Webster Henry" });
@@ -8646,12 +8652,86 @@ const PLEADING_SIGNATURE_PLACEHOLDERS = [
   { token: "ATTORNEY_NAME", label: "Attorney Name" },
   { token: "ATTORNEY_CODE", label: "Attorney Code (Bar #)" },
   { token: "CLIENT_TYPE", label: "Client Type" },
-  { token: "CLIENT_NAME", label: "Client Name" },
+  { token: "DEFENDANT_NAME", label: "Defendant Name" },
   { token: "ATTORNEY_FIRM", label: "Attorney Firm" },
   { token: "ATTORNEY_ADDRESS", label: "Attorney Address" },
   { token: "ATTORNEY_PHONE", label: "Attorney Phone" },
   { token: "ATTORNEY_EMAIL", label: "Attorney Email" },
 ];
+
+function buildAllCaseFields(caseData, parties, insurance, experts) {
+  const fields = [];
+  const add = (cat, label, value) => { if (value) fields.push({ category: cat, label, value: String(value) }); };
+  add("Case Info", "Case Title", caseData.title);
+  add("Case Info", "Case Number", caseData.caseNum);
+  add("Case Info", "Short Case Number", caseData.shortCaseNum);
+  add("Case Info", "File Number", caseData.fileNum);
+  add("Case Info", "Claim Number", caseData.claimNum);
+  add("Case Info", "Court", caseData.court);
+  add("Case Info", "County", caseData.county);
+  add("Case Info", "Judge", caseData.judge);
+  add("Case Info", "Mediator", caseData.mediator);
+  add("Case Info", "Opposing Counsel", caseData.opposingCounsel);
+  add("Case Info", "Status", caseData.status);
+  add("Case Info", "Stage", caseData.stage);
+  add("Case Info", "Type", caseData.type);
+  add("Case Info", "State", "Alabama");
+  const fmt = d => { try { return new Date(d).toLocaleDateString(); } catch { return ""; } };
+  add("Dates", "Date of Loss", caseData.dol ? fmt(caseData.dol) : "");
+  add("Dates", "Trial Date", caseData.trialDate ? fmt(caseData.trialDate) : "");
+  add("Dates", "Mediation Date", caseData.mediation ? fmt(caseData.mediation) : "");
+  add("Dates", "Answer Filed", caseData.answerFiled ? fmt(caseData.answerFiled) : "");
+  add("Dates", "Written Discovery", caseData.writtenDisc ? fmt(caseData.writtenDisc) : "");
+  add("Dates", "Party Depositions", caseData.partyDepo ? fmt(caseData.partyDepo) : "");
+  add("Dates", "Today's Date", new Date().toLocaleDateString());
+  const lead = USERS.find(u => u.id === caseData.leadAttorney);
+  const second = USERS.find(u => u.id === caseData.secondAttorney);
+  const para = USERS.find(u => u.id === caseData.paralegal);
+  const la = USERS.find(u => u.id === caseData.legalAssistant);
+  if (lead) { add("Staff", "Lead Attorney", lead.name); add("Staff", "Lead Attorney Email", lead.email); add("Staff", "Lead Attorney Phone", lead.phone); }
+  if (second) { add("Staff", "2nd Attorney", second.name); add("Staff", "2nd Attorney Email", second.email); add("Staff", "2nd Attorney Phone", second.phone); }
+  if (para) { add("Staff", "Paralegal", para.name); add("Staff", "Paralegal Email", para.email); add("Staff", "Paralegal Phone", para.phone); }
+  if (la) { add("Staff", "Legal Assistant", la.name); add("Staff", "Legal Assistant Email", la.email); add("Staff", "Legal Assistant Phone", la.phone); }
+  add("Staff", "Firm", "Webster Henry");
+  const offices = { "Mobile": "51 St. Joseph Street, Suite 1510, Mobile, AL 36602", "Birmingham": "2100 Southbridge Pkwy., Suite 530, Birmingham, AL 35209", "Montgomery": "445 Dexter Avenue, Suite 4050, Montgomery, AL 36104" };
+  Object.entries(offices).forEach(([name, addr]) => add("Staff", `${name} Office Address`, addr));
+  (parties || []).forEach(p => {
+    const d = p.data || {};
+    const name = p.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
+    if (!name) return;
+    const prefix = `${p.partyType || "Party"}: ${name}`;
+    add("Parties", `${prefix} — Name`, name);
+    const addr = [d.address, d.city, d.state, d.zip].filter(Boolean).join(", ");
+    if (addr) add("Parties", `${prefix} — Address`, addr);
+    if (d.phone) add("Parties", `${prefix} — Phone`, d.phone);
+    if (d.email) add("Parties", `${prefix} — Email`, d.email);
+    if (d.representedBy) add("Parties", `${prefix} — Represented By`, d.representedBy);
+    if (d.isOurClient) add("Parties", "Our Client", name);
+  });
+  (insurance || []).forEach(ins => {
+    const d = ins.data || {};
+    const label = d.company || d.carrier || "Policy";
+    if (d.company) add("Insurance", `${label} — Carrier`, d.company);
+    if (d.adjusterName) add("Insurance", `${label} — Adjuster`, d.adjusterName);
+    if (d.adjusterPhone) add("Insurance", `${label} — Adjuster Phone`, d.adjusterPhone);
+    if (d.adjusterEmail) add("Insurance", `${label} — Adjuster Email`, d.adjusterEmail);
+    if (d.policyNum) add("Insurance", `${label} — Policy #`, d.policyNum);
+    if (d.claimNum) add("Insurance", `${label} — Claim #`, d.claimNum);
+    if (d.coverageType) add("Insurance", `${label} — Coverage Type`, d.coverageType);
+    if (d.policyLimit) add("Insurance", `${label} — Policy Limit`, `$${d.policyLimit}`);
+  });
+  (experts || []).forEach(ex => {
+    const d = ex.data || {};
+    if (!d.name) return;
+    const prefix = d.name;
+    add("Experts", `${prefix} — Name`, d.name);
+    if (d.type) add("Experts", `${prefix} — Type`, d.type);
+    if (d.company) add("Experts", `${prefix} — Company`, d.company);
+    if (d.phone) add("Experts", `${prefix} — Phone`, d.phone);
+    if (d.email) add("Experts", `${prefix} — Email`, d.email);
+  });
+  return fields;
+}
 
 function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insurance, experts }) {
   const [templates, setTemplates] = useState([]);
@@ -8664,6 +8744,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
   const [values, setValues] = useState({});
   const [generating, setGenerating] = useState(false);
   const [includeCoS, setIncludeCoS] = useState(true);
+  const [browseOpen, setBrowseOpen] = useState(null);
 
   useEffect(() => {
     apiGetTemplates().then(t => { setTemplates(t); setLoading(false); }).catch(() => setLoading(false));
@@ -8824,11 +8905,20 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
             const sectionLabel = (label) => (
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 0 4px", borderTop: "1px solid var(--c-border)", marginTop: 10 }}>{label}</div>
             );
+            const allFields = buildAllCaseFields(caseData, parties, insurance, experts);
+            const fieldCategories = [...new Set(allFields.map(f => f.category))];
             const renderPh = (ph) => {
               const sugs = getPlaceholderSuggestions(ph.token, caseData, parties, insurance, experts);
+              const isOpen = browseOpen === ph.token;
               return (
                 <div key={ph.token} style={{ marginBottom: 14 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 4 }}>{ph.label}</label>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)" }}>{ph.label}</label>
+                    <button
+                      onClick={() => setBrowseOpen(isOpen ? null : ph.token)}
+                      style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid var(--c-border)", background: isOpen ? "#1E2A3A" : "var(--c-bg2)", color: isOpen ? "#fff" : "var(--c-text2)", cursor: "pointer" }}
+                    >{isOpen ? "Close Fields" : "Browse Fields"}</button>
+                  </div>
                   {sugs.length > 0 && (
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
                       {sugs.map((s, i) => (
@@ -8836,6 +8926,31 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
                           style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid var(--c-border)", background: values[ph.token] === s.value ? "#1E2A3A" : "var(--c-bg2)", color: values[ph.token] === s.value ? "#fff" : "var(--c-text)", cursor: "pointer" }}
                         >{s.label}</button>
                       ))}
+                    </div>
+                  )}
+                  {isOpen && (
+                    <div style={{ border: "1px solid var(--c-border)", borderRadius: 8, background: "var(--c-bg2)", maxHeight: 200, overflowY: "auto", marginBottom: 6 }}>
+                      {fieldCategories.map(cat => {
+                        const catFields = allFields.filter(f => f.category === cat);
+                        if (!catFields.length) return null;
+                        return (
+                          <div key={cat}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, padding: "6px 10px 2px", background: "var(--c-bg)", position: "sticky", top: 0 }}>{cat}</div>
+                            {catFields.map((f, i) => (
+                              <div
+                                key={i}
+                                onClick={() => { setValues(v => ({ ...v, [ph.token]: f.value })); setBrowseOpen(null); }}
+                                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px", cursor: "pointer", fontSize: 11, borderBottom: "1px solid var(--c-border)" }}
+                                onMouseEnter={e => e.currentTarget.style.background = "var(--c-hover)"}
+                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                              >
+                                <span style={{ color: "var(--c-text2)", marginRight: 8, flexShrink: 0 }}>{f.label}</span>
+                                <span style={{ color: "var(--c-text)", fontWeight: 500, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "55%" }}>{f.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   <input
