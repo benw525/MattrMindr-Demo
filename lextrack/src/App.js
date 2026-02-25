@@ -547,6 +547,11 @@ body.dark-body { background: #0E1116; }
 .dark .modal-title { color: #E6EDF3; }
 .dark .modal-sub { color: #6E7681; }
 .dark .modal-footer { border-top-color: #27313D; }
+.dark .modal-box { background: #161B22; border-color: #27313D; color: #E6EDF3; }
+.dark .login-bg { background: #0E1116; }
+.dark .login-box { background: #161B22; border-color: #27313D; box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+.dark .login-title { color: #E6EDF3; }
+.dark .login-sub { color: #6E7681; }
 .dark .btn-outline { color: #9DA7B3; border-color: #27313D; }
 .dark .btn-outline:hover { color: #4F7393; border-color: #4F7393; background: transparent; }
 .dark .btn-gold { background: #1E2A3A; color: #E6EDF3; }
@@ -1550,7 +1555,7 @@ function ChangePasswordModal({ forced, currentUser, onDone, onClose }) {
     <div className="case-overlay" style={{ left: 0, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="login-box" style={{ maxWidth: 420, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative" }} onClick={e => e.stopPropagation()}>
         <button onClick={onClose} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#1e3a5f", marginBottom: 16 }}>Change Password</div>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 16 }}>Change Password</div>
         {content}
         <button className="btn btn-outline" style={{ width: "100%", marginTop: 10 }} onClick={onClose}>Cancel</button>
       </div>
@@ -2855,7 +2860,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             <button onClick={() => { setContactPopup(null); setContactEditMode(false); }} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
             {contactEditMode && contactEditDraft ? (
               <>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#1e3a5f", marginBottom: 16 }}>Edit Contact</div>
+                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 16 }}>Edit Contact</div>
                 {[["Name", "name"], ["Phone", "phone"], ["Email", "email"], ["Fax", "fax"], ["Address", "address"]].map(([lbl, key]) => (
                   <div className="form-group" key={key}>
                     <label>{lbl}</label>
@@ -2889,7 +2894,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               return (
                 <>
                   <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 600, color: "#1e3a5f", marginBottom: 6 }}>{contactPopup.name}</div>
+                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 6 }}>{contactPopup.name}</div>
                     <span style={{ fontSize: 11, fontWeight: 600, background: cs.bg, color: "#1F2428", borderRadius: 4, padding: "2px 8px" }}>{contactPopup.category}</span>
                   </div>
                   <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 14 }}>
@@ -3888,7 +3893,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 <div className="case-overlay" style={{ left: 0, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={e => e.target === e.currentTarget && (setShowAddMedParty(false), setMedPartySelect(""), setMedPartyDob(""))}>
                   <div className="login-box" style={{ maxWidth: 420, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative" }} onClick={e => e.stopPropagation()}>
                     <button onClick={() => { setShowAddMedParty(false); setMedPartySelect(""); setMedPartyDob(""); }} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#1e3a5f", marginBottom: 16 }}>Add Party to Medical Summary</div>
+                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 16 }}>Add Party to Medical Summary</div>
                     <div className="form-group">
                       <label>Select Party</label>
                       <select value={medPartySelect} onChange={e => {
@@ -4075,7 +4080,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 <div className="case-overlay" style={{ left: 0, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={e => e.target === e.currentTarget && setShowAddParty(false)}>
                   <div className="login-box" style={{ maxWidth: 420, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative" }} onClick={e => e.stopPropagation()}>
                     <button onClick={() => setShowAddParty(false)} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#1e3a5f", marginBottom: 16 }}>Add Party to Billing Summary</div>
+                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 16 }}>Add Party to Billing Summary</div>
                     <div className="form-group">
                       <label>Select Party</label>
                       <select value={newPartyForm.partyId || ""} onChange={e => {
@@ -6781,7 +6786,7 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
     <div className="case-overlay" style={{ left: 0, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="login-box" style={{ maxWidth: 440, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative", maxHeight: "85vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         <button onClick={onClose} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#1e3a5f", marginBottom: 16 }}>Add Time Entry</div>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 16 }}>Add Time Entry</div>
 
         <div className="form-group">
           <label>Case / Matter</label>
