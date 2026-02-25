@@ -49,6 +49,7 @@ server/
     parties.js      — CRUD /api/parties (case parties: individuals & corporations)
     insurance.js    — CRUD /api/insurance (case insurance policies with coverage tracking)
     experts.js      — CRUD /api/experts (case experts with contact card integration)
+    time-entries.js — CRUD /api/time-entries (manual time log entries per user/case)
   system-templates/
     case-header.docx      — Court caption block (auto-prepended to Pleadings)
     case-signature.docx   — Attorney signature block (auto-appended to Pleadings)
@@ -72,7 +73,7 @@ lextrack/
 - Deadline Tracker: calendar grid, list view, iCal feed import, court rules calculator
 - Tasks View: filterable task list with inline editing, auto-escalation, recurring tasks
 - Reports: 10 pre-built report types with CSV export and print
-- Time Log: activity history per user (task completions + notes)
+- Time Log: unified time tracking view; derives entries from task completions, notes, and correspondence; supports manual time entries via `time_entries` table; inline editing for Detail and Time cells (auto-save on blur); Add Entry modal with smart case selector ("Touched Today" grouping, "My Office"/"My Matters" quick filters); CSV export includes all entry types
 - Staff Directory with admin controls (role/office management, send temp passwords, remove staff)
 - Contacts: auto-populated contacts (Clients, Attorneys, Courts + manual Experts/Miscellaneous), with phone/email/fax/address, associated cases, persistent notes, and soft-delete with 30-day recovery. Category-specific fields: Attorney→Firm, Adjuster/Expert→Company, Court→County. Attorney and Court contacts support Staff accordion (debounced auto-save, accordion UI like case parties). Attorney staff types: Legal Assistant, Paralegal, Receptionist, Other. Court staff types: Judicial Assistant, Clerk, Court Reporter, Bailiff, Other. Staff fields: name (single), phone, email.
 - AI Search: Natural language search across all case data via OpenAI gpt-5-mini
@@ -140,3 +141,4 @@ lextrack/
 | case_parties | Per-case parties (individuals & corporations, JSONB data) |
 | case_insurance | Per-case insurance policies with coverage tracking (JSONB data) |
 | case_experts | Per-case experts with contact card links (JSONB data) |
+| time_entries | Manual time log entries per user/case |

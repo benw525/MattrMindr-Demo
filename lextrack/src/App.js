@@ -6,7 +6,7 @@ import {
   apiGetTasks, apiGetCaseTasks, apiCreateTask, apiCreateTasks, apiUpdateTask, apiCompleteTask, apiReassignTasksByRole,
   apiGetDeadlines, apiCreateDeadline,
   apiGetUsers, apiCreateUser, apiDeleteUser, apiGetDeletedUsers, apiRestoreUser, apiUpdateUserOffices, apiUpdateUserRoles, apiUpdateUser,
-  apiGetNotes, apiCreateNote, apiDeleteNote,
+  apiGetNotes, apiCreateNote, apiUpdateNote, apiDeleteNote,
   apiGetLinks, apiCreateLink, apiDeleteLink,
   apiGetActivity, apiCreateActivity,
   apiGetContacts, apiGetDeletedContacts, apiCreateContact, apiUpdateContact, apiDeleteContact, apiRestoreContact, apiMergeContacts,
@@ -18,6 +18,7 @@ import {
   apiGetInsurance, apiCreateInsurance, apiUpdateInsurance, apiDeleteInsurance,
   apiGetExperts, apiCreateExpert, apiUpdateExpert, apiDeleteExpert,
   apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument,
+  apiGetTimeEntries, apiCreateTimeEntry, apiUpdateTimeEntry, apiDeleteTimeEntry,
 } from "./api.js";
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+3:wght@300;400;500;600&display=swap');`;
@@ -1343,7 +1344,7 @@ export default function App() {
         {view === "documents" && <DocumentsView currentUser={currentUser} allCases={allCases} />}
         {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} userOffices={userOffices} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} userOffices={userOffices} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} />}
-        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} />}
+        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} userOffices={userOffices} />}
         {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} />}
         {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} userOffices={userOffices} setUserOffices={setUserOffices} allUsers={allUsers} setAllUsers={setAllUsers} />}
       </div>
@@ -6143,16 +6144,26 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
 
 // ─── Staff View ───────────────────────────────────────────────────────────────
 // ─── Time Log View ────────────────────────────────────────────────────────────
-function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [] }) {
-  const thisMonth = today.slice(0, 7); // "YYYY-MM"
+function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [], userOffices = {} }) {
+  const thisMonth = today.slice(0, 7);
   const [fromDate, setFromDate] = useState(thisMonth + "-01");
   const [toDate,   setToDate]   = useState(today);
+  const [manualEntries, setManualEntries] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingCell, setEditingCell] = useState(null);
+  const [editValue, setEditValue] = useState("");
+  const editRef = useRef(null);
 
-  // Quick range helpers
+  useEffect(() => {
+    apiGetTimeEntries(currentUser.id, fromDate, toDate)
+      .then(setManualEntries)
+      .catch(() => {});
+  }, [currentUser.id, fromDate, toDate]);
+
   const setRange = (label) => {
     const now = new Date(today + "T00:00:00");
     if (label === "This Week") {
-      const day = now.getDay(); // 0=Sun
+      const day = now.getDay();
       const mon = new Date(now); mon.setDate(now.getDate() - ((day + 6) % 7));
       setFromDate(mon.toISOString().split("T")[0]);
       setToDate(today);
@@ -6178,19 +6189,16 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
     }
   };
 
-  // Build activity rows from tasks and notes
   const rows = useMemo(() => {
     const result = [];
     const from = new Date(fromDate + "T00:00:00");
     const to   = new Date(toDate   + "T23:59:59");
-
     const inRange = (dateStr) => {
       if (!dateStr) return false;
       const d = new Date(dateStr);
       return d >= from && d <= to;
     };
 
-    // Task completions — attribute to completedBy or timeLogUser if set, else assigned
     tasks.forEach(t => {
       const creditId = t.timeLogUser || t.completedBy || t.assigned;
       if (creditId !== currentUser.id) return;
@@ -6198,17 +6206,15 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
       if (!inRange(t.completedAt)) return;
       const cs = allCases.find(c => c.id === t.caseId);
       result.push({
-        date:     t.completedAt,
-        type:     "Task Completed",
+        _source: "task", _id: t.id,
+        date: t.completedAt,
         caseTitle: cs?.title || `Case #${t.caseId}`,
-        fileNum:  cs?.fileNum || "",
-        detail:   t.title,
-        category: "",
-        time:     t.timeLogged || "",
+        fileNum: cs?.fileNum || "",
+        detail: t.title,
+        time: t.timeLogged || "",
       });
     });
 
-    // Notes — attribute to timeLogUser if set, else author
     Object.entries(caseNotes).forEach(([caseId, notes]) => {
       (notes || []).forEach(note => {
         const creditId = note.timeLogUser || note.authorId;
@@ -6217,18 +6223,16 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
         const cs = allCases.find(c => c.id === Number(caseId));
         const summary = (note.body || "").slice(0, 100).replace(/\n/g, " ") + (note.body?.length > 100 ? "…" : "");
         result.push({
-          date:     note.createdAt,
-          type:     "Note Added",
+          _source: "note", _id: note.id,
+          date: note.createdAt,
           caseTitle: cs?.title || `Case #${caseId}`,
-          fileNum:  cs?.fileNum || "",
-          detail:   summary,
-          category: note.type || "",
-          time:     note.timeLogged || "",
+          fileNum: cs?.fileNum || "",
+          detail: summary,
+          time: note.timeLogged || "",
         });
       });
     });
 
-    // Correspondence — attribute to sender if they're a firm user
     const userEmail = (allUsers.find(u => u.id === currentUser.id) || {}).email || "";
     correspondence.forEach(email => {
       if (!email.fromEmail) return;
@@ -6237,20 +6241,30 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
       if (!inRange(email.receivedAt)) return;
       const cs = allCases.find(c => c.id === email.caseId);
       result.push({
-        date:     email.receivedAt,
-        type:     "Email Sent",
+        _source: "email", _id: email.id,
+        date: email.receivedAt,
         caseTitle: cs?.title || `Case #${email.caseId}`,
-        fileNum:  cs?.fileNum || "",
-        detail:   email.subject || "(no subject)",
-        category: "",
-        time:     "",
+        fileNum: cs?.fileNum || "",
+        detail: email.subject || "(no subject)",
+        time: "",
       });
     });
 
-    // Sort newest first
+    manualEntries.forEach(me => {
+      const cs = allCases.find(c => c.id === me.caseId);
+      result.push({
+        _source: "manual", _id: me.id,
+        date: me.date,
+        caseTitle: cs?.title || `Case #${me.caseId}`,
+        fileNum: cs?.fileNum || "",
+        detail: me.detail,
+        time: me.time || "",
+      });
+    });
+
     result.sort((a, b) => new Date(b.date) - new Date(a.date));
     return result;
-  }, [tasks, caseNotes, currentUser.id, allCases, fromDate, toDate, correspondence, allUsers]);
+  }, [tasks, caseNotes, currentUser.id, allCases, fromDate, toDate, correspondence, allUsers, manualEntries]);
 
   const fmtDateTime = (iso) => {
     const d = new Date(iso);
@@ -6258,18 +6272,12 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
   };
 
   const exportCSV = () => {
-    const headers = ["Date", "Activity Type", "Case/Matter", "File Number", "Detail", "Note Category", "Time"];
+    const headers = ["Date", "Case/Matter", "File Number", "Detail", "Time"];
     const escapeCell = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
     const csvRows = [
       headers.join(","),
       ...rows.map(r => [
-        fmtDateTime(r.date),
-        r.type,
-        r.caseTitle,
-        r.fileNum,
-        r.detail,
-        r.category,
-        r.time || "",
+        fmtDateTime(r.date), r.caseTitle, r.fileNum, r.detail, r.time || "",
       ].map(escapeCell).join(","))
     ];
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
@@ -6281,31 +6289,64 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
     URL.revokeObjectURL(url);
   };
 
-  const taskCount = rows.filter(r => r.type === "Task Completed").length;
-  const noteCount = rows.filter(r => r.type === "Note Added").length;
-  const emailCount = rows.filter(r => r.type === "Email Sent").length;
+  const startEdit = (source, id, field, currentVal) => {
+    setEditingCell({ key: `${source}-${id}`, field });
+    setEditValue(currentVal || "");
+    setTimeout(() => editRef.current?.focus(), 0);
+  };
+
+  const saveEdit = async () => {
+    if (!editingCell) return;
+    const row = rows.find(r => `${r._source}-${r._id}` === editingCell.key);
+    const field = editingCell.field;
+    setEditingCell(null);
+    if (!row || (row[field] || "") === editValue) return;
+
+    if (row._source === "manual") {
+      try {
+        await apiUpdateTimeEntry(row._id, { [field]: editValue });
+        setManualEntries(prev => prev.map(e => e.id === row._id ? { ...e, [field]: editValue } : e));
+      } catch (err) { console.error(err); }
+    } else if (row._source === "task" && field === "time") {
+      try {
+        await apiUpdateTask(row._id, { timeLogged: editValue });
+      } catch (err) { console.error(err); }
+    } else if (row._source === "note" && field === "time") {
+      try {
+        await apiUpdateNote(row._id, { timeLogged: editValue });
+      } catch (err) { console.error(err); }
+    }
+  };
+
+  const handleDeleteManual = async (id) => {
+    try {
+      await apiDeleteTimeEntry(id);
+      setManualEntries(prev => prev.filter(e => e.id !== id));
+    } catch (err) { console.error(err); }
+  };
+
+  const handleAddEntry = async (entry) => {
+    try {
+      const saved = await apiCreateTimeEntry(entry);
+      setManualEntries(prev => [...prev, saved]);
+      setShowAddForm(false);
+    } catch (err) { alert("Failed to add entry: " + err.message); }
+  };
 
   return (
     <>
       <div className="topbar">
         <div>
           <div className="topbar-title">Time Log</div>
-          <div className="topbar-subtitle">{currentUser.name} · {taskCount} task{taskCount !== 1 ? "s" : ""} completed · {noteCount} note{noteCount !== 1 ? "s" : ""} added{emailCount > 0 ? ` · ${emailCount} email${emailCount !== 1 ? "s" : ""} sent` : ""}</div>
+          <div className="topbar-subtitle">{currentUser.name} · {rows.length} entr{rows.length !== 1 ? "ies" : "y"} · {fmtDateTime(fromDate)} – {fmtDateTime(toDate)}</div>
         </div>
         <div className="topbar-actions">
-          <button
-            className="btn btn-gold"
-            disabled={rows.length === 0}
-            onClick={exportCSV}
-            title={rows.length === 0 ? "No activity in this range" : "Download CSV"}
-          >
-            ⬇ Export CSV
-          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAddForm(true)}>+ Add Entry</button>
+          <button className="btn btn-gold" disabled={rows.length === 0} onClick={exportCSV} title={rows.length === 0 ? "No activity in this range" : "Download CSV"}>⬇ Export CSV</button>
         </div>
       </div>
 
       <div className="content">
-        {/* Filters */}
         <div className="card" style={{ marginBottom: 18 }}>
           <div style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -6318,22 +6359,16 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {["This Week", "This Month", "Last Month", "Last 30 Days", "Last 90 Days", "This Year"].map(label => (
-                <button
-                  key={label}
-                  className="btn btn-outline btn-sm"
-                  style={{ fontSize: 11 }}
-                  onClick={() => setRange(label)}
-                >{label}</button>
+                <button key={label} className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => setRange(label)}>{label}</button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Preview table */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">Activity Preview</div>
-            <span style={{ fontSize: 12, color: "#8A9096" }}>{rows.length} entries · {fmtDateTime(fromDate)} – {fmtDateTime(toDate)}</span>
+            <div className="card-title">Time Entries</div>
+            <span style={{ fontSize: 12, color: "#8A9096" }}>{rows.length} entries</span>
           </div>
           {rows.length === 0 ? (
             <div className="empty">No activity recorded for this date range.</div>
@@ -6343,43 +6378,51 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
                 <thead>
                   <tr>
                     <th style={{ whiteSpace: "nowrap" }}>Date</th>
-                    <th>Activity</th>
                     <th>Case/Matter</th>
                     <th>Detail</th>
-                    <th>Category</th>
-                    <th style={{ whiteSpace: "nowrap" }}>Time</th>
+                    <th style={{ whiteSpace: "nowrap", width: 90 }}>Time</th>
+                    <th style={{ width: 36 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={i}>
+                    <tr key={`${r._source}-${r._id}-${i}`}>
                       <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--c-text2)" }}>{fmtDateTime(r.date)}</td>
-                      <td>
-                        <span style={{
-                          display: "inline-block",
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          background: r.type === "Task Completed" ? "#dcfce7" : "#E4E7EB",
-                          color: "#1F2428",
-                        }}>{r.type}</span>
-                      </td>
                       <td>
                         <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 500 }}>{r.caseTitle}</div>
                         {r.fileNum && <div style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {r.fileNum}</div>}
                       </td>
-                      <td style={{ fontSize: 12, color: "#1F2428", maxWidth: 380 }}>
-                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{r.detail}</div>
-                      </td>
-                      <td>
-                        {r.category && (
-                          <span style={{ fontSize: 11, color: "#1E2A3A", background: "#fff7ed", border: "1px solid #fed7aa", padding: "2px 7px", borderRadius: 4 }}>
-                            {r.category}
-                          </span>
+                      <td style={{ fontSize: 12, color: "#1F2428", maxWidth: 420 }}>
+                        {editingCell?.key === `${r._source}-${r._id}` && editingCell.field === "detail" ? (
+                          <input ref={editRef} value={editValue} onChange={e => setEditValue(e.target.value)}
+                            onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingCell(null); }}
+                            style={{ width: "100%", fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box" }} />
+                        ) : (
+                          <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", cursor: r._source === "manual" ? "pointer" : "default", minHeight: 18 }}
+                            onClick={() => r._source === "manual" && startEdit(r._source, r._id, "detail", r.detail)}
+                            title={r._source === "manual" ? "Click to edit" : ""}
+                          >{r.detail || <span style={{ color: "#8A9096", fontStyle: "italic" }}>Click to add detail</span>}</div>
                         )}
                       </td>
-                      <td style={{ fontSize: 12, color: "#8A9096", whiteSpace: "nowrap" }}>{r.time || "—"}</td>
+                      <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                        {editingCell?.key === `${r._source}-${r._id}` && editingCell.field === "time" ? (
+                          <input ref={editRef} value={editValue} onChange={e => setEditValue(e.target.value)}
+                            onBlur={saveEdit} onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingCell(null); }}
+                            style={{ width: 70, fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
+                        ) : (
+                          <span style={{ cursor: (r._source === "manual" || r._source === "task" || r._source === "note") ? "pointer" : "default", color: r.time ? "var(--c-text2)" : "#8A9096" }}
+                            onClick={() => (r._source === "manual" || r._source === "task" || r._source === "note") && startEdit(r._source, r._id, "time", r.time)}
+                            title={(r._source === "manual" || r._source === "task" || r._source === "note") ? "Click to edit" : ""}
+                          >{r.time || "—"}</span>
+                        )}
+                      </td>
+                      <td>
+                        {r._source === "manual" && (
+                          <button onClick={() => handleDeleteManual(r._id)}
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#8A9096", padding: 2 }}
+                            title="Delete entry">✕</button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -6388,7 +6431,176 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
           )}
         </div>
       </div>
+
+      {showAddForm && (
+        <AddTimeEntryModal
+          allCases={allCases}
+          currentUser={currentUser}
+          tasks={tasks}
+          caseNotes={caseNotes}
+          correspondence={correspondence}
+          allUsers={allUsers}
+          userOffices={userOffices}
+          onSave={handleAddEntry}
+          onClose={() => setShowAddForm(false)}
+        />
+      )}
     </>
+  );
+}
+
+function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspondence, allUsers, userOffices, onSave, onClose }) {
+  const [caseId, setCaseId] = useState(null);
+  const [date, setDate] = useState(today);
+  const [detail, setDetail] = useState("");
+  const [time, setTime] = useState("");
+  const [caseSearch, setCaseSearch] = useState("");
+  const [caseFilter, setCaseFilter] = useState("all");
+
+  const todayCaseIds = useMemo(() => {
+    const ids = new Set();
+    const todayStart = new Date(today + "T00:00:00");
+    const todayEnd = new Date(today + "T23:59:59");
+    const isToday = (dateStr) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      return d >= todayStart && d <= todayEnd;
+    };
+    tasks.forEach(t => {
+      const creditId = t.timeLogUser || t.completedBy || t.assigned;
+      if (creditId === currentUser.id && t.status === "Completed" && isToday(t.completedAt)) ids.add(t.caseId);
+    });
+    Object.entries(caseNotes).forEach(([cid, notes]) => {
+      (notes || []).forEach(note => {
+        const creditId = note.timeLogUser || note.authorId;
+        if (creditId === currentUser.id && isToday(note.createdAt)) ids.add(Number(cid));
+      });
+    });
+    const userEmail = (allUsers.find(u => u.id === currentUser.id) || {}).email || "";
+    (correspondence || []).forEach(email => {
+      if (userEmail && email.fromEmail?.toLowerCase() === userEmail.toLowerCase() && isToday(email.receivedAt)) ids.add(email.caseId);
+    });
+    return ids;
+  }, [tasks, caseNotes, correspondence, currentUser.id, allUsers]);
+
+  const myOffices = useMemo(() => (userOffices[currentUser.id] || []), [userOffices, currentUser.id]);
+
+  const filteredCases = useMemo(() => {
+    let cases = allCases.filter(c => c.status !== "Closed" || todayCaseIds.has(c.id));
+    if (caseFilter === "myOffice" && myOffices.length > 0) {
+      cases = cases.filter(c => (c.offices || []).some(o => myOffices.includes(o)));
+    } else if (caseFilter === "myMatters") {
+      cases = cases.filter(c => [c.leadAttorney, c.secondAttorney, c.paralegal, c.paralegal2, c.legalAssistant].includes(currentUser.id));
+    }
+    if (caseSearch) {
+      const q = caseSearch.toLowerCase();
+      cases = cases.filter(c => (c.title || "").toLowerCase().includes(q) || (c.fileNum || "").toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q));
+    }
+    const todayGroup = cases.filter(c => todayCaseIds.has(c.id));
+    const otherGroup = cases.filter(c => !todayCaseIds.has(c.id));
+    todayGroup.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    otherGroup.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    return { todayGroup, otherGroup };
+  }, [allCases, caseFilter, caseSearch, todayCaseIds, currentUser.id, myOffices]);
+
+  const selectedCase = allCases.find(c => c.id === caseId);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+        <div className="modal-header"><span>Add Time Entry</span><button className="modal-close" onClick={onClose}>✕</button></div>
+        <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 14, overflow: "auto", flex: 1 }}>
+          <div>
+            <label className="field-label">Case / Matter *</label>
+            {selectedCase ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", fontSize: 13 }}>
+                  <div style={{ fontWeight: 500 }}>{selectedCase.title}</div>
+                  {selectedCase.fileNum && <div style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {selectedCase.fileNum}</div>}
+                </div>
+                <button className="btn btn-outline btn-sm" onClick={() => setCaseId(null)}>Change</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  {[
+                    { key: "all", label: "All Cases" },
+                    { key: "myMatters", label: "My Matters" },
+                    ...(myOffices.length > 0 ? [{ key: "myOffice", label: "My Office" }] : []),
+                  ].map(f => (
+                    <button key={f.key}
+                      className={`btn btn-sm ${caseFilter === f.key ? "btn-primary" : "btn-outline"}`}
+                      style={{ fontSize: 11 }}
+                      onClick={() => setCaseFilter(f.key)}
+                    >{f.label}</button>
+                  ))}
+                </div>
+                <input
+                  placeholder="Search cases..."
+                  value={caseSearch}
+                  onChange={e => setCaseSearch(e.target.value)}
+                  style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box", marginBottom: 8 }}
+                />
+                <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--c-border)", borderRadius: 6 }}>
+                  {filteredCases.todayGroup.length > 0 && (
+                    <>
+                      <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, background: "var(--c-bg2)", borderBottom: "1px solid var(--c-border)", position: "sticky", top: 0, zIndex: 1 }}>Touched Today</div>
+                      {filteredCases.todayGroup.map(c => (
+                        <div key={c.id} onClick={() => setCaseId(c.id)}
+                          style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid var(--c-border)", fontSize: 13 }}
+                          onMouseOver={e => e.currentTarget.style.background = "var(--c-hover)"} onMouseOut={e => e.currentTarget.style.background = ""}>
+                          <div style={{ fontWeight: 500 }}>{c.title}</div>
+                          {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {filteredCases.otherGroup.length > 0 && (
+                    <>
+                      {filteredCases.todayGroup.length > 0 && (
+                        <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, background: "var(--c-bg2)", borderBottom: "1px solid var(--c-border)", position: "sticky", top: 0, zIndex: 1 }}>All Cases</div>
+                      )}
+                      {filteredCases.otherGroup.map(c => (
+                        <div key={c.id} onClick={() => setCaseId(c.id)}
+                          style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid var(--c-border)", fontSize: 13 }}
+                          onMouseOver={e => e.currentTarget.style.background = "var(--c-hover)"} onMouseOut={e => e.currentTarget.style.background = ""}>
+                          <div style={{ fontWeight: 500 }}>{c.title}</div>
+                          {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {filteredCases.todayGroup.length === 0 && filteredCases.otherGroup.length === 0 && (
+                    <div style={{ padding: 16, fontSize: 12, color: "#8A9096", textAlign: "center" }}>No cases match your filters.</div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <label className="field-label">Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: "100%" }} />
+            </div>
+            <div>
+              <label className="field-label">Time</label>
+              <input placeholder="e.g. 1.5, 0:30" value={time} onChange={e => setTime(e.target.value)}
+                style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box" }} />
+            </div>
+          </div>
+          <div>
+            <label className="field-label">Detail</label>
+            <textarea value={detail} onChange={e => setDetail(e.target.value)} rows={3}
+              placeholder="Description of work performed..."
+              style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+        </div>
+        <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={!caseId} onClick={() => onSave({ caseId, date, detail, time })}>Add Entry</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

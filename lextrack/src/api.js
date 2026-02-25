@@ -60,6 +60,7 @@ export const apiCreateDeadline = (data) => apiFetch("/api/deadlines", { method: 
 // Notes
 export const apiGetNotes    = (caseId) => apiFetch(`/api/notes/${caseId}`);
 export const apiCreateNote  = (data)   => apiFetch("/api/notes",     { method: "POST",   body: data });
+export const apiUpdateNote  = (id, data) => apiFetch(`/api/notes/${id}`, { method: "PUT",    body: data });
 export const apiDeleteNote  = (id)     => apiFetch(`/api/notes/${id}`, { method: "DELETE" });
 
 // Links
@@ -154,3 +155,9 @@ export const apiGetExperts    = (caseId) => apiFetch(`/api/experts/${caseId}`);
 export const apiCreateExpert  = (data)   => apiFetch("/api/experts",       { method: "POST",   body: data });
 export const apiUpdateExpert  = (id, data) => apiFetch(`/api/experts/${id}`, { method: "PUT",    body: data });
 export const apiDeleteExpert  = (id)     => apiFetch(`/api/experts/${id}`, { method: "DELETE" });
+
+// Time Entries
+export const apiGetTimeEntries    = (userId, from, to) => apiFetch(`/api/time-entries?userId=${userId}&from=${from}&to=${to}`);
+export const apiCreateTimeEntry   = (data)   => apiFetch("/api/time-entries",       { method: "POST",   body: data });
+export const apiUpdateTimeEntry   = (id, data) => apiFetch(`/api/time-entries/${id}`, { method: "PUT",    body: data });
+export const apiDeleteTimeEntry   = (id)     => apiFetch(`/api/time-entries/${id}`, { method: "DELETE" });

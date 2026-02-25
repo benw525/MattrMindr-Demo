@@ -47,6 +47,21 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
+router.put("/:id", requireAuth, async (req, res) => {
+  const { timeLogged } = req.body;
+  try {
+    const { rows } = await pool.query(
+      "UPDATE case_notes SET time_logged = $1 WHERE id = $2 RETURNING *",
+      [timeLogged || null, req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    return res.json(toFrontend(rows[0]));
+  } catch (err) {
+    console.error("Note update error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     await pool.query("DELETE FROM case_notes WHERE id = $1", [req.params.id]);

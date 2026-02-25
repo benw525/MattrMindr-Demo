@@ -255,6 +255,19 @@ async function createSchema() {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS time_entries (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        case_id    INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        date       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        detail     TEXT    NOT NULL DEFAULT '',
+        time       VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
     await client.query("COMMIT");
     console.log("Schema created successfully.");
   } catch (err) {
