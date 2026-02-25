@@ -17,7 +17,7 @@ import {
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
   apiGetInsurance, apiCreateInsurance, apiUpdateInsurance, apiDeleteInsurance,
   apiGetExperts, apiCreateExpert, apiUpdateExpert, apiDeleteExpert,
-  apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument,
+  apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument, apiDetectPleadingSections,
   apiGetTimeEntries, apiCreateTimeEntry, apiUpdateTimeEntry, apiDeleteTimeEntry,
 } from "./api.js";
 
@@ -8349,12 +8349,72 @@ function DocumentsView({ currentUser }) {
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 6 }}>Category</label>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {TEMPLATE_CATEGORIES.map(cat => (
-                      <button key={cat} onClick={() => setWizard(w => ({ ...w, category: cat, subType: cat !== "Letters" ? "" : w.subType }))}
+                      <button key={cat} onClick={async () => {
+                        setWizard(w => ({ ...w, category: cat, subType: cat !== "Letters" ? "" : w.subType }));
+                        if (cat === "Pleadings" && wizard.file && !wizard.detectionDone) {
+                          setWizard(w => ({ ...w, category: cat, subType: "", detectingPleading: true }));
+                          try {
+                            const result = await apiDetectPleadingSections(wizard.file);
+                            setWizard(w => ({ ...w, detectingPleading: false, detectionDone: true, detectedSections: result, useSystemHeader: !result.hasHeader, useSystemSignature: !result.hasSignature, useSystemCos: !result.hasCos }));
+                          } catch { setWizard(w => ({ ...w, detectingPleading: false, detectionDone: true, detectedSections: { hasHeader: false, hasSignature: false, hasCos: false } })); }
+                        }
+                      }}
                         style={{ padding: "8px 16px", borderRadius: 8, border: `2px solid ${wizard.category === cat ? "#1E2A3A" : "var(--c-border)"}`, background: wizard.category === cat ? CATEGORY_COLORS[cat] : "var(--c-bg2)", cursor: "pointer", fontSize: 13, fontWeight: wizard.category === cat ? 700 : 400, color: "var(--c-text)" }}
                       >{cat}</button>
                     ))}
                   </div>
                 </div>
+
+                {wizard.category === "Pleadings" && wizard.detectingPleading && (
+                  <div style={{ background: "#EFF6FF", border: "1px solid #93C5FD", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 12, color: "#1E40AF" }}>
+                    Analyzing document for existing pleading sections...
+                  </div>
+                )}
+
+                {wizard.category === "Pleadings" && wizard.detectionDone && wizard.detectedSections && (wizard.detectedSections.hasHeader || wizard.detectedSections.hasSignature || wizard.detectedSections.hasCos) && (
+                  <div style={{ background: "var(--c-bg2)", border: "1px solid var(--c-border)", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text)", marginBottom: 4 }}>Pleading Sections Detected</div>
+                    <div style={{ fontSize: 12, color: "var(--c-text3)", marginBottom: 12 }}>Your document appears to contain some standard pleading sections. For each one, choose whether to use the system-provided version or keep what's in your document.</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {wizard.detectedSections.hasHeader && (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg)" }}>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text)" }}>Case Header (Caption Block)</div>
+                            <div style={{ fontSize: 11, color: "var(--c-text3)" }}>Court name, parties, case number</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button onClick={() => setWizard(w => ({ ...w, useSystemHeader: true }))} style={{ padding: "4px 10px", borderRadius: 5, border: `2px solid ${wizard.useSystemHeader ? "#1E2A3A" : "var(--c-border)"}`, background: wizard.useSystemHeader ? "#d1fae5" : "var(--c-bg2)", cursor: "pointer", fontSize: 11, fontWeight: wizard.useSystemHeader ? 600 : 400, color: "var(--c-text)" }}>Use System</button>
+                            <button onClick={() => setWizard(w => ({ ...w, useSystemHeader: false }))} style={{ padding: "4px 10px", borderRadius: 5, border: `2px solid ${!wizard.useSystemHeader ? "#1E2A3A" : "var(--c-border)"}`, background: !wizard.useSystemHeader ? "#FEF3C7" : "var(--c-bg2)", cursor: "pointer", fontSize: 11, fontWeight: !wizard.useSystemHeader ? 600 : 400, color: "var(--c-text)" }}>Use Document's Own</button>
+                          </div>
+                        </div>
+                      )}
+                      {wizard.detectedSections.hasSignature && (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg)" }}>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text)" }}>Signature Block</div>
+                            <div style={{ fontSize: 11, color: "var(--c-text3)" }}>Attorney name, firm, address</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button onClick={() => setWizard(w => ({ ...w, useSystemSignature: true }))} style={{ padding: "4px 10px", borderRadius: 5, border: `2px solid ${wizard.useSystemSignature ? "#1E2A3A" : "var(--c-border)"}`, background: wizard.useSystemSignature ? "#d1fae5" : "var(--c-bg2)", cursor: "pointer", fontSize: 11, fontWeight: wizard.useSystemSignature ? 600 : 400, color: "var(--c-text)" }}>Use System</button>
+                            <button onClick={() => setWizard(w => ({ ...w, useSystemSignature: false }))} style={{ padding: "4px 10px", borderRadius: 5, border: `2px solid ${!wizard.useSystemSignature ? "#1E2A3A" : "var(--c-border)"}`, background: !wizard.useSystemSignature ? "#FEF3C7" : "var(--c-bg2)", cursor: "pointer", fontSize: 11, fontWeight: !wizard.useSystemSignature ? 600 : 400, color: "var(--c-text)" }}>Use Document's Own</button>
+                          </div>
+                        </div>
+                      )}
+                      {wizard.detectedSections.hasCos && (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg)" }}>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text)" }}>Certificate of Service</div>
+                            <div style={{ fontSize: 11, color: "var(--c-text3)" }}>Service attestation with party list</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button onClick={() => setWizard(w => ({ ...w, useSystemCos: true }))} style={{ padding: "4px 10px", borderRadius: 5, border: `2px solid ${wizard.useSystemCos ? "#1E2A3A" : "var(--c-border)"}`, background: wizard.useSystemCos ? "#d1fae5" : "var(--c-bg2)", cursor: "pointer", fontSize: 11, fontWeight: wizard.useSystemCos ? 600 : 400, color: "var(--c-text)" }}>Use System</button>
+                            <button onClick={() => setWizard(w => ({ ...w, useSystemCos: false }))} style={{ padding: "4px 10px", borderRadius: 5, border: `2px solid ${!wizard.useSystemCos ? "#1E2A3A" : "var(--c-border)"}`, background: !wizard.useSystemCos ? "#FEF3C7" : "var(--c-bg2)", cursor: "pointer", fontSize: 11, fontWeight: !wizard.useSystemCos ? 600 : 400, color: "var(--c-text)" }}>Use Document's Own</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {wizard.category === "Letters" && (
                   <div style={{ marginBottom: 16 }}>
@@ -8604,6 +8664,14 @@ function DocumentsView({ currentUser }) {
                     <div><strong>Placeholders:</strong> {wizard.placeholders.length} ({wizard.placeholders.filter(p => p.autoDetected).length} auto-detected, {wizard.placeholders.filter(p => !p.autoDetected).length} manual)</div>
                     {wizard.tags.length > 0 && <div><strong>Tags:</strong> {wizard.tags.join(", ")}</div>}
                     <div><strong>Visibility:</strong> {(wizard.visibility || "global") === "global" ? "Everyone" : "Only Me"}</div>
+                    {wizard.category === "Pleadings" && wizard.detectedSections && (wizard.detectedSections.hasHeader || wizard.detectedSections.hasSignature || wizard.detectedSections.hasCos) && (
+                      <div style={{ marginTop: 4 }}>
+                        <strong>Pleading Sections:</strong>
+                        {wizard.detectedSections.hasHeader && <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 6px", borderRadius: 4, background: wizard.useSystemHeader ? "#d1fae5" : "#FEF3C7" }}>Header: {wizard.useSystemHeader ? "System" : "Document"}</span>}
+                        {wizard.detectedSections.hasSignature && <span style={{ marginLeft: 4, fontSize: 11, padding: "1px 6px", borderRadius: 4, background: wizard.useSystemSignature ? "#d1fae5" : "#FEF3C7" }}>Signature: {wizard.useSystemSignature ? "System" : "Document"}</span>}
+                        {wizard.detectedSections.hasCos && <span style={{ marginLeft: 4, fontSize: 11, padding: "1px 6px", borderRadius: 4, background: wizard.useSystemCos ? "#d1fae5" : "#FEF3C7" }}>CoS: {wizard.useSystemCos ? "System" : "Document"}</span>}
+                      </div>
+                    )}
                   </div>
                   {wizard.placeholders.length > 0 && (
                     <div style={{ marginTop: 12, borderTop: "1px solid var(--c-border)", paddingTop: 8 }}>
@@ -8638,7 +8706,8 @@ function DocumentsView({ currentUser }) {
                       });
                       setTemplates(p => p.map(t => t.id === updated.id ? updated : t));
                     } else {
-                      const saved = await apiSaveTemplate(wizard.file, wizard.name.trim(), wizard.tags, phData, wizard.visibility || "global", wizard.category || "General", wizard.subType || "");
+                      const systemPrefs = wizard.category === "Pleadings" ? { useSystemHeader: wizard.useSystemHeader !== false, useSystemSignature: wizard.useSystemSignature !== false, useSystemCos: wizard.useSystemCos !== false } : null;
+                      const saved = await apiSaveTemplate(wizard.file, wizard.name.trim(), wizard.tags, phData, wizard.visibility || "global", wizard.category || "General", wizard.subType || "", systemPrefs);
                       setTemplates(p => [...p, saved]);
                     }
                     setWizard(null);

@@ -115,7 +115,7 @@ export async function apiUploadTemplateFile(file) {
   return res.json();
 }
 
-export async function apiSaveTemplate(file, name, tags, placeholders, visibility, category, subType) {
+export async function apiSaveTemplate(file, name, tags, placeholders, visibility, category, subType, systemPrefs) {
   const form = new FormData();
   form.append("file", file);
   form.append("name", name);
@@ -124,8 +124,21 @@ export async function apiSaveTemplate(file, name, tags, placeholders, visibility
   form.append("visibility", visibility || "global");
   form.append("category", category || "General");
   form.append("subType", subType || "");
+  if (systemPrefs) {
+    form.append("useSystemHeader", String(systemPrefs.useSystemHeader !== false));
+    form.append("useSystemSignature", String(systemPrefs.useSystemSignature !== false));
+    form.append("useSystemCos", String(systemPrefs.useSystemCos !== false));
+  }
   const res = await fetch("/api/templates", { method: "POST", credentials: "include", body: form });
   if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `Save error ${res.status}`); }
+  return res.json();
+}
+
+export async function apiDetectPleadingSections(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/templates/detect-pleading-sections", { method: "POST", credentials: "include", body: form });
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `Detect error ${res.status}`); }
   return res.json();
 }
 

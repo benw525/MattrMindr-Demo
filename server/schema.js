@@ -179,6 +179,9 @@ async function createSchema() {
         visibility      TEXT    NOT NULL DEFAULT 'global',
         category        TEXT    NOT NULL DEFAULT 'General',
         sub_type        TEXT    NOT NULL DEFAULT '',
+        use_system_header    BOOLEAN DEFAULT true,
+        use_system_signature BOOLEAN DEFAULT true,
+        use_system_cos       BOOLEAN DEFAULT true,
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );

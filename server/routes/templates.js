@@ -93,7 +93,7 @@ function assemblePleading(mainBuffer, headerXml, signatureXml, cosXml) {
   return zip.generate({ type: "nodebuffer" });
 }
 
-const TEMPLATE_FIELDS = "id, name, tags, created_by, created_by_name, placeholders, visibility, category, sub_type, created_at, updated_at";
+const TEMPLATE_FIELDS = "id, name, tags, created_by, created_by_name, placeholders, visibility, category, sub_type, use_system_header, use_system_signature, use_system_cos, created_at, updated_at";
 
 const toFrontend = (row) => ({
   id: row.id,
@@ -105,6 +105,9 @@ const toFrontend = (row) => ({
   visibility: row.visibility || "global",
   category: row.category || "General",
   subType: row.sub_type || "",
+  useSystemHeader: row.use_system_header !== false,
+  useSystemSignature: row.use_system_signature !== false,
+  useSystemCos: row.use_system_cos !== false,
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });
@@ -144,6 +147,45 @@ function scanDocxForPlaceholders(buffer) {
   } catch (err) {
     console.error("scanDocxForPlaceholders error:", err.message);
     return [];
+  }
+}
+
+function detectPleadingSections(buffer) {
+  try {
+    const zip = new PizZip(buffer);
+    const docFile = zip.file("word/document.xml");
+    if (!docFile) return { hasHeader: false, hasSignature: false, hasCos: false };
+    const xml = docFile.asText();
+
+    const textContent = xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").toLowerCase();
+
+    const headerTokenPatterns = ["{{court}}", "{{county}}", "{{plaintiffs}}", "{{defendants}}", "{{case_number}}",
+      "<<court>>", "<<county>>", "<<plaintiffs>>", "<<defendants>>", "<<case_number>>"];
+    const headerTextPatterns = [/in the circuit court/i, /in the district court/i, /in the superior court/i,
+      /in the court of/i, /civil action/i, /case no\b/i, /cause no\b/i,
+      /\bplaintiff\s*[,)]/i, /\bdefendant\s*[,)]/i, /\bv\.\s/i, /\bvs\.\s/i];
+    const headerTokenHits = headerTokenPatterns.filter(t => xml.toLowerCase().includes(t)).length;
+    const headerTextHits = headerTextPatterns.filter(p => p.test(textContent)).length;
+    const hasHeader = headerTokenHits >= 2 || headerTextHits >= 2 || (headerTokenHits >= 1 && headerTextHits >= 1);
+
+    const sigTokenPatterns = ["{{signature}}", "{{attorney_name}}", "{{attorney_firm}}", "{{attorney_code}}",
+      "<<signature>>", "<<attorney_name>>", "<<attorney_firm>>", "<<attorney_code>>"];
+    const sigTextPatterns = [/respectfully submitted/i, /\/s\//i, /attorney for/i, /bar no/i, /bar number/i,
+      /counsel for/i, /attorney at law/i];
+    const sigTokenHits = sigTokenPatterns.filter(t => xml.toLowerCase().includes(t)).length;
+    const sigTextHits = sigTextPatterns.filter(p => p.test(textContent)).length;
+    const hasSignature = sigTokenHits >= 2 || sigTextHits >= 2 || (sigTokenHits >= 1 && sigTextHits >= 1);
+
+    const cosTokenPatterns = ["{{attorney}}", "{{attorney_firm}}", "{{attorney_address}}"];
+    const cosTextPatterns = [/certificate of service/i, /i hereby certify/i, /served upon/i,
+      /was served/i, /mailing a copy/i, /electronic.{0,20}service/i];
+    const cosTextHits = cosTextPatterns.filter(p => p.test(textContent)).length;
+    const hasCos = cosTextHits >= 2;
+
+    return { hasHeader, hasSignature, hasCos };
+  } catch (err) {
+    console.error("detectPleadingSections error:", err.message);
+    return { hasHeader: false, hasSignature: false, hasCos: false };
   }
 }
 
@@ -235,6 +277,17 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
   }
 });
 
+router.post("/detect-pleading-sections", requireAuth, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  try {
+    const result = detectPleadingSections(req.file.buffer);
+    return res.json(result);
+  } catch (err) {
+    console.error("Detect pleading sections error:", err);
+    return res.status(500).json({ error: "Failed to analyze document" });
+  }
+});
+
 router.post("/", requireAuth, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
   const fname = req.file.originalname.toLowerCase();
@@ -305,9 +358,13 @@ router.post("/", requireAuth, upload.single("file"), async (req, res) => {
       ...(ph.mapping && ph.mapping !== "_manual" ? { mapping: ph.mapping } : {}),
     }));
 
+    const useSystemHeader = req.body.useSystemHeader !== "false";
+    const useSystemSignature = req.body.useSystemSignature !== "false";
+    const useSystemCos = req.body.useSystemCos !== "false";
+
     const { rows } = await pool.query(
-      `INSERT INTO doc_templates (name, tags, created_by, created_by_name, placeholders, docx_data, visibility, category, sub_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO doc_templates (name, tags, created_by, created_by_name, placeholders, docx_data, visibility, category, sub_type, use_system_header, use_system_signature, use_system_cos)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING ${TEMPLATE_FIELDS}`,
       [
         name.trim(),
@@ -319,6 +376,9 @@ router.post("/", requireAuth, upload.single("file"), async (req, res) => {
         req.body.visibility === "personal" ? "personal" : "global",
         category || "General",
         subType || "",
+        useSystemHeader,
+        useSystemSignature,
+        useSystemCos,
       ]
     );
     return res.status(201).json(toFrontend(rows[0]));
@@ -388,7 +448,7 @@ router.get("/:id/source", requireAuth, async (req, res) => {
 });
 
 router.put("/:id", requireAuth, async (req, res) => {
-  const { name, tags, placeholders, visibility, reprocessDocx, category, subType } = req.body;
+  const { name, tags, placeholders, visibility, reprocessDocx, category, subType, useSystemHeader, useSystemSignature, useSystemCos } = req.body;
   try {
     const { rows: existing } = await pool.query("SELECT created_by, docx_data, placeholders AS old_placeholders FROM doc_templates WHERE id = $1", [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ error: "Not found" });
@@ -402,6 +462,9 @@ router.put("/:id", requireAuth, async (req, res) => {
     if (visibility !== undefined) { sets.push(`visibility = $${idx++}`); vals.push(visibility === "personal" ? "personal" : "global"); }
     if (category !== undefined) { sets.push(`category = $${idx++}`); vals.push(category); }
     if (subType !== undefined) { sets.push(`sub_type = $${idx++}`); vals.push(subType); }
+    if (useSystemHeader !== undefined) { sets.push(`use_system_header = $${idx++}`); vals.push(useSystemHeader); }
+    if (useSystemSignature !== undefined) { sets.push(`use_system_signature = $${idx++}`); vals.push(useSystemSignature); }
+    if (useSystemCos !== undefined) { sets.push(`use_system_cos = $${idx++}`); vals.push(useSystemCos); }
 
     let parsedNewPhs = [];
     if (placeholders !== undefined) {
@@ -519,9 +582,13 @@ router.post("/:id/generate", requireAuth, async (req, res) => {
     let docxBuffer = template.docx_data;
 
     if (isPleading) {
-      const headerBuf = loadSystemTemplate("case-header.docx");
-      const sigBuf = loadSystemTemplate("case-signature.docx");
-      const cosBuf = includeCoS ? loadSystemTemplate("certificate-of-service.docx") : null;
+      const useSystemHeader = template.use_system_header !== false;
+      const useSystemSignature = template.use_system_signature !== false;
+      const useSystemCos = template.use_system_cos !== false;
+
+      const headerBuf = useSystemHeader ? loadSystemTemplate("case-header.docx") : null;
+      const sigBuf = useSystemSignature ? loadSystemTemplate("case-signature.docx") : null;
+      const cosBuf = (includeCoS && useSystemCos) ? loadSystemTemplate("certificate-of-service.docx") : null;
 
       const headerXml = headerBuf ? extractBodyXml(headerBuf) : "";
       const sigXml = sigBuf ? extractBodyXml(sigBuf) : "";
