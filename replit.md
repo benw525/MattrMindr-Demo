@@ -41,6 +41,7 @@ server/
     activity.js     — GET/POST /api/activity
     contacts.js     — CRUD /api/contacts (soft-delete/restore, 30-day retention)
     contact-notes.js — GET/POST/DELETE /api/contact-notes
+    contact-staff.js — CRUD /api/contact-staff (staff under attorney/court contacts)
     ai-search.js    — POST /api/ai-search (OpenAI gpt-5-mini semantic case search)
     correspondence.js — GET/DELETE /api/correspondence (per-case email history)
     inbound-email.js — POST /api/inbound-email (SendGrid Inbound Parse webhook, no auth)
@@ -66,7 +67,7 @@ lextrack/
 - Reports: 10 pre-built report types with CSV export and print
 - Time Log: activity history per user (task completions + notes)
 - Staff Directory with admin controls (role/office management, send temp passwords, remove staff)
-- Contacts: auto-populated contacts (Clients, Attorneys, Courts + manual Experts/Miscellaneous), with phone/email/fax/address, associated cases, persistent notes, and soft-delete with 30-day recovery
+- Contacts: auto-populated contacts (Clients, Attorneys, Courts + manual Experts/Miscellaneous), with phone/email/fax/address, associated cases, persistent notes, and soft-delete with 30-day recovery. Category-specific fields: Attorney→Firm, Adjuster/Expert→Company, Court→County. Attorney and Court contacts support Staff accordion (debounced auto-save, accordion UI like case parties). Attorney staff types: Legal Assistant, Paralegal, Receptionist, Other. Court staff types: Judicial Assistant, Clerk, Court Reporter, Bailiff, Other. Staff fields: name (single), phone, email.
 - AI Search: Natural language search across all case data via OpenAI gpt-5-mini
 - Confidential Cases: access-restricted to assigned team members + App Admin
 - Case Parties: accordion-style party management on Details tab; Individual (name/address/phones/other contacts/email/represented-by) and Corporation (entity name/type/registered agent/POC) types; any party type selectable; integrated with document generator placeholders
@@ -123,8 +124,9 @@ lextrack/
 | case_notes | Per-case notes |
 | case_links | Per-case document links |
 | case_activity | Per-case activity log |
-| contacts | Clients, attorneys, courts, experts |
+| contacts | Clients, attorneys, courts, experts (+ firm/company/county fields) |
 | contact_notes | Per-contact notes |
+| contact_staff | Staff members under attorney/court contacts (JSONB data) |
 | case_correspondence | Inbound emails captured via SendGrid |
 | doc_templates | Document templates (.docx with placeholders) |
 | case_parties | Per-case parties (individuals & corporations, JSONB data) |

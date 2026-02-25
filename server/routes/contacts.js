@@ -19,6 +19,9 @@ const toFrontend = (row) => ({
   email: row.email || "",
   fax: row.fax || "",
   address: row.address || "",
+  firm: row.firm || "",
+  company: row.company || "",
+  county: row.county || "",
   deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
 });
@@ -61,9 +64,9 @@ router.post("/", requireAuth, async (req, res) => {
   const d = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO contacts (name, category, phone, email, fax, address)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [d.name, d.category, d.phone || "", d.email || "", d.fax || "", d.address || ""]
+      `INSERT INTO contacts (name, category, phone, email, fax, address, firm, company, county)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [d.name, d.category, d.phone || "", d.email || "", d.fax || "", d.address || "", d.firm || "", d.company || "", d.county || ""]
     );
     return res.status(201).json(toFrontend(rows[0]));
   } catch (err) {
@@ -76,9 +79,9 @@ router.put("/:id", requireAuth, async (req, res) => {
   const d = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE contacts SET name=$1, category=$2, phone=$3, email=$4, fax=$5, address=$6
-       WHERE id=$7 AND deleted_at IS NULL RETURNING *`,
-      [d.name, d.category, d.phone || "", d.email || "", d.fax || "", d.address || "", req.params.id]
+      `UPDATE contacts SET name=$1, category=$2, phone=$3, email=$4, fax=$5, address=$6, firm=$7, company=$8, county=$9
+       WHERE id=$10 AND deleted_at IS NULL RETURNING *`,
+      [d.name, d.category, d.phone || "", d.email || "", d.fax || "", d.address || "", d.firm || "", d.company || "", d.county || "", req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     return res.json(toFrontend(rows[0]));
@@ -128,12 +131,11 @@ router.post("/merge", requireAuth, requireShareholder, async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Update primary contact with chosen field values
     await client.query(
-      `UPDATE contacts SET name=$1, category=$2, phone=$3, email=$4, fax=$5, address=$6
-       WHERE id=$7 AND deleted_at IS NULL`,
+      `UPDATE contacts SET name=$1, category=$2, phone=$3, email=$4, fax=$5, address=$6, firm=$7, company=$8, county=$9
+       WHERE id=$10 AND deleted_at IS NULL`,
       [fields.name, fields.category, fields.phone || "", fields.email || "",
-       fields.fax || "", fields.address || "", primaryId]
+       fields.fax || "", fields.address || "", fields.firm || "", fields.company || "", fields.county || "", primaryId]
     );
 
     // Move all notes from merged contacts to the primary

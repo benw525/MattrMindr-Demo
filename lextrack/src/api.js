@@ -89,6 +89,12 @@ export const apiGetContactNotes    = (contactId) => apiFetch(`/api/contact-notes
 export const apiCreateContactNote  = (data)      => apiFetch("/api/contact-notes",       { method: "POST",   body: data });
 export const apiDeleteContactNote  = (id)        => apiFetch(`/api/contact-notes/${id}`, { method: "DELETE" });
 
+// Contact Staff
+export const apiGetContactStaff    = (contactId) => apiFetch(`/api/contact-staff/${contactId}`);
+export const apiCreateContactStaff = (data)      => apiFetch("/api/contact-staff",       { method: "POST",   body: data });
+export const apiUpdateContactStaff = (id, data)  => apiFetch(`/api/contact-staff/${id}`, { method: "PUT",    body: data });
+export const apiDeleteContactStaff = (id)        => apiFetch(`/api/contact-staff/${id}`, { method: "DELETE" });
+
 // Correspondence
 export const apiGetCorrespondence    = (caseId) => apiFetch(`/api/correspondence/${caseId}`);
 export const apiDeleteCorrespondence = (id)     => apiFetch(`/api/correspondence/${id}`, { method: "DELETE" });

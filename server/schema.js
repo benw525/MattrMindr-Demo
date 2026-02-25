@@ -188,8 +188,21 @@ async function createSchema() {
         email      TEXT    NOT NULL DEFAULT '',
         fax        TEXT    NOT NULL DEFAULT '',
         address    TEXT    NOT NULL DEFAULT '',
+        firm       TEXT    NOT NULL DEFAULT '',
+        company    TEXT    NOT NULL DEFAULT '',
+        county     TEXT    NOT NULL DEFAULT '',
         deleted_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS contact_staff (
+        id          SERIAL PRIMARY KEY,
+        contact_id  INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        staff_type  TEXT    NOT NULL DEFAULT 'Other',
+        data        JSONB   NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
 

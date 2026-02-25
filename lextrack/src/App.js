@@ -11,6 +11,7 @@ import {
   apiGetActivity, apiCreateActivity,
   apiGetContacts, apiGetDeletedContacts, apiCreateContact, apiUpdateContact, apiDeleteContact, apiRestoreContact, apiMergeContacts,
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
+  apiGetContactStaff, apiCreateContactStaff, apiUpdateContactStaff, apiDeleteContactStaff,
   apiAiSearch,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
@@ -5900,7 +5901,7 @@ const CONTACT_NOTE_TYPES = [
 ];
 
 function NewContactModal({ onSave, onClose }) {
-  const [form, setForm] = useState({ name: "", category: "Client", phone: "", email: "", fax: "", address: "" });
+  const [form, setForm] = useState({ name: "", category: "Client", phone: "", email: "", fax: "", address: "", firm: "", company: "", county: "" });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -5917,6 +5918,24 @@ function NewContactModal({ onSave, onClose }) {
               {CONTACT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          {form.category === "Attorney" && (
+            <div>
+              <label className="field-label">Firm</label>
+              <input className="field-input" value={form.firm} onChange={e => set("firm", e.target.value)} placeholder="Law firm name" />
+            </div>
+          )}
+          {(form.category === "Adjuster" || form.category === "Expert") && (
+            <div>
+              <label className="field-label">Company</label>
+              <input className="field-input" value={form.company} onChange={e => set("company", e.target.value)} placeholder="Company name" />
+            </div>
+          )}
+          {form.category === "Court" && (
+            <div>
+              <label className="field-label">County</label>
+              <input className="field-input" value={form.county} onChange={e => set("county", e.target.value)} placeholder="County name" />
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
               <label className="field-label">Phone</label>
@@ -5945,6 +5964,9 @@ function NewContactModal({ onSave, onClose }) {
   );
 }
 
+const ATTORNEY_STAFF_TYPES = ["Legal Assistant", "Paralegal", "Receptionist", "Other"];
+const COURT_STAFF_TYPES = ["Judicial Assistant", "Clerk", "Court Reporter", "Bailiff", "Other"];
+
 function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, onUpdate, onDelete, onAddNote, onDeleteNote }) {
   const [draft, setDraft] = useState({ ...contact });
   const [saving, setSaving] = useState(false);
@@ -5952,9 +5974,35 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
   const [newNoteBody, setNewNoteBody] = useState("");
   const [newNoteType, setNewNoteType] = useState("General");
   const [addingNote, setAddingNote] = useState(false);
+  const [staff, setStaff] = useState([]);
+  const [expandedStaff, setExpandedStaff] = useState(null);
+  const [addingStaff, setAddingStaff] = useState(false);
+  const staffTimers = useRef({});
+  const staffPendingData = useRef({});
+
+  const hasStaff = contact.category === "Attorney" || contact.category === "Court";
+  const staffTypes = contact.category === "Attorney" ? ATTORNEY_STAFF_TYPES : COURT_STAFF_TYPES;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setDraft({ ...contact }); setShowDelete(false); }, [contact.id]);
+
+  useEffect(() => {
+    if (hasStaff) {
+      apiGetContactStaff(contact.id).then(setStaff).catch(() => setStaff([]));
+    } else {
+      setStaff([]);
+    }
+    return () => {
+      Object.values(staffTimers.current).forEach(clearTimeout);
+      const pending = staffPendingData.current;
+      Object.keys(pending).forEach(async (sid) => {
+        try { await apiUpdateContactStaff(sid, { data: pending[sid] }); } catch {}
+      });
+      staffPendingData.current = {};
+      staffTimers.current = {};
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact.id, hasStaff]);
 
   const set = (k, v) => setDraft(p => ({ ...p, [k]: v }));
 
@@ -5990,6 +6038,42 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
       setNewNoteBody("");
     } catch {}
     setAddingNote(false);
+  };
+
+  const addStaffMember = async () => {
+    setAddingStaff(true);
+    try {
+      const s = await apiCreateContactStaff({ contactId: contact.id, staffType: staffTypes[0], data: { name: "", phone: "", email: "" } });
+      setStaff(prev => [...prev, s]);
+      setExpandedStaff(s.id);
+    } catch {}
+    setAddingStaff(false);
+  };
+
+  const removeStaffMember = async (id) => {
+    if (!window.confirm("Remove this staff member?")) return;
+    try {
+      await apiDeleteContactStaff(id);
+      setStaff(prev => prev.filter(s => s.id !== id));
+      if (expandedStaff === id) setExpandedStaff(null);
+    } catch {}
+  };
+
+  const updateStaffType = async (id, staffType) => {
+    setStaff(prev => prev.map(s => s.id === id ? { ...s, staffType } : s));
+    try { await apiUpdateContactStaff(id, { staffType }); } catch {}
+  };
+
+  const updateStaffField = (staffMember, field, value) => {
+    const newData = { ...(staffPendingData.current[staffMember.id] || staffMember.data), [field]: value };
+    staffPendingData.current[staffMember.id] = newData;
+    setStaff(prev => prev.map(s => s.id === staffMember.id ? { ...s, data: newData } : s));
+    if (staffTimers.current[staffMember.id]) clearTimeout(staffTimers.current[staffMember.id]);
+    staffTimers.current[staffMember.id] = setTimeout(async () => {
+      const dataToSave = staffPendingData.current[staffMember.id];
+      delete staffPendingData.current[staffMember.id];
+      try { await apiUpdateContactStaff(staffMember.id, { data: dataToSave }); } catch (err) { console.error(err); }
+    }, 600);
   };
 
   return (
@@ -6028,9 +6112,26 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
         </div>
 
         <div className="case-overlay-body" style={{ padding: "20px 28px", overflowY: "auto" }}>
-          {/* Contact Information */}
           <div style={{ marginBottom: 28 }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#8A9096", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid var(--c-border)" }}>Contact Information</div>
+            {contact.category === "Attorney" && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>Firm</label>
+                <input className="field-input" value={draft.firm || ""} onChange={e => set("firm", e.target.value)} onBlur={handleBlur} placeholder="Law firm name" />
+              </div>
+            )}
+            {(contact.category === "Adjuster" || contact.category === "Expert") && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>Company</label>
+                <input className="field-input" value={draft.company || ""} onChange={e => set("company", e.target.value)} onBlur={handleBlur} placeholder="Company name" />
+              </div>
+            )}
+            {contact.category === "Court" && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>County</label>
+                <input className="field-input" value={draft.county || ""} onChange={e => set("county", e.target.value)} onBlur={handleBlur} placeholder="County name" />
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <div>
                 <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>Phone</label>
@@ -6051,7 +6152,67 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
             </div>
           </div>
 
-          {/* Associated Cases */}
+          {hasStaff && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid var(--c-border)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#8A9096", textTransform: "uppercase" }}>
+                  Staff <span style={{ fontSize: 11, fontWeight: 400, color: "#8A9096", textTransform: "none", letterSpacing: 0 }}>({staff.length})</span>
+                </div>
+                <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={addStaffMember} disabled={addingStaff}>
+                  {addingStaff ? "Adding…" : "+ Add Staff"}
+                </button>
+              </div>
+              {staff.length === 0 ? (
+                <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic" }}>No staff members added yet.</div>
+              ) : (
+                staff.map(s => {
+                  const isExp = expandedStaff === s.id;
+                  const d = s.data || {};
+                  return (
+                    <div key={s.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 8 }}>
+                      <div
+                        onClick={() => setExpandedStaff(isExp ? null : s.id)}
+                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent", borderRadius: isExp ? "8px 8px 0 0" : 8, transition: "background 0.15s" }}
+                      >
+                        <span style={{ fontSize: 12, color: "var(--c-text2)" }}>{isExp ? "▲" : "▼"}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "#E4E7EB", color: "#1F2428" }}>{s.staffType}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text)", flex: 1 }}>{d.name || "Unnamed"}</span>
+                        {d.phone && <span style={{ fontSize: 11, color: "#8A9096" }}>{d.phone}</span>}
+                      </div>
+                      {isExp && (
+                        <div style={{ padding: "14px 14px 10px", borderTop: "1px solid var(--c-border)" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                            <div style={{ gridColumn: "1 / -1" }}>
+                              <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>Type</label>
+                              <select className="field-input" value={s.staffType} onChange={e => updateStaffType(s.id, e.target.value)}>
+                                {staffTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                            <div style={{ gridColumn: "1 / -1" }}>
+                              <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>Name</label>
+                              <input className="field-input" value={d.name || ""} onChange={e => updateStaffField(s, "name", e.target.value)} placeholder="Full name" />
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>Phone</label>
+                              <input className="field-input" value={d.phone || ""} onChange={e => updateStaffField(s, "phone", e.target.value)} placeholder="(555) 555-5555" />
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: 11, color: "#8A9096", marginBottom: 4 }}>Email</label>
+                              <input className="field-input" value={d.email || ""} onChange={e => updateStaffField(s, "email", e.target.value)} placeholder="email@example.com" />
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                            <button onClick={() => removeStaffMember(s.id)} style={{ background: "none", border: "none", color: "#e05252", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>Remove Staff</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
           {(contact.category === "Client" || contact.category === "Attorney" || contact.category === "Court") && (
             <div style={{ marginBottom: 28 }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#8A9096", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid var(--c-border)" }}>
@@ -6083,7 +6244,6 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
             </div>
           )}
 
-          {/* Notes */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#8A9096", textTransform: "uppercase", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid var(--c-border)" }}>
               Notes <span style={{ fontSize: 11, fontWeight: 400, color: "#8A9096", textTransform: "none", letterSpacing: 0 }}>({(notes || []).length})</span>
@@ -6136,9 +6296,15 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
 }
 
 function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
+  const hasAnyFirm = contacts.some(c => c.firm);
+  const hasAnyCompany = contacts.some(c => c.company);
+  const hasAnyCounty = contacts.some(c => c.county);
   const MERGE_FIELDS = [
     { key: "name",     label: "Name" },
     { key: "category", label: "Category" },
+    ...(hasAnyFirm ? [{ key: "firm", label: "Firm" }] : []),
+    ...(hasAnyCompany ? [{ key: "company", label: "Company" }] : []),
+    ...(hasAnyCounty ? [{ key: "county", label: "County" }] : []),
     { key: "phone",    label: "Phone" },
     { key: "email",    label: "Email" },
     { key: "fax",      label: "Fax" },
