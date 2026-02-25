@@ -15,7 +15,7 @@ import {
   apiAiSearch,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
-  apiGetInsurance, apiCreateInsurance, apiUpdateInsurance, apiDeleteInsurance,
+  apiConflictCheck,
   apiGetExperts, apiCreateExpert, apiUpdateExpert, apiDeleteExpert,
   apiGetMiscContacts, apiCreateMiscContact, apiUpdateMiscContact, apiDeleteMiscContact,
   apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument, apiDetectPleadingSections,
@@ -24,9 +24,9 @@ import {
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+3:wght@300;400;500;600&display=swap');`;
 
-const OFFICES = ["Mobile", "Birmingham", "Auburn", "Montgomery", "Demopolis"];
+const OFFICES = ["Mobile"];
 
-const STAFF_ROLES = ["Attorney","Paralegal","Legal Assistant","Associate","Shareholder","App Admin","Billing","Receptionist","Firm Administrator"];
+const STAFF_ROLES = ["Public Defender","Assistant Public Defender","Investigator","Legal Assistant","Paralegal","Social Worker","Admin","App Admin"];
 const hasRole = (user, role) => (user?.roles || (user?.role ? [user.role] : [])).includes(role);
 const isAppAdmin = (user) => hasRole(user, "App Admin");
 const AVATAR_PALETTE = ["#C9A84C","#4C7AC9","#4CAE72","#C94C4C","#9B4CC9","#4CC9C9","#C97B4C","#4C9BC9","#7BC94C","#C94C8C","#884CC9","#4CC96A","#C9C94C","#4C6AC9","#C94C6A","#4CAEC9","#6AC94C","#C9844C","#4CC9A8","#5884C9"];
@@ -85,124 +85,53 @@ const getEffectivePriority = (task) => {
 // Chain-spawn definitions: when a task with this title is completed, automatically
 // create the next task. dueDaysFromCompletion is calculated from the completion date.
 const TASK_CHAINS = {
-  "Confirm Service": {
-    title: "File Answer",
-    assignedRole: "leadAttorney",
-    priority: "Urgent",
-    dueDaysFromCompletion: 0,
-    autoEscalate: true,
-    notes: "Auto-generated after Confirm Service was completed. File answer immediately.",
-  },
-  "File Answer": {
-    title: "Send Discovery to Plaintiff",
-    assignedRole: "paralegal2",
-    priority: "High",
-    dueDaysFromCompletion: 0,
-    autoEscalate: false,
-    notes: "Auto-generated after File Answer was completed. Send discovery to plaintiff immediately.",
-  },
-  "Send Written Discovery to Plaintiff": {
-    title: "Plaintiff's Discovery Received",
-    assignedRole: "paralegal2",
-    priority: "High",
-    dueDaysFromCompletion: 30,
-    autoEscalate: true,
-    notes: "Auto-generated after Send Written Discovery to Plaintiff was completed.",
-  },
-  "Plaintiff's Discovery Received": {
-    title: "Send Subpoenas to Providers",
-    assignedRole: "paralegal2",
-    priority: "Urgent",
-    dueDaysFromCompletion: 0,
-    autoEscalate: true,
-    notes: "Auto-generated after Plaintiff's Discovery Received was completed.",
-  },
-  "Send Subpoenas to Providers": {
-    title: "Follow-up on Subpoenas",
-    assignedRole: "paralegal2",
-    priority: "Medium",
-    dueDaysFromCompletion: 30,
-    autoEscalate: true,
-    notes: "Auto-generated after Send Subpoenas to Providers was completed.",
-  },
-  "Follow-up on Subpoenas": {
-    title: "Update Medical Record Summary",
+  "Initial Client Interview": {
+    title: "Request Discovery from Prosecutor",
     assignedRole: "paralegal",
-    priority: "Medium",
-    dueDaysFromCompletion: 30,
-    autoEscalate: true,
-    notes: "Auto-generated after Follow-up on Subpoenas was completed.",
-  },
-  "Schedule Party Depositions": {
-    title: "Complete DWU Report",
-    assignedRole: "leadAttorney",
-    priority: "Medium",
-    dueDaysFromCompletion: 180,
-    autoEscalate: true,
-    notes: "Auto-generated after Schedule Party Depositions was completed.",
-  },
-  "Request Check": {
-    title: "Follow-up on Check",
-    assignedRole: "legalAssistant",
     priority: "High",
-    dueDaysFromCompletion: 7,
-    autoEscalate: false,
-    notes: "Auto-generated after Request Check was completed.",
+    dueDaysFromCompletion: 3,
+    autoEscalate: true,
+    notes: "Auto-generated after Initial Client Interview was completed.",
   },
-  "Send Release and Dismissal to Client": {
-    title: "Close File",
-    assignedRole: "legalAssistant",
+  "Request Discovery from Prosecutor": {
+    title: "Review Discovery Materials",
+    assignedRole: "assignedAttorney",
     priority: "High",
-    dueDaysFromCompletion: 0,
-    autoEscalate: false,
-    notes: "Auto-generated after Send Release and Dismissal to Client was completed.",
+    dueDaysFromCompletion: 14,
+    autoEscalate: true,
+    notes: "Auto-generated after Request Discovery from Prosecutor was completed.",
+  },
+  "Review Discovery Materials": {
+    title: "Investigation and Witness Interviews",
+    assignedRole: "investigator",
+    priority: "Medium",
+    dueDaysFromCompletion: 21,
+    autoEscalate: true,
+    notes: "Auto-generated after Review Discovery Materials was completed.",
+  },
+  "File Pre-Trial Motions": {
+    title: "Prepare for Motion Hearing",
+    assignedRole: "assignedAttorney",
+    priority: "High",
+    dueDaysFromCompletion: 14,
+    autoEscalate: true,
+    notes: "Auto-generated after File Pre-Trial Motions was completed.",
   },
 };
 
-const MULTI_CHAINS = {
-  "Let Client know Case is Settled": [
-    { title: "Draft and Send Release",                assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 7,  autoEscalate: false, notes: "Auto-generated after Let Client know Case is Settled was completed." },
-    { title: "Draft Joint Stipulation of Dismissal",  assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 10, autoEscalate: false, notes: "Auto-generated after Let Client know Case is Settled was completed." },
-  ],
-  "Draft and Send Release": [
-    { title: "Follow-up on Signed Release",           assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 7,  autoEscalate: false, notes: "Auto-generated after Draft and Send Release was completed." },
-    { title: "Request Check",                         assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 3,  autoEscalate: false, notes: "Auto-generated after Draft and Send Release was completed." },
-  ],
-  "Follow-up on Check": [
-    { title: "Send Settlement Paperwork to Plaintiff", assignedRole: "legalAssistant", priority: "High",   dueDaysFromCompletion: 3,  autoEscalate: false, notes: "Auto-generated after Follow-up on Check was completed." },
-    { title: "Send Release and Dismissal to Client",   assignedRole: "legalAssistant", priority: "Medium", dueDaysFromCompletion: 7,  autoEscalate: false, notes: "Auto-generated after Follow-up on Check was completed." },
-  ],
-};
+const MULTI_CHAINS = {};
 
-// Dual-condition chains: spawn a task only when BOTH named tasks are complete
-// for the same case. Checked after every completion.
-const DUAL_CHAINS = [
-  {
-    requires: ["Send Written Discovery to Plaintiff", "Plaintiff's Discovery Received"],
-    spawn: {
-      title: "Schedule Party Depositions",
-      assignedRole: "paralegal2",
-      priority: "Medium",
-      dueDaysFromCompletion: 30,
-      autoEscalate: true,
-      notes: "Auto-generated after both Send Written Discovery to Plaintiff and Plaintiff's Discovery Received were completed.",
-    },
-  },
-];
+const DUAL_CHAINS = [];
 
 const generateDefaultTasks = (caseObj, userId) => {
   const resolveRole = (role) => role ? (caseObj[role] || userId) : userId;
   const base = [
-    { title: "Open file and assign file number",         assignedRole: null,             priority: "High",   dueDays: 1,  notes: "" },
-    { title: "Send acknowledgment letter to client",     assignedRole: "legalAssistant", priority: "High",   dueDays: 3,  notes: "Confirm representation and provide case number." },
-    { title: "Confirm Service",                          assignedRole: "legalAssistant", priority: "Urgent", dueDays: 5,  notes: "Verify service date and calculate ARCP 12(a) deadline." },
-    { title: "Subpoena Police File",                     assignedRole: "paralegal2",     priority: "High",   dueDays: 14, notes: "" },
-    { title: "Send Written Discovery to Plaintiff",      assignedRole: "paralegal2",     priority: "Urgent", dueDays: 0,  notes: "Completing this task will automatically generate Plaintiff's Discovery Received (due 30 days out)." },
-    { title: "Investigate Accident Scene",               assignedRole: "secondAttorney", priority: "Medium", dueDays: 30, notes: "" },
-    { title: "Complete Written Discovery",               assignedRole: "secondAttorney", priority: "Medium", dueDays: 30, notes: "" },
-    { title: "Complete Medical Record Summary",          assignedRole: "paralegal",      priority: "Medium", dueDays: 30, notes: "" },
-    { title: "Submit ILP",                               assignedRole: "leadAttorney",   priority: "Medium", dueDays: 60, notes: "" },
-    { title: "Call adjuster with status update", assignedRole: "leadAttorney",   priority: "Medium", dueDays: 30, notes: "Introduce firm and confirm coverage.", recurring: true, recurringDays: 30 },
+    { title: "Initial Client Interview",              assignedRole: "assignedAttorney", priority: "Urgent", dueDays: 1,  notes: "Meet with client to discuss charges and case details." },
+    { title: "Request Discovery from Prosecutor",     assignedRole: "paralegal",        priority: "High",   dueDays: 3,  notes: "Request all discovery materials from the DA's office." },
+    { title: "Obtain Arrest Report and Booking Info",  assignedRole: "paralegal",        priority: "High",   dueDays: 3,  notes: "" },
+    { title: "Review Bond Conditions",                 assignedRole: "assignedAttorney", priority: "High",   dueDays: 2,  notes: "Review and assess bond conditions; file motion to modify if needed." },
+    { title: "Check for Conflicts of Interest",        assignedRole: "assignedAttorney", priority: "Urgent", dueDays: 1,  notes: "Run conflict check against existing cases." },
+    { title: "Client Background Investigation",        assignedRole: "investigator",     priority: "Medium", dueDays: 14, notes: "Gather background info, employment, family ties, community involvement." },
   ];
   const ids = base.map(() => newId());
   return base.map((t, i) => ({
@@ -228,15 +157,20 @@ const statusBadgeStyle = (status) => {
     Matter: { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
     Active: { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
     Closed: { bg: "var(--c-bg)", color: "var(--c-text2)", border: "var(--c-border)" },
+    Pending: { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
+    Disposed: { bg: "var(--c-bg)", color: "var(--c-text2)", border: "var(--c-border)" },
+    Transferred: { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
+    Arraignment: { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
+    "Preliminary Hearing": { bg: "#dcfce7", color: "#66aa66", border: "#bbf7d0" },
+    "Grand Jury/Indictment": { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
+    "Pre-Trial Motions": { bg: "#dcfce7", color: "#66aa66", border: "#bbf7d0" },
+    "Plea Negotiations": { bg: "#f3e8ff", color: "#a066cc", border: "#e9d5ff" },
+    Trial: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
+    Sentencing: { bg: "#fef3c7", color: "#e07a30", border: "#fde68a" },
+    "Post-Conviction": { bg: "var(--c-bg)", color: "var(--c-text2)", border: "var(--c-border)" },
+    Appeal: { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
     Urgent: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
     Overdue: { bg: "#fee2e2", color: "#e05252", border: "#fca5a5" },
-    "Trial Set": { bg: "#f3e8ff", color: "#a066cc", border: "#f3e8ff" },
-    "Pre-Answer Motions": { bg: "#dcfce7", color: "#66aa66", border: "#bbf7d0" },
-    "Written Discovery": { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
-    Depositions: { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
-    "Expert Discovery": { bg: "#fdf4ff", color: "#cc66aa", border: "#e9d5ff" },
-    Pleadings: { bg: "var(--c-bg)", color: "var(--c-text2)", border: "var(--c-border)" },
-    Mediation: { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
     "In Progress": { bg: "#E4E7EB", color: "#5599cc", border: "#E4E7EB" },
     "Not Started": { bg: "var(--c-card)", color: "#8A9096", border: "var(--c-border)" },
     Completed: { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
@@ -613,7 +547,7 @@ body.dark-body { background: #0E1116; }
 
 
 // ─── TimePromptModal ──────────────────────────────────────────────────────────
-const ATTY_PARA_ROLES = ["Attorney", "Associate", "Shareholder", "Paralegal"];
+const ATTY_PARA_ROLES = ["Public Defender", "Assistant Public Defender", "Paralegal"];
 const isAttyPara  = (u) => ATTY_PARA_ROLES.some(r => hasRole(u, r));
 const isLegalAsst = (u) => hasRole(u, "Legal Assistant");
 
@@ -630,7 +564,7 @@ function TimePromptModal({ pending, onSubmit }) {
   const showClaimPrompt  = isAttyPara(completingUser)  && task?.assigned > 0 && task.assigned !== completingUser?.id;
   const showAssignPrompt = isLegalAsst(completingUser);
 
-  const caseTeamIds   = caseForTask ? [caseForTask.leadAttorney, caseForTask.secondAttorney, caseForTask.paralegal, caseForTask.paralegal2].filter(id => id > 0) : [];
+  const caseTeamIds   = caseForTask ? [caseForTask.assignedAttorney, caseForTask.secondAttorney, caseForTask.paralegal, caseForTask.investigator, caseForTask.socialWorker].filter(id => id > 0) : [];
   const caseTeamUsers = USERS.filter(u => caseTeamIds.includes(u.id) && isAttyPara(u));
   const otherAttyPara = USERS.filter(u => !caseTeamIds.includes(u.id) && isAttyPara(u));
   const assignedUser  = task ? getUserById(task.assigned) : null;
@@ -924,8 +858,8 @@ export default function App() {
   const handleAddRecord = async (record) => {
     try {
       const payload = {
-        writtenDisc: "", partyDepo: "", expertDepo: "", mediation: "",
-        trialDate: "", answerFiled: "", dol: "", judge: "",
+        arrestDate: "", arraignmentDate: "", nextCourtDate: "",
+        trialDate: "", sentencingDate: "", dispositionDate: "", judge: "",
         ...record,
         status: "Active",
       };
@@ -960,7 +894,7 @@ export default function App() {
     }
   };
 
-  const TEAM_ROLES = ["leadAttorney", "secondAttorney", "paralegal", "paralegal2", "legalAssistant"];
+  const TEAM_ROLES = ["assignedAttorney", "secondAttorney", "paralegal", "investigator", "socialWorker"];
 
   const handleUpdateCase = async (updated) => {
     try {
@@ -980,22 +914,22 @@ export default function App() {
         }
       }
 
-      // When stage changes to "Settled", spawn trigger task + complete all other open tasks
-      if (saved.stage === "Settled" && prev && prev.stage !== "Settled") {
+      // When status changes to "Disposed", spawn closing task + complete all other open tasks
+      if (saved.status === "Disposed" && prev && prev.status !== "Disposed") {
         const alreadyExists = tasks.some(t =>
-          t.caseId === saved.id && t.title === "Let Client know Case is Settled"
+          t.caseId === saved.id && t.title === "Notify client of case disposition"
         );
         if (!alreadyExists) {
           const triggerTask = {
             caseId: saved.id,
-            title: "Let Client know Case is Settled",
-            assigned: saved.leadAttorney || 0,
-            assignedRole: "leadAttorney",
+            title: "Notify client of case disposition",
+            assigned: saved.assignedAttorney || 0,
+            assignedRole: "assignedAttorney",
             due: addDays(today, 7),
             priority: "High",
             autoEscalate: false,
             status: "Not Started",
-            notes: "Auto-generated when case stage was set to Settled.",
+            notes: "Auto-generated when case status was set to Disposed.",
             recurring: false,
             recurringDays: null,
             isGenerated: true,
@@ -1004,11 +938,10 @@ export default function App() {
           const savedTask = await apiCreateTask(triggerTask);
           setTasks(prev => [...prev, savedTask]);
         }
-        // Mark all other open tasks for this case as Completed
         const openOthers = tasks.filter(t =>
           t.caseId === saved.id &&
           t.status !== "Completed" &&
-          t.title !== "Let Client know Case is Settled"
+          t.title !== "Notify client of case disposition"
         );
         if (openOthers.length > 0) {
           const completed = await Promise.all(
@@ -1018,8 +951,8 @@ export default function App() {
         }
       }
 
-      // When stage changes to "Closed", mark all open tasks as Completed
-      if (saved.stage === "Closed" && prev && prev.stage !== "Closed") {
+      // When status changes to "Closed", mark all open tasks as Completed
+      if (saved.status === "Closed" && prev && prev.status !== "Closed") {
         const openTasks = tasks.filter(t =>
           t.caseId === saved.id && t.status !== "Completed"
         );
@@ -1215,12 +1148,6 @@ export default function App() {
         });
       });
 
-      if (target.title.trim() === "File Answer" && caseForTask) {
-        const updated = { ...caseForTask, answerFiled: completedDate };
-        try {
-          await handleUpdateCase(updated);
-        } catch (err) { console.error("Failed to auto-set Answer Filed:", err); }
-      }
 
       const assignedToOther = target.assigned > 0 && target.assigned !== currentUser.id;
       const completionDetail = assignedToOther
@@ -1434,7 +1361,7 @@ function LoginScreen({ onLogin }) {
         {view === "login" && (<>
           <div className="form-group">
             <label>Email</label>
-            <input type="email" placeholder="your.email@websterhenry.com" value={email} onChange={e => { setEmail(e.target.value); setErr(""); setMsg(""); }} onKeyDown={e => e.key === "Enter" && doLogin()} />
+            <input type="email" placeholder="your.email@mcpdo.gov" value={email} onChange={e => { setEmail(e.target.value); setErr(""); setMsg(""); }} onKeyDown={e => e.key === "Enter" && doLogin()} />
           </div>
           <div className="form-group">
             <label>Password</label>
@@ -1454,7 +1381,7 @@ function LoginScreen({ onLogin }) {
           <div style={{ fontSize: 13, color: "#8A9096", marginBottom: 16 }}>Enter your email and we'll send a reset code.</div>
           <div className="form-group">
             <label>Email</label>
-            <input type="email" placeholder="your.email@websterhenry.com" value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && doForgot()} />
+            <input type="email" placeholder="your.email@mcpdo.gov" value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && doForgot()} />
           </div>
           {err && <div style={{ color: "#e05252", fontSize: 13, marginBottom: 12 }}>{err}</div>}
           <button className="btn btn-gold" style={{ width: "100%", padding: 10 }} onClick={doForgot} disabled={busy}>
@@ -1575,9 +1502,21 @@ function Toggle({ on, onChange, color = "#1E2A3A" }) {
 
 // ─── New Case/Matter Modal ────────────────────────────────────────────────────
 function NewCaseModal({ onSave, onClose, userOffices }) {
-  const [form, setForm] = useState({ caseNum: "", title: "", client: "", insured: "", plaintiff: "", defendant: "", opposingCounsel: "", shortCaseNum: "", county: "", court: "", claimNum: "", fileNum: "", adjuster: "", stage: "Pleadings", leadAttorney: 0, secondAttorney: 0, paralegal: 0, paralegal2: 0, legalAssistant: 0, offices: [], answerFiled: "", dol: "", mediator: "", notes: "" });
+  const [form, setForm] = useState({ caseNum: "", title: "", defendantName: "", prosecutor: "", county: "", court: "", courtDivision: "", chargeDescription: "", chargeStatute: "", chargeClass: "", caseType: "Felony", stage: "Arraignment", assignedAttorney: 0, secondAttorney: 0, paralegal: 0, investigator: 0, socialWorker: 0, offices: [], arrestDate: "", notes: "" });
   const [autoTasks, setAutoTasks] = useState(true);
+  const [conflicts, setConflicts] = useState(null);
+  const [conflictChecking, setConflictChecking] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const checkConflicts = async (name) => {
+    if (!name || name.trim().length < 2) { setConflicts(null); return; }
+    setConflictChecking(true);
+    try {
+      const result = await apiConflictCheck(name.trim());
+      if (result.cases.length > 0 || result.contacts.length > 0) setConflicts(result);
+      else setConflicts(null);
+    } catch { setConflicts(null); }
+    setConflictChecking(false);
+  };
   const isMatter = !form.caseNum.trim();
 
   const filteredUsers = useMemo(() => {
@@ -1627,30 +1566,64 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
         </div>
 
         <div className="form-row">
-          <div className="form-group"><label>Case Number (blank = Matter)</label><input value={form.caseNum} onChange={e => set("caseNum", e.target.value)} placeholder="e.g. 02-CV-2025-901000" /></div>
-          <div className="form-group"><label>File Number</label><input value={form.fileNum} onChange={e => set("fileNum", e.target.value)} placeholder="e.g. 010-3100" /></div>
-        </div>
-        <div className="form-group"><label>Style / Title *</label><input value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Smith v. Jones" /></div>
-        <div className="form-row">
-          <div className="form-group"><label>Client</label><input value={form.client} onChange={e => set("client", e.target.value)} /></div>
-          <div className="form-group"><label>Insured</label><input value={form.insured} onChange={e => set("insured", e.target.value)} /></div>
+          <div className="form-group"><label>Case Number (blank = Matter)</label><input value={form.caseNum} onChange={e => set("caseNum", e.target.value)} placeholder="e.g. CC-2025-001234" /></div>
+          <div className="form-group"><label>Case Title *</label><input value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. State v. Smith" /></div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label>Plaintiff(s)</label><input value={form.plaintiff} onChange={e => set("plaintiff", e.target.value)} /></div>
-          <div className="form-group"><label>Defendant(s)</label><input value={form.defendant} onChange={e => set("defendant", e.target.value)} /></div>
-          <div className="form-group"><label>Opposing Counsel</label><input value={form.opposingCounsel} onChange={e => set("opposingCounsel", e.target.value)} /></div>
-          <div className="form-group"><label>Short Case Number</label><input value={form.shortCaseNum} onChange={e => set("shortCaseNum", e.target.value)} /></div>
+          <div className="form-group"><label>Defendant Name</label><input value={form.defendantName} onChange={e => set("defendantName", e.target.value)} onBlur={e => checkConflicts(e.target.value)} /></div>
+          <div className="form-group"><label>Prosecutor</label><input value={form.prosecutor} onChange={e => set("prosecutor", e.target.value)} /></div>
+        </div>
+        {conflictChecking && <div style={{ padding: "8px 12px", background: "#FFF8E1", border: "1px solid #FFD54F", borderRadius: 6, marginBottom: 10, fontSize: 12, color: "#795548" }}>Checking for conflicts...</div>}
+        {conflicts && (
+          <div style={{ padding: "10px 14px", background: "#FFF3E0", border: "1px solid #FF9800", borderRadius: 6, marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#E65100", marginBottom: 6 }}>⚠ Potential Conflict Detected</div>
+            {conflicts.cases.length > 0 && <div style={{ fontSize: 12, color: "#BF360C", marginBottom: 4 }}>
+              <strong>Matching cases:</strong> {conflicts.cases.map(cc => `${cc.title} (${cc.case_num || "no case #"})`).join(", ")}
+            </div>}
+            {conflicts.contacts.length > 0 && <div style={{ fontSize: 12, color: "#BF360C" }}>
+              <strong>Matching contacts:</strong> {conflicts.contacts.map(cc => `${cc.first_name} ${cc.last_name}`).join(", ")}
+            </div>}
+            <div style={{ fontSize: 11, color: "#795548", marginTop: 4 }}>Review potential conflicts before proceeding.</div>
+          </div>
+        )}
+        <div className="form-row">
+          <div className="form-group"><label>Court Division</label>
+            <select value={form.courtDivision} onChange={e => set("courtDivision", e.target.value)}>
+              <option value="">— Select —</option>
+              <option value="Circuit Court">Circuit Court</option>
+              <option value="District Court">District Court</option>
+              <option value="Juvenile Court">Juvenile Court</option>
+            </select>
+          </div>
           <div className="form-group"><label>County</label><input value={form.county} onChange={e => set("county", e.target.value)} /></div>
+        </div>
+        <div className="form-row">
           <div className="form-group"><label>Court</label><input value={form.court} onChange={e => set("court", e.target.value)} /></div>
-          <div className="form-group"><label>Date of Loss</label><input type="date" value={form.dol} onChange={e => set("dol", e.target.value)} /></div>
+          <div className="form-group"><label>Judge</label><input value={form.judge || ""} onChange={e => set("judge", e.target.value)} /></div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label>Claim Number</label><input value={form.claimNum} onChange={e => set("claimNum", e.target.value)} /></div>
-          <div className="form-group"><label>Adjuster</label><input value={form.adjuster} onChange={e => set("adjuster", e.target.value)} /></div>
+          <div className="form-group"><label>Case Type</label>
+            <select value={form.caseType} onChange={e => set("caseType", e.target.value)}>
+              {["Felony", "Misdemeanor", "Juvenile", "Probation Violation", "Mental Health/Commitment", "Appeal", "Other"].map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div className="form-group"><label>Charge Description</label><input value={form.chargeDescription} onChange={e => set("chargeDescription", e.target.value)} /></div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label>Lead Attorney</label>
-            <select value={form.leadAttorney} onChange={e => set("leadAttorney", Number(e.target.value))}>
+          <div className="form-group"><label>Charge Statute</label><input value={form.chargeStatute} onChange={e => set("chargeStatute", e.target.value)} /></div>
+          <div className="form-group"><label>Arrest Date</label><input type="date" value={form.arrestDate} onChange={e => set("arrestDate", e.target.value)} /></div>
+        </div>
+        <div className="form-row">
+          <div className="form-group"><label>Stage</label>
+            <select value={form.stage} onChange={e => set("stage", e.target.value)}>
+              {["Arraignment", "Preliminary Hearing", "Grand Jury/Indictment", "Pre-Trial Motions", "Plea Negotiations", "Trial", "Sentencing", "Post-Conviction", "Appeal"].map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div className="form-group" />
+        </div>
+        <div className="form-row">
+          <div className="form-group"><label>Assigned Attorney</label>
+            <select value={form.assignedAttorney} onChange={e => set("assignedAttorney", Number(e.target.value))}>
               <option value={0}>— Select —</option>
               {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
             </select>
@@ -1669,28 +1642,29 @@ function NewCaseModal({ onSave, onClose, userOffices }) {
               {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
-          <div className="form-group"><label>Paralegal 2</label>
-            <select value={form.paralegal2} onChange={e => set("paralegal2", Number(e.target.value))}>
+          <div className="form-group"><label>Investigator</label>
+            <select value={form.investigator} onChange={e => set("investigator", Number(e.target.value))}>
               <option value={0}>— None —</option>
               {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label>Legal Assistant</label>
-            <select value={form.legalAssistant} onChange={e => set("legalAssistant", Number(e.target.value))}>
+          <div className="form-group"><label>Social Worker</label>
+            <select value={form.socialWorker} onChange={e => set("socialWorker", Number(e.target.value))}>
               <option value={0}>— None —</option>
               {filteredUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
           <div className="form-group" />
         </div>
+        <div className="form-group"><label>Notes</label><textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={3} /></div>
 
         <div style={{ background: autoTasks ? "#E4E7EB" : "var(--c-bg)", border: `1px solid ${autoTasks ? "#1E2A3A22" : "#D6D8DB"}`, borderRadius: 7, padding: "12px 14px", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 600 }}>✅ Auto-generate opening tasks</div>
-              <div style={{ fontSize: 11, color: "#8A9096", marginTop: 2 }}>Open file, ack. letter, calendar answer deadline, subpoena police file, send written discovery, investigate scene, written discovery, medical record summary, ILP, adjuster call (recurring)</div>
+              <div style={{ fontSize: 11, color: "#8A9096", marginTop: 2 }}>Initial client interview, request discovery, obtain arrest report, review bond, conflict check, background investigation</div>
             </div>
             <Toggle on={autoTasks} onChange={() => setAutoTasks(p => !p)} />
           </div>
@@ -2113,7 +2087,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
                 <span style={{ fontSize: 14, marginRight: 6 }}>📌</span>
                 <div className="dl-info" style={{ flex: 1, minWidth: 0 }}>
                   <div className="dl-title" style={{ fontSize: 13 }}>{c.title}</div>
-                  <div className="dl-case">{c.caseNum || "Matter"}{c.client ? ` · ${c.client}` : ""}</div>
+                  <div className="dl-case">{c.caseNum || "Matter"}{c.defendantName ? ` · ${c.defendantName}` : ""}</div>
                 </div>
                 <div style={{ fontSize: 11, color: "#8A9096", flexShrink: 0 }}>{c.status}</div>
               </div>
@@ -2303,11 +2277,11 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
       if (statusFilter !== "All" && statusFilter !== "Deleted" && c.status !== statusFilter) return false;
       if (typeFilter === "Case" && !isFiled(c)) return false;
       if (typeFilter === "Matter" && isFiled(c)) return false;
-      if (attyFilter !== "All" && c.leadAttorney !== Number(attyFilter) && c.secondAttorney !== Number(attyFilter)) return false;
+      if (attyFilter !== "All" && c.assignedAttorney !== Number(attyFilter) && c.secondAttorney !== Number(attyFilter)) return false;
       if (officeFilter !== "All" && !(c.offices || []).includes(officeFilter)) return false;
       if (search) {
         const q = search.toLowerCase();
-        return c.title?.toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q) || (c.client || "").toLowerCase().includes(q) || (c.plaintiff || "").toLowerCase().includes(q) || (c.defendant || "").toLowerCase().includes(q) || (c.opposingCounsel || "").toLowerCase().includes(q) || (c.county || "").toLowerCase().includes(q) || (c.court || "").toLowerCase().includes(q) || (c.fileNum || "").toLowerCase().includes(q) || (c.claimNum || "").toLowerCase().includes(q);
+        return c.title?.toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q) || (c.defendantName || "").toLowerCase().includes(q) || (c.prosecutor || "").toLowerCase().includes(q) || (c.county || "").toLowerCase().includes(q) || (c.court || "").toLowerCase().includes(q) || (c.chargeDescription || "").toLowerCase().includes(q);
       }
       return true;
     });
@@ -2315,11 +2289,11 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
       let av = "", bv = "";
       if (sortCol === "title") { av = a.title || ""; bv = b.title || ""; }
       else if (sortCol === "caseNum") { av = a.caseNum || ""; bv = b.caseNum || ""; }
-      else if (sortCol === "client") { av = a.client || ""; bv = b.client || ""; }
+      else if (sortCol === "defendant") { av = a.defendantName || ""; bv = b.defendantName || ""; }
       else if (sortCol === "stage") { av = a.stage || ""; bv = b.stage || ""; }
       else if (sortCol === "trialDate") { av = a.trialDate || "9999"; bv = b.trialDate || "9999"; }
       else if (sortCol === "type") { av = recordType(a); bv = recordType(b); }
-      else if (sortCol === "lead") { av = getUserById(a.leadAttorney)?.name || ""; bv = getUserById(b.leadAttorney)?.name || ""; }
+      else if (sortCol === "lead") { av = getUserById(a.assignedAttorney)?.name || ""; bv = getUserById(b.assignedAttorney)?.name || ""; }
       return (sortDir === "asc" ? 1 : -1) * av.localeCompare(bv);
     });
     return list;
@@ -2337,7 +2311,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const officeAttorneys = useMemo(() => {
     return USERS
       .filter(u => {
-        if (!hasRole(u, "Attorney") && !hasRole(u, "Associate") && !hasRole(u, "Shareholder")) return false;
+        if (!hasRole(u, "Public Defender") && !hasRole(u, "Assistant Public Defender")) return false;
         if (officeFilter === "All") return true;
         const uOff = userOffices[u.id] || [];
         return uOff.includes(officeFilter);
@@ -2440,7 +2414,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                         </div>
                         <div style={{ fontSize: 12, color: "#8A9096", marginTop: 4, lineHeight: 1.5 }}>{r.reason}</div>
                         <div style={{ fontSize: 11, color: "#8A9096", marginTop: 4, display: "flex", gap: 12 }}>
-                          {c.client && <span>Client: {c.client}</span>}
+                          {c.defendantName && <span>Defendant: {c.defendantName}</span>}
                           {c.stage && <span>Stage: {c.stage}</span>}
                           {(c.offices || []).length > 0 && <span>Office: {c.offices.join(", ")}</span>}
                         </div>
@@ -2475,8 +2449,8 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                       <th>Type</th>
                       <th>Case Number</th>
                       <th>Style</th>
-                      <th>File #</th>
-                      <th>Client</th>
+                      <th>Case Type</th>
+                      <th>Defendant</th>
                       <th>Stage</th>
                       <th>Trial Date</th>
                       <th>Lead</th>
@@ -2491,17 +2465,16 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                         <td><Badge label={recordType(c)} /></td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           <div style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A" }}>{c.caseNum || "—"}</div>
-                          {c.claimNum && <div style={{ fontFamily: "monospace", fontSize: 10, color: "#5D6268", marginTop: 2 }}>Claim: {c.claimNum}</div>}
                         </td>
                         <td>
                           <div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>
-                          {c.plaintiff && <div style={{ fontSize: 12, color: "#1F2428", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>{c.plaintiff}</div>}
+                          {c.prosecutor && <div style={{ fontSize: 12, color: "#1F2428", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>{c.prosecutor}</div>}
                         </td>
-                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
-                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.client || "—"}</td>
+                        <td style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseType || "—"}</td>
+                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.defendantName || "—"}</td>
                         <td><Badge label={c.stage} /></td>
                         <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#8A9096", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
-                        <td><Avatar userId={c.leadAttorney} size={26} /></td>
+                        <td><Avatar userId={c.assignedAttorney} size={26} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -2528,7 +2501,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                         <th>Type</th>
                         <th>Case Number</th>
                         <th>Style</th>
-                        <th>File #</th>
+                        <th>Case Type</th>
                         <th>Deleted On</th>
                         <th>Expires In</th>
                         <th></th>
@@ -2543,8 +2516,8 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                           <tr key={c.id}>
                             <td><Badge label={recordType(c)} /></td>
                             <td style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A", whiteSpace: "nowrap" }}>{c.caseNum || "—"}</td>
-                            <td><div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.plaintiff && <div style={{ fontSize: 11, color: "#8A9096" }}>Pltf: {c.plaintiff}</div>}</td>
-                            <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
+                            <td><div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>{c.defendantName && <div style={{ fontSize: 11, color: "#8A9096" }}>Def: {c.defendantName}</div>}</td>
+                            <td style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseType || "—"}</td>
                             <td style={{ fontSize: 12, color: "#e05252" }}>{deletedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                             <td style={{ fontSize: 12, color: daysLeft <= 7 ? "#e05252" : "#8A9096" }}>{daysLeft} day{daysLeft !== 1 ? "s" : ""}</td>
                             <td><button className="btn btn-outline btn-sm" onClick={() => handleRestoreDeleted(c.id)}>Restore</button></td>
@@ -2567,8 +2540,8 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                       <SortTh col="type" label="Type" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="caseNum" label="Case Number" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="title" label="Style" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                      <th>File #</th>
-                      <SortTh col="client" label="Client" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <th>Case Type</th>
+                      <SortTh col="defendant" label="Defendant" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="stage" label="Stage" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="trialDate" label="Trial Date" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="lead" label="Lead" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -2583,17 +2556,16 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                         <td><Badge label={recordType(c)} /></td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           <div style={{ fontFamily: "monospace", fontSize: 11, color: "#1E2A3A" }}>{c.caseNum || "—"}</div>
-                          {c.claimNum && <div style={{ fontFamily: "monospace", fontSize: 10, color: "#5D6268", marginTop: 2 }}>Claim: {c.claimNum}</div>}
                         </td>
                         <td>
                           <div style={{ color: "var(--c-text)", fontWeight: 600, fontSize: 13 }}>{c.title}</div>
-                          {c.plaintiff && <div style={{ fontSize: 12, color: "#1F2428", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>{c.plaintiff}</div>}
+                          {c.prosecutor && <div style={{ fontSize: 12, color: "#1F2428", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>{c.prosecutor}</div>}
                         </td>
-                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "var(--c-text2)" }}>{c.fileNum || "—"}</td>
-                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.client || "—"}</td>
+                        <td style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseType || "—"}</td>
+                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.defendantName || "—"}</td>
                         <td><Badge label={c.stage} /></td>
                         <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#8A9096", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
-                        <td><Avatar userId={c.leadAttorney} size={26} /></td>
+                        <td><Avatar userId={c.assignedAttorney} size={26} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -2646,40 +2618,42 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
 // Field definitions: key = JS property name, label = display name, type = input type
 const CORE_FIELDS = [
   // Details section
-  { key: "title",      label: "Style / Title",      type: "text",   section: "details" },
-  { key: "caseNum",    label: "Case Number",         type: "text",   section: "details" },
-  { key: "fileNum",    label: "File Number",         type: "text",   section: "details" },
-  { key: "client",     label: "Client",              type: "text",   section: "info" },
-  { key: "insured",    label: "Insured",              type: "text",   section: "info" },
-  { key: "plaintiff",        label: "Plaintiff(s)",        type: "text",   section: "details" },
-  { key: "defendant",        label: "Defendant(s)",        type: "text",   section: "details" },
-  { key: "opposingCounsel",  label: "Opposing Counsel",    type: "text",   section: "details" },
-  { key: "shortCaseNum",     label: "Short Case Number",   type: "text",   section: "info" },
-  { key: "county",           label: "County",              type: "text",   section: "info" },
-  { key: "court",            label: "Court",               type: "text",   section: "info" },
-  { key: "expert",           label: "Expert",              type: "text",   section: "details" },
-  { key: "claimNum",   label: "Claim Number",        type: "text",   section: "details" },
-  { key: "adjuster",  label: "Adjuster",    type: "text",   section: "details" },
-  { key: "judge",      label: "Judge",               type: "text",   section: "details" },
-  { key: "mediator",   label: "Mediator",            type: "text",   section: "details" },
-  { key: "status",     label: "Status",              type: "select", section: "details", options: ["Active", "Closed", "Monitoring"] },
-  { key: "stage",      label: "Stage",               type: "select", section: "details", options: ["Pleadings", "Pre-Answer Motions", "Written Discovery", "Depositions", "Expert Discovery", "Pre-Trial", "Trial Set", "Appeal", "Settled", "Closed"] },
+  { key: "title",            label: "Case Title",           type: "text",   section: "details" },
+  { key: "caseNum",          label: "Case Number",          type: "text",   section: "details" },
+  { key: "defendantName",    label: "Defendant",            type: "text",   section: "details" },
+  { key: "prosecutor",       label: "Prosecutor",           type: "text",   section: "details" },
+  { key: "chargeDescription",label: "Charge Description",   type: "text",   section: "details" },
+  { key: "chargeStatute",    label: "Statute",              type: "text",   section: "details" },
+  { key: "chargeClass",      label: "Charge Class",         type: "select", section: "details", options: ["Class A Felony", "Class B Felony", "Class C Felony", "Misdemeanor A", "Misdemeanor B", "Misdemeanor C", "Violation", "Other"] },
+  { key: "caseType",         label: "Case Type",            type: "select", section: "details", options: ["Felony", "Misdemeanor", "Juvenile", "Probation Violation", "Mental Health/Commitment", "Appeal", "Other"] },
+  { key: "judge",            label: "Judge",                type: "text",   section: "details" },
+  { key: "status",           label: "Status",               type: "select", section: "details", options: ["Active", "Closed", "Pending", "Disposed", "Transferred"] },
+  { key: "stage",            label: "Stage",                type: "select", section: "details", options: ["Arraignment", "Preliminary Hearing", "Grand Jury/Indictment", "Pre-Trial Motions", "Plea Negotiations", "Trial", "Sentencing", "Post-Conviction", "Appeal"] },
+  // Info section
+  { key: "custodyStatus",    label: "Custody Status",       type: "select", section: "info", options: ["In Custody", "Out on Bond", "Released on Own Recognizance", "Supervision"] },
+  { key: "bondAmount",       label: "Bond Amount",          type: "text",   section: "info" },
+  { key: "bondConditions",   label: "Bond Conditions",      type: "text",   section: "info" },
+  { key: "jailLocation",     label: "Jail Location",        type: "text",   section: "info" },
+  { key: "courtDivision",    label: "Court Division",       type: "select", section: "info", options: ["Circuit Court", "District Court", "Juvenile Court"] },
+  { key: "county",           label: "County",               type: "text",   section: "info" },
+  { key: "court",            label: "Court",                type: "text",   section: "info" },
+  { key: "dispositionType",  label: "Disposition",          type: "select", section: "info", options: ["", "Guilty Plea", "Not Guilty Verdict", "Nolle Prosequi", "Dismissed", "Acquitted", "Convicted at Trial", "Youthful Offender", "Other"] },
   // Dates section
-  { key: "dol",          label: "Date of Loss",          type: "date", section: "dates" },
-  { key: "answerFiled",  label: "Answer Filed",           type: "date", section: "dates" },
-  { key: "writtenDisc",  label: "Written Discovery",      type: "date", section: "dates" },
-  { key: "partyDepo",    label: "Party Depositions",      type: "date", section: "dates" },
-  { key: "mediation",    label: "Mediation Date",         type: "date", section: "dates" },
-  { key: "trialDate",    label: "Trial Date",             type: "date", section: "dates" },
+  { key: "arrestDate",       label: "Arrest Date",          type: "date",   section: "dates" },
+  { key: "arraignmentDate",  label: "Arraignment Date",     type: "date",   section: "dates" },
+  { key: "nextCourtDate",    label: "Next Court Date",      type: "date",   section: "dates" },
+  { key: "trialDate",        label: "Trial Date",           type: "date",   section: "dates" },
+  { key: "sentencingDate",   label: "Sentencing Date",      type: "date",   section: "dates" },
+  { key: "dispositionDate",  label: "Disposition Date",     type: "date",   section: "dates" },
   // Team section
-  { key: "leadAttorney",   label: "Lead Attorney",   type: "user",   section: "team" },
-  { key: "secondAttorney", label: "2nd Attorney",    type: "user",   section: "team" },
-  { key: "paralegal",      label: "Paralegal 1",     type: "user",   section: "team" },
-  { key: "paralegal2",     label: "Paralegal 2",     type: "user",   section: "team" },
-  { key: "legalAssistant", label: "Legal Assistant",  type: "user",   section: "team" },
+  { key: "assignedAttorney", label: "Assigned Attorney",    type: "user",   section: "team" },
+  { key: "secondAttorney",   label: "2nd Attorney",         type: "user",   section: "team" },
+  { key: "paralegal",        label: "Paralegal",            type: "user",   section: "team" },
+  { key: "investigator",     label: "Investigator",         type: "user",   section: "team" },
+  { key: "socialWorker",     label: "Social Worker",        type: "user",   section: "team" },
 ];
 
-const isAttorney = (user) => hasRole(user, "Attorney") || hasRole(user, "Associate") || hasRole(user, "Shareholder");
+const isAttorney = (user) => hasRole(user, "Public Defender") || hasRole(user, "Assistant Public Defender");
 
 function EditField({ fieldKey, label, type, options, value, onChange, onBlur, onRemove, canRemove, isCustom, userList, readOnly, onContactClick }) {
   const displayVal = type === "date" ? (value || "") : (value ?? "");
@@ -2749,15 +2723,15 @@ function EditField({ fieldKey, label, type, options, value, onChange, onBlur, on
   );
 }
 
-const CONTACT_LINKABLE_KEYS = new Set(["client", "insured", "plaintiff", "adjuster", "judge", "mediator", "expert", "opposingCounsel"]);
+const CONTACT_LINKABLE_KEYS = new Set(["defendantName", "prosecutor", "judge"]);
 
-const KEY_DATE_FIELDS = ["dol", "answerFiled", "writtenDisc", "partyDepo", "mediation", "trialDate"];
-const KEY_DATE_TYPES = { dol: "Other", answerFiled: "Filing", writtenDisc: "Discovery", partyDepo: "Discovery", mediation: "Hearing", trialDate: "Hearing" };
+const KEY_DATE_FIELDS = ["arrestDate", "arraignmentDate", "nextCourtDate", "trialDate", "sentencingDate", "dispositionDate"];
+const KEY_DATE_TYPES = { arrestDate: "Other", arraignmentDate: "Hearing", nextCourtDate: "Hearing", trialDate: "Hearing", sentencingDate: "Hearing", dispositionDate: "Other" };
 
 function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, userOffices, onAddDeadline, onUpdateDeadline }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
-  const DEFAULT_HIDDEN_DATES = ["answerFiled", "partyDepo", "mediation"];
+  const DEFAULT_HIDDEN_DATES = [];
   const [hiddenFields, setHiddenFields] = useState(c._hiddenFields != null ? c._hiddenFields : DEFAULT_HIDDEN_DATES);
   const [addingField, setAddingField] = useState(false);
   const [newFieldLabel, setNewFieldLabel] = useState("");
@@ -2766,28 +2740,14 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [addingDate, setAddingDate] = useState(false);
   const [newDateLabel, setNewDateLabel] = useState("");
   const [showPrint, setShowPrint] = useState(false);
-  const [showBillingPrint, setShowBillingPrint] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "details" | "billing" | "expenses" | "correspondence" | "activity"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "details" | "correspondence" | "activity"
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [allContacts, setAllContacts] = useState([]);
   const [contactPopup, setContactPopup] = useState(null);
   const [contactEditMode, setContactEditMode] = useState(false);
   const [contactEditDraft, setContactEditDraft] = useState(null);
-  const [billingParties, setBillingParties] = useState(c.billingParties || []);
-  const [showAddParty, setShowAddParty] = useState(false);
-  const [newPartyForm, setNewPartyForm] = useState({ name: "", dob: "", collateralSource: false, partyId: "" });
-  const [caseExpenses, setCaseExpenses] = useState(c.caseExpenses || []);
-  const [medicalSummary, setMedicalSummary] = useState(c.medicalSummary || []);
-  const [showAddMedParty, setShowAddMedParty] = useState(false);
-  const [medPartySelect, setMedPartySelect] = useState("");
-  const [medPartyDob, setMedPartyDob] = useState("");
-  const [expandedMedEntry, setExpandedMedEntry] = useState(null);
-  const [showMedPrint, setShowMedPrint] = useState(null);
   const [showCompletedOverlay, setShowCompletedOverlay] = useState(false);
-  const [medFilters, setMedFilters] = useState({});
-  const [expenseServiceFilter, setExpenseServiceFilter] = useState("");
-  const [expensePaidFilter, setExpensePaidFilter] = useState("all");
   const [customTeam, setCustomTeam] = useState(c._customTeam || []);
   const [addingTeamSlot, setAddingTeamSlot] = useState(false);
   const [newTeamRole, setNewTeamRole] = useState("");
@@ -2801,18 +2761,11 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [partiesLoading, setPartiesLoading] = useState(false);
   const [expandedParty, setExpandedParty] = useState(null);
   const [addingParty, setAddingParty] = useState(false);
-  const [newPartyType, setNewPartyType] = useState("Plaintiff");
+  const [newPartyType, setNewPartyType] = useState("Defendant");
   const [newPartyKind, setNewPartyKind] = useState("individual");
   const [newPartyCustomType, setNewPartyCustomType] = useState("");
   const partyTimers = useRef({});
   const partyPendingData = useRef({});
-  const [insurance, setInsurance] = useState([]);
-  const [insuranceLoading, setInsuranceLoading] = useState(false);
-  const [expandedInsurance, setExpandedInsurance] = useState(null);
-  const [addingInsurance, setAddingInsurance] = useState(false);
-  const [newInsuranceType, setNewInsuranceType] = useState("Liability");
-  const insuranceTimers = useRef({});
-  const insurancePendingData = useRef({});
   const [experts, setExperts] = useState([]);
   const [expertsLoading, setExpertsLoading] = useState(false);
   const [expandedExpert, setExpandedExpert] = useState(null);
@@ -2846,8 +2799,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     if (activeTab === "details") {
       setPartiesLoading(true);
       apiGetParties(c.id).then(setParties).catch(() => {}).finally(() => setPartiesLoading(false));
-      setInsuranceLoading(true);
-      apiGetInsurance(c.id).then(setInsurance).catch(() => {}).finally(() => setInsuranceLoading(false));
+
       setExpertsLoading(true);
       apiGetExperts(c.id).then(setExperts).catch(() => {}).finally(() => setExpertsLoading(false));
       setMiscContactsLoading(true);
@@ -2855,8 +2807,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     }
     const timersRef = partyTimers.current;
     const pendingRef = partyPendingData.current;
-    const insTimersRef = insuranceTimers.current;
-    const insPendingRef = insurancePendingData.current;
+
     const expTimersRef = expertTimers.current;
     const expPendingRef = expertPendingData.current;
     const miscTimersRef = miscContactTimers.current;
@@ -2871,15 +2822,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         }
       });
       partyTimers.current = {};
-      Object.entries(insTimersRef).forEach(([key, timer]) => {
-        clearTimeout(timer);
-        const pendingData = insPendingRef[key];
-        if (pendingData) {
-          apiUpdateInsurance(parseInt(key), { data: pendingData }).catch(() => {});
-          delete insPendingRef[key];
-        }
-      });
-      insuranceTimers.current = {};
+
       Object.entries(expTimersRef).forEach(([key, timer]) => {
         clearTimeout(timer);
         const pendingData = expPendingRef[key];
@@ -2935,10 +2878,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   // Auto-save on draft/customFields/customDates/billing/expenses change (debounced)
   useEffect(() => {
     const t = setTimeout(() => {
-      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, _hiddenFields: hiddenFields, billingParties, caseExpenses, medicalSummary, _customTeam: customTeam });
+      onUpdate({ ...draft, _customFields: customFields, _customDates: customDates, _hiddenFields: hiddenFields, _customTeam: customTeam });
     }, 400);
     return () => clearTimeout(t);
-  }, [draft, customFields, customDates, billingParties, caseExpenses, medicalSummary, customTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft, customFields, customDates, customTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Field label lookup for human-readable log entries
   const fieldLabel = (key) => {
@@ -3123,11 +3066,8 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       {showPrint && (
         <CasePrintView c={draft} notes={notes} tasks={tasks} deadlines={deadlines} links={links} onClose={() => setShowPrint(false)} />
       )}
-      {showBillingPrint && (
-        <BillingPrintView c={draft} billingParties={billingParties} onClose={() => setShowBillingPrint(false)} />
-      )}
       {showDocGen && (
-        <GenerateDocumentModal caseData={draft} currentUser={currentUser} onClose={() => setShowDocGen(false)} parties={parties} insurance={insurance} experts={experts} />
+        <GenerateDocumentModal caseData={draft} currentUser={currentUser} onClose={() => setShowDocGen(false)} parties={parties} experts={experts} />
       )}
       {showDeleteConfirm && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
@@ -3328,14 +3268,14 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 onChange={e => setAndLog("status", e.target.value)}
                 style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", cursor: "pointer", fontFamily: "inherit" }}
               >
-                {["Active", "Closed", "Monitoring"].map(o => <option key={o}>{o}</option>)}
+                {["Active", "Closed", "Pending", "Disposed", "Transferred"].map(o => <option key={o}>{o}</option>)}
               </select>
               <select
-                value={draft.stage || "Pleadings"}
+                value={draft.stage || "Arraignment"}
                 onChange={e => setAndLog("stage", e.target.value)}
                 style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", cursor: "pointer", fontFamily: "inherit" }}
               >
-                {["Pleadings", "Pre-Answer Motions", "Written Discovery", "Depositions", "Expert Discovery", "Pre-Trial", "Trial Set", "Appeal", "Settled", "Closed"].map(o => <option key={o}>{o}</option>)}
+                {["Arraignment", "Preliminary Hearing", "Grand Jury/Indictment", "Pre-Trial Motions", "Plea Negotiations", "Trial", "Sentencing", "Post-Conviction", "Appeal"].map(o => <option key={o}>{o}</option>)}
               </select>
               <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: draft.confidential ? "#dc2626" : "#8A9096", cursor: "pointer", userSelect: "none", marginLeft: 4 }} title="Confidential cases are excluded from AI Search">
                 <input type="checkbox" checked={!!draft.confidential} onChange={e => setAndLog("confidential", e.target.checked)} style={{ margin: 0, cursor: "pointer" }} />
@@ -3367,9 +3307,6 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         <div className="case-overlay-tabs">
           <div className={`case-overlay-tab ${activeTab === "overview" ? "active" : ""}`} onClick={() => setActiveTab("overview")}>Overview</div>
           <div className={`case-overlay-tab ${activeTab === "details" ? "active" : ""}`} onClick={() => setActiveTab("details")}>Details</div>
-          <div className={`case-overlay-tab ${activeTab === "medical" ? "active" : ""}`} onClick={() => setActiveTab("medical")}>Medical Summary</div>
-          <div className={`case-overlay-tab ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>Billing Summary</div>
-          <div className={`case-overlay-tab ${activeTab === "expenses" ? "active" : ""}`} onClick={() => setActiveTab("expenses")}>Case Expenses</div>
           <div className={`case-overlay-tab ${activeTab === "correspondence" ? "active" : ""}`} onClick={() => setActiveTab("correspondence")}>
             Correspondence {correspondence.length > 0 && <span style={{ fontSize: 10, color: "#8A9096", marginLeft: 4 }}>({correspondence.length})</span>}
           </div>
@@ -3655,7 +3592,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                       <div>
                         <label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>Party Type</label>
                         <select value={newPartyType} onChange={e => setNewPartyType(e.target.value)} style={{ width: "100%", fontSize: 13, padding: "6px 8px" }}>
-                          {["Plaintiff", "Defendant", "Cross-Defendant", "Third-Party Defendant", "Third-Party Plaintiff", "Intervenor", "Garnishee"].map(t => <option key={t} value={t}>{t}</option>)}
+                          {["Defendant", "Co-Defendant", "Victim", "Witness"].map(t => <option key={t} value={t}>{t}</option>)}
                           <option value="_custom">Custom...</option>
                         </select>
                       </div>
@@ -3674,7 +3611,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                       </div>
                     )}
                     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                      <button className="btn btn-outline btn-sm" onClick={() => { setAddingParty(false); setNewPartyType("Plaintiff"); setNewPartyKind("individual"); setNewPartyCustomType(""); }}>Cancel</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setAddingParty(false); setNewPartyType("Defendant"); setNewPartyKind("individual"); setNewPartyCustomType(""); }}>Cancel</button>
                       <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={async () => {
                         let partyType = newPartyType === "_custom" ? (newPartyCustomType || "Other").trim() : newPartyType;
                         if (!partyType) partyType = "Other";
@@ -3683,7 +3620,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                           setParties(p => [...p, saved]);
                           setAddingParty(false);
                           setExpandedParty(saved.id);
-                          setNewPartyType("Plaintiff"); setNewPartyKind("individual"); setNewPartyCustomType("");
+                          setNewPartyType("Defendant"); setNewPartyKind("individual"); setNewPartyCustomType("");
                           log("Party Added", `Added ${newPartyKind === "corporation" ? "entity" : "individual"} ${partyType}`);
                         } catch (err) { alert("Failed to add party: " + err.message); }
                       }}>Add</button>
@@ -3704,13 +3641,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   ? (d.entityName || "Unnamed Entity")
                   : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ") || "Unnamed Party";
                 const PARTY_TYPE_COLORS = {
-                  "Plaintiff": { bg: "#E8F4FD", text: "#1A6FA0", border: "#B3D9F0" },
                   "Defendant": { bg: "#FDECEA", text: "#9A3030", border: "#F0B8B3" },
-                  "Cross-Defendant": { bg: "#FDF0E6", text: "#8A5A1E", border: "#F0D4A8" },
-                  "Third-Party Defendant": { bg: "#F5E6F5", text: "#7A3080", border: "#D8B0D8" },
-                  "Third-Party Plaintiff": { bg: "#E6F0F5", text: "#306080", border: "#B0C8D8" },
-                  "Intervenor": { bg: "#EAF5EA", text: "#2F6A3A", border: "#B3D8B8" },
-                  "Garnishee": { bg: "#F5F0E6", text: "#6A5A2F", border: "#D8CCA8" },
+                  "Co-Defendant": { bg: "#FDF0E6", text: "#8A5A1E", border: "#F0D4A8" },
+                  "Victim": { bg: "#E8F4FD", text: "#1A6FA0", border: "#B3D9F0" },
+                  "Witness": { bg: "#EAF5EA", text: "#2F6A3A", border: "#B3D8B8" },
                 };
                 const typeColor = PARTY_TYPE_COLORS[party.partyType] || { bg: "#EDEFF2", text: "#5D6268", border: "#D6D8DB" };
 
@@ -3958,212 +3892,9 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
             <div style={{ borderTop: "1px solid var(--c-border)", margin: "8px 0 32px" }} />
 
-            {/* Two-column: Insurance + (right column TBD) */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 48px", marginBottom: 32 }}>
 
-            {/* Left column: Insurance */}
-            <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
-              <div className="case-overlay-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>Insurance ({insurance.length})</span>
-                <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 11, padding: "2px 10px" }} onClick={() => setAddingInsurance(true)}>+ Add Policy</button>
-              </div>
-
-              {addingInsurance && (
-                <div style={{ background: "var(--c-bg2)", border: "1px solid var(--c-border)", borderRadius: 8, padding: 16, marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 12 }}>New Insurance Policy</div>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>Insurance Type</label>
-                    <select value={newInsuranceType} onChange={e => setNewInsuranceType(e.target.value)} style={{ width: "100%", fontSize: 13, padding: "6px 8px" }}>
-                      {["Liability", "UM/UIM", "MedPay", "PLUP", "Homeowners", "Business"].map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button className="btn btn-outline btn-sm" onClick={() => { setAddingInsurance(false); setNewInsuranceType("Liability"); }}>Cancel</button>
-                    <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={async () => {
-                      try {
-                        const saved = await apiCreateInsurance({ caseId: c.id, insuranceType: newInsuranceType, data: {} });
-                        setInsurance(p => [...p, saved]);
-                        setAddingInsurance(false);
-                        setExpandedInsurance(saved.id);
-                        setNewInsuranceType("Liability");
-                        log("Insurance Added", `Added ${newInsuranceType} policy`);
-                      } catch (err) { alert("Failed to add insurance: " + err.message); }
-                    }}>Add</button>
-                  </div>
-                </div>
-              )}
-
-              {insuranceLoading && <div style={{ fontSize: 13, color: "#8A9096", padding: "12px 0" }}>Loading insurance...</div>}
-
-              {!insuranceLoading && insurance.length === 0 && !addingInsurance && (
-                <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic", padding: "12px 0" }}>No insurance policies added yet.</div>
-              )}
-
-              {!insuranceLoading && insurance.map(ins => {
-                const isExp = expandedInsurance === ins.id;
-                const d = ins.data || {};
-                const displayName = d.company || ins.insuranceType;
-                const INSURANCE_TYPE_COLORS = {
-                  "Liability": { bg: "#FDECEA" },
-                  "UM/UIM": { bg: "#E8F4FD" },
-                  "MedPay": { bg: "#E8F8E8" },
-                  "PLUP": { bg: "#FDF0E6" },
-                  "Homeowners": { bg: "#F5E6F5" },
-                  "Business": { bg: "#EDEFF2" },
-                };
-                const typeColor = INSURANCE_TYPE_COLORS[ins.insuranceType] || { bg: "#EDEFF2" };
-
-                const updateInsField = (field, value) => {
-                  const newData = { ...(insurancePendingData.current[ins.id] || d), [field]: value };
-                  insurancePendingData.current[ins.id] = newData;
-                  setInsurance(p => p.map(x => x.id === ins.id ? { ...x, data: newData } : x));
-                  const timerKey = `${ins.id}`;
-                  if (insuranceTimers.current[timerKey]) clearTimeout(insuranceTimers.current[timerKey]);
-                  insuranceTimers.current[timerKey] = setTimeout(async () => {
-                    const dataToSave = insurancePendingData.current[ins.id];
-                    delete insurancePendingData.current[ins.id];
-                    try { await apiUpdateInsurance(ins.id, { data: dataToSave }); } catch (err) { console.error(err); }
-                  }, 600);
-                };
-
-                const inputStyle = { width: "100%", fontSize: 13, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" };
-                const labelStyle = { fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 3 };
-                const fieldGroup = { marginBottom: 10 };
-
-                const partyOptions = parties.map(p => {
-                  const pd = p.data || {};
-                  const name = p.entityKind === "corporation" ? (pd.entityName || "Unnamed Entity") : [pd.firstName, pd.lastName].filter(Boolean).join(" ") || "Unnamed Party";
-                  return { value: `${p.partyType}: ${name}`, label: `${p.partyType}: ${name}` };
-                });
-
-                return (
-                  <div key={ins.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 8, overflow: "hidden" }}>
-                    <div
-                      onClick={() => setExpandedInsurance(isExp ? null : ins.id)}
-                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent" }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 14 }}>🛡️</span>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>{displayName}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 4, background: typeColor.bg, color: "#1F2428", letterSpacing: "0.02em" }}>{ins.insuranceType}</span>
-                            {d.status && <span style={{ fontSize: 11, color: "#8A9096" }}>· {d.status}</span>}
-                            {d.assignedParty && <span style={{ fontSize: 11, color: "#8A9096" }}>· {d.assignedParty}</span>}
-                          </div>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 12, color: "#8A9096" }}>{isExp ? "▲" : "▼"}</span>
-                    </div>
-
-                    {isExp && (
-                      <div style={{ padding: "12px 14px", borderTop: "1px solid var(--c-border)" }}>
-                        <div style={fieldGroup}><label style={labelStyle}>Company</label><input style={inputStyle} value={d.company || ""} onChange={e => updateInsField("company", e.target.value)} placeholder="Insurance company name" /></div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                          <div style={fieldGroup}><label style={labelStyle}>Claim Number</label><input style={inputStyle} value={d.claimNumber || ""} onChange={e => updateInsField("claimNumber", e.target.value)} placeholder="Insurer's claim #" /></div>
-                          <div style={fieldGroup}>
-                            <label style={labelStyle}>Status</label>
-                            <select style={inputStyle} value={d.status || ""} onChange={e => updateInsField("status", e.target.value)}>
-                              <option value="">—</option>
-                              {["Open", "Closed", "Denied", "Exhausted", "Pending", "In Litigation"].map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </div>
-                        </div>
-
-                        <div style={fieldGroup}>
-                          <label style={labelStyle}>Assigned Party</label>
-                          <select style={inputStyle} value={d.assignedParty || ""} onChange={e => updateInsField("assignedParty", e.target.value)}>
-                            <option value="">— Select Party —</option>
-                            {partyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 12, marginBottom: 6 }}>Policy Numbers</div>
-                        {(d.policyNumbers || []).map((pn, idx) => (
-                          <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                            <input style={{ ...inputStyle, flex: 1 }} value={pn || ""} placeholder="Policy number" onChange={e => {
-                              const nums = [...(d.policyNumbers || [])];
-                              nums[idx] = e.target.value;
-                              updateInsField("policyNumbers", nums);
-                            }} />
-                            <button onClick={() => { const nums = (d.policyNumbers || []).filter((_, i) => i !== idx); updateInsField("policyNumbers", nums); }} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
-                          </div>
-                        ))}
-                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: 12 }} onClick={() => updateInsField("policyNumbers", [...(d.policyNumbers || []), ""])}>+ Add Policy Number</button>
-
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Coverage</div>
-                        {(d.coverages || []).map((cov, idx) => (
-                          <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                            <select style={{ ...inputStyle, width: 140, flex: "0 0 140px" }} value={cov.type || "Bodily Injury"} onChange={e => {
-                              const covs = [...(d.coverages || [])];
-                              covs[idx] = { ...covs[idx], type: e.target.value };
-                              updateInsField("coverages", covs);
-                            }}>
-                              {["Bodily Injury", "Property Damage", "Combined Single Limit", "Per Person", "Per Occurrence", "Aggregate", "Medical Payments", "Uninsured Motorist", "Underinsured Motorist", "Umbrella/Excess", "Deductible", "Other"].map(l => <option key={l}>{l}</option>)}
-                            </select>
-                            <input style={{ ...inputStyle, flex: 1 }} value={cov.amount || ""} placeholder="Amount (e.g. $100,000)" onChange={e => {
-                              const covs = [...(d.coverages || [])];
-                              covs[idx] = { ...covs[idx], amount: e.target.value };
-                              updateInsField("coverages", covs);
-                            }} />
-                            <button onClick={() => { const covs = (d.coverages || []).filter((_, i) => i !== idx); updateInsField("coverages", covs); }} style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
-                          </div>
-                        ))}
-                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: 12 }} onClick={() => updateInsField("coverages", [...(d.coverages || []), { type: "Bodily Injury", amount: "" }])}>+ Add Coverage</button>
-
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginTop: 4, marginBottom: 6 }}>Adjuster</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-                          <div><label style={labelStyle}>Name</label><input style={inputStyle} value={d.adjusterName || ""} onChange={e => updateInsField("adjusterName", e.target.value)} /></div>
-                          <div><label style={labelStyle}>Phone</label><input style={inputStyle} value={d.adjusterPhone || ""} onChange={e => updateInsField("adjusterPhone", e.target.value)} /></div>
-                          <div><label style={labelStyle}>Email</label><input style={inputStyle} value={d.adjusterEmail || ""} onChange={e => updateInsField("adjusterEmail", e.target.value)} /></div>
-                          <div><label style={labelStyle}>Fax</label><input style={inputStyle} value={d.adjusterFax || ""} onChange={e => updateInsField("adjusterFax", e.target.value)} /></div>
-                        </div>
-                        <div style={fieldGroup}><label style={labelStyle}>Adjuster Address</label><input style={inputStyle} value={d.adjusterAddress || ""} onChange={e => updateInsField("adjusterAddress", e.target.value)} /></div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                          <div><label style={labelStyle}>Policy Start</label><input type="date" style={inputStyle} value={d.policyStart || ""} onChange={e => updateInsField("policyStart", e.target.value)} /></div>
-                          <div><label style={labelStyle}>Policy End</label><input type="date" style={inputStyle} value={d.policyEnd || ""} onChange={e => updateInsField("policyEnd", e.target.value)} /></div>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 10, marginBottom: 10 }}>
-                          <div style={fieldGroup}>
-                            <label style={labelStyle}>Reservation of Rights</label>
-                            <select style={inputStyle} value={d.reservationOfRights || ""} onChange={e => updateInsField("reservationOfRights", e.target.value)}>
-                              <option value="">—</option>
-                              {["No", "Yes", "Pending"].map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </div>
-                          <div style={fieldGroup}><label style={labelStyle}>ROR Date</label><input type="date" style={inputStyle} value={d.rorDate || ""} onChange={e => updateInsField("rorDate", e.target.value)} /></div>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-                          <div style={fieldGroup}><label style={labelStyle}>Tender Date</label><input type="date" style={inputStyle} value={d.tenderDate || ""} onChange={e => updateInsField("tenderDate", e.target.value)} /></div>
-                          <div style={fieldGroup}><label style={labelStyle}>Denial Date</label><input type="date" style={inputStyle} value={d.denialDate || ""} onChange={e => updateInsField("denialDate", e.target.value)} /></div>
-                          <div style={fieldGroup}><label style={labelStyle}>SIR/Deductible Amount</label><input style={inputStyle} value={d.sirAmount || ""} placeholder="$0.00" onChange={e => updateInsField("sirAmount", e.target.value)} /></div>
-                        </div>
-
-                        <div style={fieldGroup}><label style={labelStyle}>Notes</label><textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} value={d.notes || ""} onChange={e => updateInsField("notes", e.target.value)} placeholder="Additional notes..." /></div>
-
-                        <div style={{ borderTop: "1px solid var(--c-border)", paddingTop: 10, display: "flex", justifyContent: "flex-end" }}>
-                          <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#e05252", borderColor: "#e05252" }} onClick={async () => {
-                            if (!window.confirm(`Remove ${displayName} (${ins.insuranceType}) policy from this case?`)) return;
-                            try {
-                              await apiDeleteInsurance(ins.id);
-                              setInsurance(p => p.filter(x => x.id !== ins.id));
-                              setExpandedInsurance(null);
-                              log("Insurance Removed", `Removed ${ins.insuranceType}: ${displayName}`);
-                            } catch (err) { alert("Failed: " + err.message); }
-                          }}>Remove Policy</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-              {/* Right column: Experts */}
+              {/* Experts */}
               <div className="case-overlay-section" style={{ display: "flex", flexDirection: "column" }}>
               <div className="case-overlay-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span>Experts ({experts.length})</span>
@@ -4382,6 +4113,66 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   </div>
                 );
               })}
+              </div>
+
+              {/* Charges Section */}
+              <div style={{ marginTop: 32, borderTop: "2px solid var(--c-border)", paddingTop: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div className="case-overlay-section-title" style={{ marginBottom: 0 }}>Charges</div>
+                  <button className="btn btn-sm" style={{ fontSize: 12, padding: "4px 12px", background: "#1E2A3A", color: "#fff", border: "none", borderRadius: 5 }}
+                    onClick={() => {
+                      const newCharge = { id: Date.now(), statute: "", description: "", chargeClass: "", originalOrAmended: "Original", disposition: "", dispositionDate: "" };
+                      onUpdate({ charges: [...(c.charges || []), newCharge] });
+                    }}>+ Add Charge</button>
+                </div>
+                {(!c.charges || c.charges.length === 0) && <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic" }}>No charges added yet.</div>}
+                {(c.charges || []).map((charge, idx) => (
+                  <div key={charge.id || idx} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 8, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>
+                          {charge.description || "Untitled Charge"}{charge.statute ? ` (§${charge.statute})` : ""}
+                        </div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                          {charge.chargeClass && <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, background: /Felony/.test(charge.chargeClass) ? "#FDECEA" : "#E8F4FD", color: /Felony/.test(charge.chargeClass) ? "#9A3030" : "#1A6FA0", fontWeight: 600 }}>{charge.chargeClass}</span>}
+                          {charge.originalOrAmended && <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, background: "#EDEFF2", color: "#5D6268", fontWeight: 600 }}>{charge.originalOrAmended}</span>}
+                          {charge.disposition && <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, background: "#EAF5EA", color: "#2F6A3A", fontWeight: 600 }}>{charge.disposition}</span>}
+                        </div>
+                      </div>
+                      <button style={{ background: "none", border: "none", color: "#e05252", cursor: "pointer", fontSize: 14 }}
+                        onClick={() => onUpdate({ charges: (c.charges || []).filter((_, i) => i !== idx) })}>✕</button>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", marginTop: 8 }}>
+                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Statute</label>
+                        <input style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
+                          value={charge.statute} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, statute: e.target.value }; onUpdate({ charges: updated }); }} /></div>
+                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Description</label>
+                        <input style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
+                          value={charge.description} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, description: e.target.value }; onUpdate({ charges: updated }); }} /></div>
+                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Class</label>
+                        <select style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
+                          value={charge.chargeClass} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, chargeClass: e.target.value }; onUpdate({ charges: updated }); }}>
+                          <option value="">— Select —</option>
+                          {["Class A Felony", "Class B Felony", "Class C Felony", "Misdemeanor A", "Misdemeanor B", "Misdemeanor C", "Violation", "Other"].map(o => <option key={o} value={o}>{o}</option>)}
+                        </select></div>
+                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Original / Amended</label>
+                        <select style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
+                          value={charge.originalOrAmended} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, originalOrAmended: e.target.value }; onUpdate({ charges: updated }); }}>
+                          <option value="Original">Original</option>
+                          <option value="Amended">Amended</option>
+                        </select></div>
+                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Disposition</label>
+                        <select style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
+                          value={charge.disposition} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, disposition: e.target.value }; onUpdate({ charges: updated }); }}>
+                          <option value="">— None —</option>
+                          {["Guilty Plea", "Not Guilty Verdict", "Nolle Prosequi", "Dismissed", "Acquitted", "Convicted"].map(o => <option key={o} value={o}>{o}</option>)}
+                        </select></div>
+                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Disposition Date</label>
+                        <input type="date" style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
+                          value={charge.dispositionDate} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, dispositionDate: e.target.value }; onUpdate({ charges: updated }); }} /></div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div style={{ marginTop: 20 }}>
@@ -4609,393 +4400,6 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
           </div>
         )}
-
-        {/* ── Medical Summary Tab ── */}
-        {activeTab === "medical" && (() => {
-          const fmt = (d) => { if (!d) return ""; const [y, m, dy] = d.split("-"); return `${m}/${dy}/${y}`; };
-          const allProviders = [...new Set([
-            ...medicalSummary.flatMap(mp => (mp.entries || []).map(e => e.provider).filter(Boolean)),
-            ...billingParties.flatMap(bp => (bp.medRows || []).map(r => r.provider).filter(Boolean)),
-          ])].sort();
-          return (
-            <div className="case-overlay-body">
-              {showAddMedParty && (
-                <div className="case-overlay" style={{ left: 0, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={e => e.target === e.currentTarget && (setShowAddMedParty(false), setMedPartySelect(""), setMedPartyDob(""))}>
-                  <div className="login-box" style={{ maxWidth: 420, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative" }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => { setShowAddMedParty(false); setMedPartySelect(""); setMedPartyDob(""); }} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 16 }}>Add Party to Medical Summary</div>
-                    <div className="form-group">
-                      <label>Select Party</label>
-                      <select value={medPartySelect} onChange={e => {
-                        setMedPartySelect(e.target.value);
-                        const p = parties.find(x => String(x.id) === e.target.value);
-                        setMedPartyDob(p?.data?.dob || "");
-                      }} style={{ width: "100%" }}>
-                        <option value="">— Select a party —</option>
-                        {parties.filter(p => !medicalSummary.some(ms => ms.partyId === p.id)).map(p => {
-                          const n = p.entityKind === "corporation" ? (p.data?.entityName || "Unnamed") : [p.data?.firstName, p.data?.middleName, p.data?.lastName].filter(Boolean).join(" ") || "Unnamed";
-                          return <option key={p.id} value={p.id}>{n} ({p.partyType})</option>;
-                        })}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Date of Birth</label>
-                      <input type="date" value={medPartyDob} onChange={e => setMedPartyDob(e.target.value)} style={{ width: "100%" }} />
-                    </div>
-                    <button className="btn btn-gold" style={{ width: "100%", padding: 10 }} disabled={!medPartySelect} onClick={async () => {
-                      const p = parties.find(x => String(x.id) === medPartySelect);
-                      if (!p) return;
-                      const n = p.entityKind === "corporation" ? (p.data?.entityName || "Unnamed") : [p.data?.firstName, p.data?.middleName, p.data?.lastName].filter(Boolean).join(" ") || "Unnamed";
-                      if (medPartyDob && !p.data?.dob) {
-                        try {
-                          await apiUpdateParty(p.id, { data: { ...p.data, dob: medPartyDob } });
-                          setParties(prev => prev.map(x => x.id === p.id ? { ...x, data: { ...x.data, dob: medPartyDob } } : x));
-                        } catch (err) { console.error("Failed to update party DOB:", err); }
-                        const bp = billingParties.find(b => b.name.toLowerCase() === n.toLowerCase());
-                        if (bp && !bp.dob) {
-                          setBillingParties(prev => prev.map(b => b.id === bp.id ? { ...b, dob: medPartyDob } : b));
-                        }
-                      }
-                      setMedicalSummary(prev => [...prev, { id: newId(), partyId: p.id, name: n, dob: medPartyDob || p.data?.dob || "", entries: [] }]);
-                      log("Medical Summary Party Added", `Added ${n} to medical summary`);
-                      setShowAddMedParty(false);
-                      setMedPartySelect("");
-                      setMedPartyDob("");
-                    }}>Add Party</button>
-                    <button className="btn btn-outline" style={{ width: "100%", marginTop: 10 }} onClick={() => { setShowAddMedParty(false); setMedPartySelect(""); setMedPartyDob(""); }}>Cancel</button>
-                  </div>
-                </div>
-              )}
-
-              {showMedPrint && (() => {
-                const mp = medicalSummary.find(m => m.id === showMedPrint);
-                if (!mp) return null;
-                return <MedicalPrintView c={c} medParty={mp} onClose={() => setShowMedPrint(null)} />;
-              })()}
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: "var(--c-text2)" }}>{medicalSummary.length} {medicalSummary.length === 1 ? "party" : "parties"}</div>
-                <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={() => {
-                  if (parties.length === 0) { alert("Add parties in the Details tab first."); return; }
-                  setShowAddMedParty(true);
-                }}>+ Add Party</button>
-              </div>
-
-              {medicalSummary.length === 0 && (
-                <div style={{ textAlign: "center", padding: "60px 0", color: "#8A9096", fontSize: 13 }}>No parties added yet. Click "+ Add Party" to begin tracking medical treatment summaries.</div>
-              )}
-
-              {medicalSummary.map(mp => {
-                const entries = mp.entries || [];
-                const providerOptions = [...new Set([...entries.map(e => e.provider).filter(Boolean), ...allProviders])].sort();
-                const mf = medFilters[mp.id] || {};
-                const provFilter = mf.provider || "";
-                const dateFrom = mf.dateFrom || "";
-                const dateTo = mf.dateTo || "";
-                const setMF = (key, val) => setMedFilters(prev => ({ ...prev, [mp.id]: { ...prev[mp.id], [key]: val } }));
-                const filtered = entries.filter(e => {
-                  if (expandedMedEntry === e.id) return true;
-                  if (provFilter && e.provider !== provFilter) return false;
-                  if (dateFrom && e.dateOfService && e.dateOfService < dateFrom) return false;
-                  if (dateTo && e.dateOfService && e.dateOfService > dateTo) return false;
-                  return true;
-                });
-                const updEntry = (eId, key, val) => setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: m.entries.map(e => e.id === eId ? { ...e, [key]: val } : e) } : m));
-                return (
-                  <div key={mp.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 24, overflow: "hidden" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--c-bg2)", borderBottom: "1px solid var(--c-border)" }}>
-                      <div>
-                        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 600, color: "var(--c-text-h)" }}>{mp.name}</div>
-                        <div style={{ fontSize: 12, color: "#8A9096", marginTop: 2 }}>
-                          {mp.dob ? `DOB: ${fmt(mp.dob)}` : "No DOB on file"} · {entries.length} treatment{entries.length !== 1 ? "s" : ""}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => setShowMedPrint(mp.id)}>Print</button>
-                        <button onClick={() => { log("Medical Summary Party Removed", `Removed ${mp.name} from medical summary`); setMedicalSummary(prev => prev.filter(m => m.id !== mp.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#e05252", fontSize: 18, lineHeight: 1 }}>✕</button>
-                      </div>
-                    </div>
-                    <div style={{ padding: 16 }}>
-                      {entries.length > 0 && (
-                        <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-                          <div>
-                            <div style={{ fontSize: 10, color: "#8A9096", marginBottom: 2 }}>Provider</div>
-                            <select value={provFilter} onChange={e => setMF("provider", e.target.value)} style={{ fontSize: 12, padding: "4px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }}>
-                              <option value="">All Providers</option>
-                              {providerOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 10, color: "#8A9096", marginBottom: 2 }}>From</div>
-                            <input type="date" value={dateFrom} onChange={e => setMF("dateFrom", e.target.value)} style={{ fontSize: 12, padding: "4px 6px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 10, color: "#8A9096", marginBottom: 2 }}>To</div>
-                            <input type="date" value={dateTo} onChange={e => setMF("dateTo", e.target.value)} style={{ fontSize: 12, padding: "4px 6px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
-                          </div>
-                          {(provFilter || dateFrom || dateTo) && (
-                            <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => setMedFilters(prev => ({ ...prev, [mp.id]: {} }))}>Clear</button>
-                          )}
-                        </div>
-                      )}
-                      {filtered.map(entry => {
-                        const isExp = expandedMedEntry === entry.id;
-                        return (
-                          <div key={entry.id} style={{ border: "1px solid var(--c-border)", borderRadius: 6, marginBottom: 8, overflow: "hidden" }}>
-                            <div onClick={() => setExpandedMedEntry(isExp ? null : entry.id)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", cursor: "pointer", background: isExp ? "var(--c-bg2)" : "transparent" }}>
-                              <div style={{ display: "flex", gap: 16, alignItems: "center", flex: 1, minWidth: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text)", minWidth: 140, flexShrink: 0 }}>{entry.provider || "No provider"}</span>
-                                <span style={{ fontSize: 12, color: "var(--c-text2)", flexShrink: 0 }}>{entry.dateOfService ? fmt(entry.dateOfService) : "No date"}</span>
-                                {entry.shortDesc && <span style={{ fontSize: 12, color: "var(--c-text2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>— {entry.shortDesc}</span>}
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <button onClick={e => { e.stopPropagation(); setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: m.entries.filter(x => x.id !== entry.id) } : m)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A9096", fontSize: 13, padding: "2px 4px" }}>✕</button>
-                                <span style={{ fontSize: 11, color: "#8A9096" }}>{isExp ? "▲" : "▼"}</span>
-                              </div>
-                            </div>
-                            {isExp && (
-                              <div style={{ padding: "10px 12px", borderTop: "1px solid var(--c-border)" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 1fr", gap: 10, marginBottom: 10 }}>
-                                  <div>
-                                    <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Provider</div>
-                                    <div style={{ position: "relative" }}>
-                                      <input list={`prov-list-${entry.id}`} value={entry.provider || ""} onChange={e => updEntry(entry.id, "provider", e.target.value)} placeholder="Provider name" style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
-                                      <datalist id={`prov-list-${entry.id}`}>
-                                        {allProviders.map(p => <option key={p} value={p} />)}
-                                      </datalist>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Date of Service</div>
-                                    <input type="date" value={entry.dateOfService || ""} onChange={e => updEntry(entry.id, "dateOfService", e.target.value)} style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Description</div>
-                                    <input value={entry.shortDesc || ""} onChange={e => updEntry(entry.id, "shortDesc", e.target.value)} placeholder="Brief description" style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)" }} />
-                                  </div>
-                                </div>
-                                <div>
-                                  <div style={{ fontSize: 11, color: "#8A9096", marginBottom: 3 }}>Summary</div>
-                                  <textarea value={entry.summary || ""} onChange={e => updEntry(entry.id, "summary", e.target.value)} placeholder="Enter treatment summary..." style={{ width: "100%", boxSizing: "border-box", minHeight: 120, fontSize: 12, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", fontFamily: "inherit", resize: "vertical", lineHeight: 1.5 }} />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginTop: 4 }} onClick={() => {
-                        const newEntry = { id: newId(), provider: "", dateOfService: "", shortDesc: "", summary: "" };
-                        setMedicalSummary(prev => prev.map(m => m.id === mp.id ? { ...m, entries: [...m.entries, newEntry] } : m));
-                        setExpandedMedEntry(newEntry.id);
-                      }}>+ Add Treatment</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-
-        {/* ── Billing Summary Tab ── */}
-        {activeTab === "billing" && (() => {
-          const fmtAmt = n => n === 0 ? "—" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-          const thStyle = { fontSize: 11, fontWeight: 600, color: "#8A9096", padding: "6px 8px", textAlign: "left", borderBottom: "1px solid var(--c-border)", background: "var(--c-bg2)" };
-          const tdStyle = { padding: "4px 4px", borderBottom: "1px solid var(--c-border2)" };
-          const cellInput = (val, onChange, placeholder, extraStyle) => (
-            <input style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "3px 6px", background: "transparent", border: "1px solid transparent", borderRadius: 4, color: "var(--c-text)", ...extraStyle }} value={val} onChange={onChange} placeholder={placeholder} onFocus={e => e.target.style.borderColor = "#93c5fd"} onBlur={e => e.target.style.borderColor = "transparent"} />
-          );
-          return (
-            <div className="case-overlay-body">
-              {showAddParty && (
-                <div className="case-overlay" style={{ left: 0, background: "rgba(0,0,0,0.25)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={e => e.target === e.currentTarget && setShowAddParty(false)}>
-                  <div className="login-box" style={{ maxWidth: 420, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative" }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setShowAddParty(false)} style={{ position: "absolute", top: 14, right: 16, background: "transparent", border: "none", fontSize: 18, color: "#8A9096", cursor: "pointer", lineHeight: 1 }}>✕</button>
-                    <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: "var(--c-text-h)", marginBottom: 16 }}>Add Party to Billing Summary</div>
-                    <div className="form-group">
-                      <label>Select Party</label>
-                      <select value={newPartyForm.partyId || ""} onChange={e => {
-                        const pid = e.target.value;
-                        if (!pid) { setNewPartyForm({ name: "", dob: "", collateralSource: false, partyId: "" }); return; }
-                        const p = parties.find(x => String(x.id) === pid);
-                        if (p) {
-                          const n = p.entityKind === "corporation" ? (p.data?.entityName || "Unnamed") : [p.data?.firstName, p.data?.middleName, p.data?.lastName].filter(Boolean).join(" ") || "Unnamed";
-                          setNewPartyForm(prev => ({ ...prev, partyId: pid, name: n, dob: p.data?.dob || prev.dob }));
-                        }
-                      }} style={{ width: "100%" }}>
-                        <option value="">— Select a party —</option>
-                        {parties.filter(p => !billingParties.some(bp => {
-                          const n = p.entityKind === "corporation" ? (p.data?.entityName || "Unnamed") : [p.data?.firstName, p.data?.middleName, p.data?.lastName].filter(Boolean).join(" ") || "Unnamed";
-                          return bp.name.toLowerCase() === n.toLowerCase();
-                        })).map(p => {
-                          const n = p.entityKind === "corporation" ? (p.data?.entityName || "Unnamed") : [p.data?.firstName, p.data?.middleName, p.data?.lastName].filter(Boolean).join(" ") || "Unnamed";
-                          return <option key={p.id} value={p.id}>{n} ({p.partyType})</option>;
-                        })}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Date of Birth</label>
-                      <input type="date" value={newPartyForm.dob} onChange={e => setNewPartyForm(p => ({ ...p, dob: e.target.value }))} style={{ width: "100%" }} />
-                    </div>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--c-text)", marginBottom: 16 }}>
-                      <input type="checkbox" checked={newPartyForm.collateralSource} onChange={e => setNewPartyForm(p => ({ ...p, collateralSource: e.target.checked }))} />
-                      Collateral Source
-                    </label>
-                    <button className="btn btn-gold" style={{ width: "100%", padding: 10 }} disabled={!newPartyForm.name} onClick={() => {
-                      if (!newPartyForm.name.trim()) return;
-                      const partyName = newPartyForm.name.trim();
-                      setBillingParties(p => [...p, { id: newId(), name: partyName, dob: newPartyForm.dob, collateralSource: newPartyForm.collateralSource, medRows: [{ id: newId(), provider: "", treatmentDates: "", amount: "" }], csRows: [{ id: newId(), insuranceProvider: "", dateRange: "", amount: "" }] }]);
-                      log("Billing Party Added", `Added billing party "${partyName}"`);
-                      setNewPartyForm({ name: "", dob: "", collateralSource: false, partyId: "" });
-                      setShowAddParty(false);
-                    }}>Add Party</button>
-                    <button className="btn btn-outline" style={{ width: "100%", marginTop: 10 }} onClick={() => setShowAddParty(false)}>Cancel</button>
-                  </div>
-                </div>
-              )}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: "var(--c-text2)" }}>{billingParties.length} {billingParties.length === 1 ? "party" : "parties"}</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn btn-outline btn-sm" onClick={() => setShowBillingPrint(true)}>🖨 Print</button>
-                  <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={() => setShowAddParty(true)}>+ Add Party</button>
-                </div>
-              </div>
-              {billingParties.length === 0 && (
-                <div style={{ textAlign: "center", padding: "60px 0", color: "#8A9096", fontSize: 13 }}>No parties added yet. Click "+ Add Party" to begin.</div>
-              )}
-              {billingParties.map(party => {
-                const medTotal = party.medRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-                const csTotal = party.csRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-                const updMedRow = (rId, key, val) => setBillingParties(p => p.map(pp => pp.id === party.id ? { ...pp, medRows: pp.medRows.map(r => r.id === rId ? { ...r, [key]: val } : r) } : pp));
-                const updCsRow  = (rId, key, val) => setBillingParties(p => p.map(pp => pp.id === party.id ? { ...pp, csRows: pp.csRows.map(r => r.id === rId ? { ...r, [key]: val } : r) } : pp));
-                return (
-                  <div key={party.id} style={{ border: "1px solid var(--c-border)", borderRadius: 8, marginBottom: 24, overflow: "hidden" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--c-bg2)", borderBottom: "1px solid var(--c-border)" }}>
-                      <div>
-                        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 600, color: "var(--c-text-h)" }}>{party.name}</div>
-                        <div style={{ fontSize: 12, color: "#8A9096", marginTop: 2 }}>
-                          {party.dob ? `DOB: ${fmt(party.dob)}` : "No DOB on file"}{party.collateralSource ? " · Collateral Source" : ""}
-                        </div>
-                      </div>
-                      <button onClick={() => { log("Billing Party Removed", `Removed billing party "${party.name}"`); setBillingParties(p => p.filter(pp => pp.id !== party.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#e05252", fontSize: 18, lineHeight: 1 }}>✕</button>
-                    </div>
-                    <div style={{ padding: 16 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginBottom: 8 }}>Medical Bills</div>
-                      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 6 }}>
-                        <thead><tr><th style={thStyle}>Provider</th><th style={thStyle}>Treatment Dates</th><th style={{ ...thStyle, width: 130 }}>Amount</th><th style={{ ...thStyle, width: 32 }} /></tr></thead>
-                        <tbody>
-                          {party.medRows.map(r => (
-                            <tr key={r.id}>
-                              <td style={tdStyle}>{cellInput(r.provider, e => updMedRow(r.id, "provider", e.target.value), "Provider name")}</td>
-                              <td style={tdStyle}>{cellInput(r.treatmentDates, e => updMedRow(r.id, "treatmentDates", e.target.value), "e.g. 1/1/24 – 3/1/24")}</td>
-                              <td style={tdStyle}>{cellInput(r.amount, e => updMedRow(r.id, "amount", e.target.value), "0.00", { textAlign: "right" })}</td>
-                              <td style={tdStyle}><button onClick={() => setBillingParties(p => p.map(pp => pp.id === party.id ? { ...pp, medRows: pp.medRows.filter(mr => mr.id !== r.id) } : pp))} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A9096", fontSize: 13, padding: "2px 4px" }}>✕</button></td>
-                            </tr>
-                          ))}
-                          <tr style={{ background: "var(--c-bg2)" }}>
-                            <td style={{ ...tdStyle, fontSize: 12, fontWeight: 600, color: "var(--c-text2)", padding: "6px 8px" }} colSpan={2}>Total</td>
-                            <td style={{ ...tdStyle, fontSize: 12, fontWeight: 700, color: medTotal > 0 ? "#1E2A3A" : "var(--c-text2)", textAlign: "right", padding: "6px 8px" }}>{fmtAmt(medTotal)}</td>
-                            <td style={tdStyle} />
-                          </tr>
-                        </tbody>
-                      </table>
-                      <button className="btn btn-outline btn-sm" style={{ fontSize: 11, marginBottom: party.collateralSource ? 20 : 0 }} onClick={() => setBillingParties(p => p.map(pp => pp.id === party.id ? { ...pp, medRows: [...pp.medRows, { id: newId(), provider: "", treatmentDates: "", amount: "" }] } : pp))}>+ Add Row</button>
-                      {party.collateralSource && (
-                        <>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", marginBottom: 8, marginTop: 4 }}>Collateral Source</div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 6 }}>
-                            <thead><tr><th style={thStyle}>Insurance Provider</th><th style={thStyle}>Date Range</th><th style={{ ...thStyle, width: 130 }}>Amount</th><th style={{ ...thStyle, width: 32 }} /></tr></thead>
-                            <tbody>
-                              {party.csRows.map(r => (
-                                <tr key={r.id}>
-                                  <td style={tdStyle}>{cellInput(r.insuranceProvider, e => updCsRow(r.id, "insuranceProvider", e.target.value), "Insurance provider")}</td>
-                                  <td style={tdStyle}>{cellInput(r.dateRange, e => updCsRow(r.id, "dateRange", e.target.value), "e.g. 1/1/24 – 3/1/24")}</td>
-                                  <td style={tdStyle}>{cellInput(r.amount, e => updCsRow(r.id, "amount", e.target.value), "0.00", { textAlign: "right" })}</td>
-                                  <td style={tdStyle}><button onClick={() => setBillingParties(p => p.map(pp => pp.id === party.id ? { ...pp, csRows: pp.csRows.filter(cr => cr.id !== r.id) } : pp))} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A9096", fontSize: 13, padding: "2px 4px" }}>✕</button></td>
-                                </tr>
-                              ))}
-                              <tr style={{ background: "var(--c-bg2)" }}>
-                                <td style={{ ...tdStyle, fontSize: 12, fontWeight: 600, color: "var(--c-text2)", padding: "6px 8px" }} colSpan={2}>Total</td>
-                                <td style={{ ...tdStyle, fontSize: 12, fontWeight: 700, color: csTotal > 0 ? "#1E2A3A" : "var(--c-text2)", textAlign: "right", padding: "6px 8px" }}>{fmtAmt(csTotal)}</td>
-                                <td style={tdStyle} />
-                              </tr>
-                            </tbody>
-                          </table>
-                          <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => setBillingParties(p => p.map(pp => pp.id === party.id ? { ...pp, csRows: [...pp.csRows, { id: newId(), insuranceProvider: "", dateRange: "", amount: "" }] } : pp))}>+ Add Row</button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-
-        {/* ── Case Expenses Tab ── */}
-        {activeTab === "expenses" && (() => {
-          const fmtAmt = n => n === 0 ? "—" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-          const serviceOptions = [...new Set(caseExpenses.map(e => e.serviceProvided).filter(Boolean))];
-          const filtered = caseExpenses.filter(e => {
-            const svc = !expenseServiceFilter || e.serviceProvided === expenseServiceFilter;
-            const pd = expensePaidFilter === "all" || (expensePaidFilter === "paid" && e.paid) || (expensePaidFilter === "unpaid" && !e.paid);
-            return svc && pd;
-          });
-          const total = filtered.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
-          const thStyle = { fontSize: 11, fontWeight: 600, color: "#8A9096", padding: "8px 10px", textAlign: "left", borderBottom: "1px solid var(--c-border)", background: "var(--c-bg2)" };
-          const tdStyle = { padding: "2px 2px", borderBottom: "1px solid var(--c-border2)" };
-          const cellInput = (val, onChange, placeholder, type, extraStyle) => (
-            <input type={type || "text"} style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "4px 6px", background: "transparent", border: "1px solid transparent", borderRadius: 4, color: "var(--c-text)", ...extraStyle }} value={val} onChange={onChange} placeholder={placeholder} onFocus={e => e.target.style.borderColor = "#93c5fd"} onBlur={e => e.target.style.borderColor = "transparent"} />
-          );
-          return (
-            <div className="case-overlay-body">
-              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-                <select value={expenseServiceFilter} onChange={e => setExpenseServiceFilter(e.target.value)} style={{ fontSize: 12, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg2)", color: "var(--c-text)", minWidth: 160 }}>
-                  <option value="">All Services</option>
-                  {serviceOptions.map(s => <option key={s}>{s}</option>)}
-                </select>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {[["all", "All"], ["paid", "Paid"], ["unpaid", "Unpaid"]].map(([val, lbl]) => (
-                    <button key={val} className={`btn btn-sm ${expensePaidFilter === val ? "" : "btn-outline"}`} style={expensePaidFilter === val ? { background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 11 } : { fontSize: 11 }} onClick={() => setExpensePaidFilter(val)}>{lbl}</button>
-                  ))}
-                </div>
-                <div style={{ flex: 1 }} />
-                <button className="btn btn-sm" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", fontSize: 12 }} onClick={() => { setCaseExpenses(p => [...p, { id: newId(), serviceProvided: "", dateOfInvoice: "", amount: "", paid: false }]); log("Expense Added", "New expense row added"); }}>+ Add Row</button>
-              </div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Service Provided</th>
-                    <th style={{ ...thStyle, width: 140 }}>Date of Invoice</th>
-                    <th style={{ ...thStyle, width: 120, textAlign: "right" }}>Amount</th>
-                    <th style={{ ...thStyle, width: 56, textAlign: "center" }}>Paid</th>
-                    <th style={{ ...thStyle, width: 32 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(e => (
-                    <tr key={e.id}>
-                      <td style={tdStyle}>{cellInput(e.serviceProvided, ev => setCaseExpenses(p => p.map(r => r.id === e.id ? { ...r, serviceProvided: ev.target.value } : r)), "Service name")}</td>
-                      <td style={tdStyle}>{cellInput(e.dateOfInvoice, ev => setCaseExpenses(p => p.map(r => r.id === e.id ? { ...r, dateOfInvoice: ev.target.value } : r)), "", "date")}</td>
-                      <td style={tdStyle}>{cellInput(e.amount, ev => setCaseExpenses(p => p.map(r => r.id === e.id ? { ...r, amount: ev.target.value } : r)), "0.00", "text", { textAlign: "right" })}</td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}><input type="checkbox" checked={!!e.paid} onChange={ev => setCaseExpenses(p => p.map(r => r.id === e.id ? { ...r, paid: ev.target.checked } : r))} /></td>
-                      <td style={tdStyle}><button onClick={() => { log("Expense Removed", `Removed expense "${e.serviceProvided || "untitled"}"${e.amount ? ` ($${e.amount})` : ""}`); setCaseExpenses(p => p.filter(r => r.id !== e.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A9096", fontSize: 13, padding: "2px 4px" }}>✕</button></td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: "var(--c-bg2)" }}>
-                    <td style={{ padding: "8px 10px", fontSize: 12, fontWeight: 600, color: "var(--c-text2)" }} colSpan={2}>
-                      Total{expenseServiceFilter ? ` · ${expenseServiceFilter}` : ""}{expensePaidFilter !== "all" ? ` · ${expensePaidFilter}` : ""}
-                    </td>
-                    <td style={{ padding: "8px 10px", fontSize: 13, fontWeight: 700, color: total > 0 ? "#1E2A3A" : "var(--c-text2)", textAlign: "right" }}>{fmtAmt(total)}</td>
-                    <td colSpan={2} />
-                  </tr>
-                </tbody>
-              </table>
-              {caseExpenses.length === 0 && (
-                <div style={{ textAlign: "center", padding: "40px 0", color: "#8A9096", fontSize: 13 }}>No expenses recorded. Click "+ Add Row" to begin.</div>
-              )}
-            </div>
-          );
-        })()}
 
         {/* ── Correspondence Tab ── */}
         {activeTab === "correspondence" && (
@@ -5243,7 +4647,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 // ─── CaseFileLinks Component ──────────────────────────────────────────────────
 // Stores local file path strings (not file contents) — user pastes or types a
 // path and it's saved as a clickable link that opens via the file:// protocol.
-const LINK_CATEGORIES = ["General", "Pleadings", "Discovery", "Medical Records", "Correspondence", "Photographs", "Expert Reports", "Settlement", "Court Orders", "Other"];
+const LINK_CATEGORIES = ["General", "Motions", "Discovery", "Police Reports", "Photographs", "Expert Reports", "Court Orders", "Plea Agreements", "Sentencing", "Other"];
 
 function CaseFileLinks({ caseId, links, currentUser, onAddLink, onDeleteLink }) {
   const [showForm, setShowForm] = useState(false);
@@ -5383,12 +4787,11 @@ const NOTE_TYPES = [
   { label: "General",          color: "var(--c-text2)", bg: "var(--c-card)" },
   { label: "Attorney Note",    color: "#1E2A3A", bg: "#fef3c7" },
   { label: "Client Contact",   color: "#5599cc", bg: "#E4E7EB" },
-  { label: "Adjuster", color: "#44bbaa", bg: "#ccfbf1" },
-  { label: "Mediation",        color: "#a066cc", bg: "#fdf4ff" },
+  { label: "Plea Discussion",  color: "#44bbaa", bg: "#ccfbf1" },
   { label: "Court / Hearing",  color: "#e07a30", bg: "#fff7ed" },
   { label: "Investigation",    color: "#4CAE72", bg: "#dcfce7" },
-  { label: "Medical",          color: "#e05252", bg: "#fef2f2" },
-  { label: "Settlement",       color: "#2e4a62", bg: "#fefce8" },
+  { label: "Witness Interview", color: "#a066cc", bg: "#fdf4ff" },
+  { label: "Social Work",      color: "#e05252", bg: "#fef2f2" },
   { label: "Internal",         color: "#8A9096", bg: "var(--c-bg)" },
 ];
 
@@ -5404,7 +4807,7 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote, caseRe
 
   const currentIsLegalAsst = isLegalAsst(currentUser);
 
-  const caseTeamIds   = caseRecord ? [caseRecord.leadAttorney, caseRecord.secondAttorney, caseRecord.paralegal, caseRecord.paralegal2].filter(id => id > 0) : [];
+  const caseTeamIds   = caseRecord ? [caseRecord.assignedAttorney, caseRecord.secondAttorney, caseRecord.paralegal, caseRecord.investigator, caseRecord.socialWorker].filter(id => id > 0) : [];
   const caseTeamUsers = USERS.filter(u => caseTeamIds.includes(u.id) && isAttyPara(u));
   const otherAttyPara = USERS.filter(u => !caseTeamIds.includes(u.id) && isAttyPara(u));
 
@@ -5578,97 +4981,6 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote, caseRe
   );
 }
 
-// ─── Billing Print View ────────────────────────────────────────────────────────
-function BillingPrintView({ c, billingParties, onClose }) {
-  const handlePrint = () => { window.print(); };
-  const fmtAmt = n => n === 0 ? "—" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const fmt = (d) => { if (!d) return ""; const [y, m, dy] = d.split("-"); return `${m}/${dy}/${y}`; };
-  const thS = { padding: "6px 8px", fontWeight: 600, fontSize: 11, background: "#F7F8FA", borderBottom: "1px solid #e2e8f0", textAlign: "left" };
-  const tdS = { padding: "5px 8px", fontSize: 12, borderBottom: "1px solid #e2e8f0" };
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 2000, overflow: "auto", padding: "40px 60px" }}>
-      <style>{`@media print { .no-print { display: none !important; } }`}</style>
-      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700 }}>Billing Summary — {c.title}</div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={handlePrint}>Print</button>
-          <button className="btn btn-outline" onClick={onClose}>Close</button>
-        </div>
-      </div>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{c.title}</div>
-      {c.caseNum && <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 24 }}>Case No. {c.caseNum}</div>}
-      {billingParties.length === 0 && <p style={{ color: "#8A9096", fontStyle: "italic" }}>No billing parties on file.</p>}
-      {billingParties.map(party => {
-        const medTotal = party.medRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-        const csTotal = party.csRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-        return (
-          <div key={party.id} style={{ marginBottom: 36, pageBreakInside: "avoid" }}>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 600, marginBottom: 2 }}>{party.name}</div>
-            <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 12 }}>{party.dob ? `DOB: ${fmt(party.dob)}` : ""}{party.collateralSource ? " · Collateral Source" : ""}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#1F2428", marginBottom: 6 }}>Medical Bills</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10 }}>
-              <thead><tr><th style={thS}>Provider</th><th style={thS}>Treatment Dates</th><th style={{ ...thS, textAlign: "right" }}>Amount</th></tr></thead>
-              <tbody>
-                {party.medRows.filter(r => r.provider || r.amount).map(r => (
-                  <tr key={r.id}><td style={tdS}>{r.provider || "—"}</td><td style={tdS}>{r.treatmentDates || "—"}</td><td style={{ ...tdS, textAlign: "right" }}>{r.amount ? fmtAmt(parseFloat(r.amount) || 0) : "—"}</td></tr>
-                ))}
-                <tr style={{ background: "#EEF1F4" }}><td style={{ ...tdS, fontWeight: 700 }} colSpan={2}>Total</td><td style={{ ...tdS, fontWeight: 700, textAlign: "right", color: "#1E2A3A" }}>{fmtAmt(medTotal)}</td></tr>
-              </tbody>
-            </table>
-            {party.collateralSource && (
-              <>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#1F2428", marginBottom: 6 }}>Collateral Source</div>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr><th style={thS}>Insurance Provider</th><th style={thS}>Date Range</th><th style={{ ...thS, textAlign: "right" }}>Amount</th></tr></thead>
-                  <tbody>
-                    {party.csRows.filter(r => r.insuranceProvider || r.amount).map(r => (
-                      <tr key={r.id}><td style={tdS}>{r.insuranceProvider || "—"}</td><td style={tdS}>{r.dateRange || "—"}</td><td style={{ ...tdS, textAlign: "right" }}>{r.amount ? fmtAmt(parseFloat(r.amount) || 0) : "—"}</td></tr>
-                    ))}
-                    <tr style={{ background: "#EEF1F4" }}><td style={{ ...tdS, fontWeight: 700 }} colSpan={2}>Total</td><td style={{ ...tdS, fontWeight: 700, textAlign: "right", color: "#1E2A3A" }}>{fmtAmt(csTotal)}</td></tr>
-                  </tbody>
-                </table>
-              </>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function MedicalPrintView({ c, medParty, onClose }) {
-  const handlePrint = () => { window.print(); };
-  const fmt = (d) => { if (!d) return ""; const [y, m, dy] = d.split("-"); return `${m}/${dy}/${y}`; };
-  const entries = (medParty.entries || []).filter(e => e.provider || e.dateOfService || e.summary);
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 2000, overflow: "auto", padding: "40px 60px" }}>
-      <style>{`@media print { .no-print { display: none !important; } }`}</style>
-      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700 }}>Medical Summary — {medParty.name}</div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" style={{ background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A" }} onClick={handlePrint}>Print</button>
-          <button className="btn btn-outline" onClick={onClose}>Close</button>
-        </div>
-      </div>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{c.title}</div>
-      {c.caseNum && <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 8 }}>Case No. {c.caseNum}</div>}
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, marginBottom: 2, marginTop: 16 }}>{medParty.name}</div>
-      <div style={{ fontSize: 12, color: "#8A9096", marginBottom: 20 }}>{medParty.dob ? `DOB: ${fmt(medParty.dob)}` : ""}</div>
-      {entries.length === 0 && <p style={{ color: "#8A9096", fontStyle: "italic" }}>No treatment entries on file.</p>}
-      {entries.map(entry => (
-        <div key={entry.id} style={{ marginBottom: 24, pageBreakInside: "avoid", borderBottom: "1px solid #e2e8f0", paddingBottom: 16 }}>
-          <div style={{ display: "flex", gap: 24, marginBottom: 8 }}>
-            <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Provider:</span> <span style={{ fontSize: 13, fontWeight: 600, color: "#1F2428" }}>{entry.provider || "—"}</span></div>
-            <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Date of Service:</span> <span style={{ fontSize: 13, color: "#1F2428" }}>{entry.dateOfService ? fmt(entry.dateOfService) : "—"}</span></div>
-            {entry.shortDesc && <div><span style={{ fontSize: 11, fontWeight: 600, color: "#8A9096" }}>Description:</span> <span style={{ fontSize: 13, color: "#1F2428" }}>{entry.shortDesc}</span></div>}
-          </div>
-          <div style={{ fontSize: 12, color: "#1F2428", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{entry.summary || "No summary provided."}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Case Print View (full case file with notes) ──────────────────────────────
 function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
 
@@ -5704,11 +5016,11 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
     setTimeout(() => { w.focus(); w.print(); }, 400);
   };
 
-  const lead = getUserById(c.leadAttorney);
+  const lead = getUserById(c.assignedAttorney);
   const second = getUserById(c.secondAttorney);
   const para = getUserById(c.paralegal);
-  const para2 = getUserById(c.paralegal2);
-  const legalAsst = getUserById(c.legalAssistant);
+  const inv = getUserById(c.investigator);
+  const sw = getUserById(c.socialWorker);
   const now = new Date().toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 
   return (
@@ -5733,7 +5045,7 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
                   <h1 style={{ marginBottom: 4, fontFamily: "Georgia, serif" }}>{c.title}</h1>
                   <div className="meta">
                     {c.caseNum && <span style={{ marginRight: 16 }}>Case No. {c.caseNum}</span>}
-                    {c.fileNum && <span style={{ marginRight: 16 }}>File No. {c.fileNum}</span>}
+                    {c.caseType && <span style={{ marginRight: 16 }}>{c.caseType}</span>}
                     <span>Status: {c.status}</span>
                     {c.stage && <span style={{ marginLeft: 16 }}>Stage: {c.stage}</span>}
                   </div>
@@ -5749,24 +5061,23 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
             <h2>Case Information</h2>
             <div className="info-grid">
               {[
-                ["Client", c.client],
-                ["Insured", c.insured],
-                ["Plaintiff(s)", c.plaintiff],
-                ["Defendant(s)", c.defendant],
-                ["Opposing Counsel", c.opposingCounsel],
-                ["Short Case Number", c.shortCaseNum],
+                ["Defendant", c.defendantName],
+                ["Prosecutor", c.prosecutor],
+                ["Charge", c.chargeDescription],
+                ["Statute", c.chargeStatute],
+                ["Charge Class", c.chargeClass],
+                ["Case Type", c.caseType],
                 ["County", c.county],
                 ["Court", c.court],
-                ["Claim Number", c.claimNum],
-                ["Adjuster", c.adjuster],
-                ["Date of Loss", fmt(c.dol)],
+                ["Court Division", c.courtDivision],
                 ["Judge", c.judge],
-                ["Mediator", c.mediator],
-                ["Lead Attorney", lead?.name],
+                ["Custody Status", c.custodyStatus],
+                ["Bond Amount", c.bondAmount],
+                ["Assigned Attorney", lead?.name],
                 ["2nd Attorney", second?.name],
-                ["Paralegal 1", para?.name],
-                ["Paralegal 2", para2?.name],
-                ["Legal Assistant", legalAsst?.name],
+                ["Paralegal", para?.name],
+                ["Investigator", inv?.name],
+                ["Social Worker", sw?.name],
                 ...(c._customTeam || []).map(m => [m.role, USERS.find(u => u.id === m.userId)?.name]),
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} className="ip"><span className="ik">{k}</span><span className="iv">{v}</span></div>
@@ -5777,11 +5088,12 @@ function CasePrintView({ c, notes, tasks, deadlines, links, onClose }) {
             <h2>Key Dates</h2>
             <div className="info-grid">
               {[
-                ["Answer Filed", fmt(c.answerFiled)],
-                ["Written Discovery", fmt(c.writtenDisc)],
-                ["Party Depositions", fmt(c.partyDepo)],
-                ["Mediation", fmt(c.mediation)],
+                ["Arrest Date", fmt(c.arrestDate)],
+                ["Arraignment Date", fmt(c.arraignmentDate)],
+                ["Next Court Date", fmt(c.nextCourtDate)],
                 ["Trial Date", fmt(c.trialDate)],
+                ["Sentencing Date", fmt(c.sentencingDate)],
+                ["Disposition Date", fmt(c.dispositionDate)],
               ].map(([k, v]) => (
                 <div key={k} className="ip"><span className="ik">{k}</span><span className="iv">{v}</span></div>
               ))}
@@ -6654,17 +5966,17 @@ const REPORT_DEFS = [
     params: ["attorney"],
   },
   {
-    id: "mediation",
+    id: "nextCourt",
     icon: "🤝",
-    title: "Cases by Mediation Deadline",
-    desc: "Active cases with a mediation date, sorted soonest first. Includes mediator and days remaining.",
+    title: "Next Court Date Report",
+    desc: "Active cases with a next court date, sorted soonest first. Includes judge and days remaining.",
     params: ["office"],
   },
   {
     id: "discovery",
     icon: "🔍",
-    title: "Cases by Discovery Deadline",
-    desc: "Cases with written discovery, party deposition, or expert deposition deadlines. Filter by deadline window.",
+    title: "Cases by Upcoming Dates",
+    desc: "Cases with arraignment or next court date deadlines within the specified window.",
     params: ["window", "office"],
   },
   {
@@ -6705,8 +6017,8 @@ const REPORT_DEFS = [
   {
     id: "answer_due",
     icon: "📝",
-    title: "Cases by Answer Filed Date",
-    desc: "Cases sorted by answer filed date. Identifies early-stage cases and tracks answer timelines.",
+    title: "Cases by Arrest Date",
+    desc: "Cases sorted by arrest date. Useful for tracking case timelines and reviewing recent arrests.",
     params: ["office"],
   },
 ];
@@ -6725,14 +6037,14 @@ function buildReport(id, allCases, tasks, deadlines, params) {
     case "trial_date": {
       const rows = activeCases.filter(c => c.trialDate).sort((a, b) => a.trialDate.localeCompare(b.trialDate));
       return {
-        columns: ["Case Number", "Style", "Trial Date", "Days", "Judge", "Lead Attorney", "Stage"],
+        columns: ["Case Number", "Style", "Trial Date", "Days", "Judge", "Assigned Attorney", "Stage"],
         rows: rows.map(c => [
           c.caseNum || "—",
           c.title,
           fmt(c.trialDate),
           daysUntil(c.trialDate) !== null ? `${daysUntil(c.trialDate)}d` : "—",
           c.judge || "—",
-          getUserById(c.leadAttorney)?.name || "—",
+          getUserById(c.assignedAttorney)?.name || "—",
           c.stage || "—",
         ]),
         caseIds: rows.map(c => c.id),
@@ -6743,7 +6055,7 @@ function buildReport(id, allCases, tasks, deadlines, params) {
     }
     case "attorney": {
       const uid = params.attorney;
-      const rows = allCases.filter(c => c.leadAttorney === uid || c.secondAttorney === uid).sort((a, b) => (a.status + a.title).localeCompare(b.status + b.title));
+      const rows = allCases.filter(c => c.assignedAttorney === uid || c.secondAttorney === uid).sort((a, b) => (a.status + a.title).localeCompare(b.status + b.title));
       return {
         columns: ["Case Number", "Style", "Status", "Stage", "Trial Date", "Role"],
         rows: rows.map(c => [
@@ -6752,23 +6064,23 @@ function buildReport(id, allCases, tasks, deadlines, params) {
           c.status,
           c.stage || "—",
           fmt(c.trialDate),
-          c.leadAttorney === uid ? "Lead" : "2nd Chair",
+          c.assignedAttorney === uid ? "Lead" : "2nd Chair",
         ]),
         caseIds: rows.map(c => c.id),
         count: rows.length,
       };
     }
-    case "mediation": {
-      const rows = activeCases.filter(c => c.mediation).sort((a, b) => a.mediation.localeCompare(b.mediation));
+    case "nextCourt": {
+      const rows = activeCases.filter(c => c.nextCourtDate).sort((a, b) => a.nextCourtDate.localeCompare(b.nextCourtDate));
       return {
-        columns: ["Case Number", "Style", "Mediation Date", "Days", "Mediator", "Lead Attorney"],
+        columns: ["Case Number", "Style", "Next Court Date", "Days", "Judge", "Assigned Attorney"],
         rows: rows.map(c => [
           c.caseNum || "—",
           c.title,
-          fmt(c.mediation),
-          daysUntil(c.mediation) !== null ? `${daysUntil(c.mediation)}d` : "—",
-          c.mediator || "—",
-          getUserById(c.leadAttorney)?.name || "—",
+          fmt(c.nextCourtDate),
+          daysUntil(c.nextCourtDate) !== null ? `${daysUntil(c.nextCourtDate)}d` : "—",
+          c.judge || "—",
+          getUserById(c.assignedAttorney)?.name || "—",
         ]),
         caseIds: rows.map(c => c.id),
         colorCol: 3,
@@ -6780,7 +6092,7 @@ function buildReport(id, allCases, tasks, deadlines, params) {
       const win = params.window || 90;
       const rows = [];
       activeCases.forEach(c => {
-        const fields = [["Written Discovery", c.writtenDisc], ["Party Depositions", c.partyDepo]];
+        const fields = [["Arraignment", c.arraignmentDate], ["Next Court Date", c.nextCourtDate]];
         fields.forEach(([label, date]) => {
           if (!date) return;
           const d = daysUntil(date);
@@ -6791,14 +6103,14 @@ function buildReport(id, allCases, tasks, deadlines, params) {
       });
       rows.sort((a, b) => a.date.localeCompare(b.date));
       return {
-        columns: ["Case Number", "Style", "Deadline Type", "Date", "Days", "Lead Attorney"],
+        columns: ["Case Number", "Style", "Deadline Type", "Date", "Days", "Assigned Attorney"],
         rows: rows.map(({ c, label, date, d }) => [
           c.caseNum || "—",
           c.title,
           label,
           fmt(date),
           `${d}d`,
-          getUserById(c.leadAttorney)?.name || "—",
+          getUserById(c.assignedAttorney)?.name || "—",
         ]),
         caseIds: rows.map(({ c }) => c.id),
         colorCol: 4,
@@ -6829,14 +6141,14 @@ function buildReport(id, allCases, tasks, deadlines, params) {
     case "no_trial": {
       const rows = activeCases.filter(c => !c.trialDate).sort((a, b) => a.title.localeCompare(b.title));
       return {
-        columns: ["Case Number", "Style", "Stage", "Answer Filed", "Lead Attorney", "File #"],
+        columns: ["Case Number", "Style", "Stage", "Arrest Date", "Assigned Attorney", "Case Type"],
         rows: rows.map(c => [
           c.caseNum || "—",
           c.title,
           c.stage || "—",
-          fmt(c.answerFiled),
-          getUserById(c.leadAttorney)?.name || "—",
-          c.fileNum || "—",
+          fmt(c.arrestDate),
+          getUserById(c.assignedAttorney)?.name || "—",
+          c.caseType || "—",
         ]),
         caseIds: rows.map(c => c.id),
         count: rows.length,
@@ -6867,7 +6179,7 @@ function buildReport(id, allCases, tasks, deadlines, params) {
     }
     case "workload": {
       const rows = USERS.map(u => {
-        const lead = allCases.filter(c => c.leadAttorney === u.id);
+        const lead = allCases.filter(c => c.assignedAttorney === u.id);
         const second = allCases.filter(c => c.secondAttorney === u.id);
         const activeLead = lead.filter(c => c.status === "Active").length;
         const activeSecond = second.filter(c => c.status === "Active").length;
@@ -6900,10 +6212,10 @@ function buildReport(id, allCases, tasks, deadlines, params) {
       };
     }
     case "answer_due": {
-      const rows = allCases.filter(c => c.answerFiled).sort((a, b) => b.answerFiled.localeCompare(a.answerFiled));
+      const rows = allCases.filter(c => c.arrestDate).sort((a, b) => b.arrestDate.localeCompare(a.arrestDate));
       return {
-        columns: ["Case Number", "Style", "Answer Filed", "Status", "Stage", "Lead Attorney", "Client"],
-        rows: rows.map(c => [c.caseNum || "—", c.title, fmt(c.answerFiled), c.status, c.stage || "—", getUserById(c.leadAttorney)?.name || "—", c.client || "—"]),
+        columns: ["Case Number", "Style", "Arrest Date", "Status", "Stage", "Assigned Attorney", "Defendant"],
+        rows: rows.map(c => [c.caseNum || "—", c.title, fmt(c.arrestDate), c.status, c.stage || "—", getUserById(c.assignedAttorney)?.name || "—", c.defendantName || "—"]),
         caseIds: rows.map(c => c.id),
         count: rows.length,
       };
@@ -7217,7 +6529,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
         _source: "task", _id: t.id,
         date: t.completedAt,
         caseTitle: cs?.title || `Case #${t.caseId}`,
-        fileNum: cs?.fileNum || "",
+        caseType: cs?.caseType || "",
         detail: t.title,
         time: t.timeLogged || "",
       });
@@ -7234,7 +6546,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
           _source: "note", _id: note.id,
           date: note.createdAt,
           caseTitle: cs?.title || `Case #${caseId}`,
-          fileNum: cs?.fileNum || "",
+          caseType: cs?.caseType || "",
           detail: summary,
           time: note.timeLogged || "",
         });
@@ -7242,7 +6554,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
     });
 
     const myCaseIds = new Set(allCasesForLog.filter(c =>
-      [c.leadAttorney, c.secondAttorney, c.paralegal, c.paralegal2, c.legalAssistant].includes(currentUser.id)
+      [c.assignedAttorney, c.secondAttorney, c.paralegal, c.investigator, c.socialWorker].includes(currentUser.id)
     ).map(c => c.id));
     correspondence.forEach(email => {
       if (!myCaseIds.has(email.caseId)) return;
@@ -7252,7 +6564,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
         _source: "email", _id: email.id,
         date: email.receivedAt,
         caseTitle: cs?.title || `Case #${email.caseId}`,
-        fileNum: cs?.fileNum || "",
+        caseType: cs?.caseType || "",
         detail: email.subject || "(no subject)",
         time: "",
       });
@@ -7263,7 +6575,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
         _source: "manual", _id: me.id,
         date: me.date,
         caseTitle: me.caseTitle || `Case #${me.caseId || "?"}`,
-        fileNum: me.fileNum || "",
+        caseType: me.caseType || "",
         detail: me.detail,
         time: me.time || "",
       });
@@ -7279,12 +6591,12 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
   };
 
   const exportCSV = () => {
-    const headers = ["Date", "Case/Matter", "File Number", "Description", "Time"];
+    const headers = ["Date", "Case/Matter", "Case Type", "Description", "Time"];
     const escapeCell = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
     const csvRows = [
       headers.join(","),
       ...rows.map(r => [
-        fmtDateTime(r.date), r.caseTitle, r.fileNum, r.detail, r.time || "",
+        fmtDateTime(r.date), r.caseTitle, r.caseType, r.detail, r.time || "",
       ].map(escapeCell).join(","))
     ];
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
@@ -7398,7 +6710,7 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
                       <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--c-text2)" }}>{fmtDateTime(r.date)}</td>
                       <td>
                         <div style={{ fontSize: 13, color: "var(--c-text)", fontWeight: 500 }}>{r.caseTitle}</div>
-                        {r.fileNum && <div style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {r.fileNum}</div>}
+                        {r.caseType && <div style={{ fontSize: 10, color: "#8A9096" }}>{r.caseType}</div>}
                       </td>
                       <td style={{ fontSize: 12, color: "#1F2428", maxWidth: 420 }}>
                         {editingCell?.key === `${r._source}-${r._id}` && editingCell.field === "detail" ? (
@@ -7498,11 +6810,11 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
     if (caseFilter === "myOffice" && myOffices.length > 0) {
       cases = cases.filter(c => (c.offices || []).some(o => myOffices.includes(o)));
     } else if (caseFilter === "myMatters") {
-      cases = cases.filter(c => [c.leadAttorney, c.secondAttorney, c.paralegal, c.paralegal2, c.legalAssistant].includes(currentUser.id));
+      cases = cases.filter(c => [c.assignedAttorney, c.secondAttorney, c.paralegal, c.investigator, c.socialWorker].includes(currentUser.id));
     }
     if (caseSearch) {
       const q = caseSearch.toLowerCase();
-      cases = cases.filter(c => (c.title || "").toLowerCase().includes(q) || (c.fileNum || "").toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q));
+      cases = cases.filter(c => (c.title || "").toLowerCase().includes(q) || (c.defendantName || "").toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q));
     }
     const todayGroup = cases.filter(c => todayCaseIds.has(c.id));
     const otherGroup = cases.filter(c => !todayCaseIds.has(c.id));
@@ -7525,7 +6837,7 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1px solid #D6D8DB", background: "#F7F8FA", fontSize: 13 }}>
                 <div style={{ fontWeight: 500 }}>{selectedCase.title}</div>
-                {selectedCase.fileNum && <div style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {selectedCase.fileNum}</div>}
+                {selectedCase.caseType && <div style={{ fontSize: 10, color: "#8A9096" }}>{selectedCase.caseType}</div>}
               </div>
               <button className="btn btn-outline btn-sm" onClick={() => setCaseId(null)}>Change</button>
             </div>
@@ -7559,7 +6871,7 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
                         style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #D6D8DB", fontSize: 13 }}
                         onMouseOver={e => e.currentTarget.style.background = "#F7F8FA"} onMouseOut={e => e.currentTarget.style.background = ""}>
                         <div style={{ fontWeight: 500, color: "#1F2428" }}>{c.title}</div>
-                        {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
+                        {c.defendantName && <span style={{ fontSize: 10, color: "#8A9096" }}>{c.defendantName}</span>}
                       </div>
                     ))}
                   </>
@@ -7574,7 +6886,7 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
                         style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #D6D8DB", fontSize: 13 }}
                         onMouseOver={e => e.currentTarget.style.background = "#F7F8FA"} onMouseOut={e => e.currentTarget.style.background = ""}>
                         <div style={{ fontWeight: 500, color: "#1F2428" }}>{c.title}</div>
-                        {c.fileNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace" }}>File # {c.fileNum}</span>}
+                        {c.defendantName && <span style={{ fontSize: 10, color: "#8A9096" }}>{c.defendantName}</span>}
                       </div>
                     ))}
                   </>
@@ -7614,15 +6926,18 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
   );
 }
 
-const CONTACT_CATEGORIES = ["Client", "Attorney", "Adjuster", "Court", "Expert", "Miscellaneous"];
+const CONTACT_CATEGORIES = ["Client", "Prosecutor", "Judge", "Court", "Witness", "Expert", "Family Member", "Social Worker", "Treatment Provider"];
 
 const CONTACT_CAT_STYLE = {
-  Client:        { bg: "#E4E7EB", color: "#5599cc", border: "#D6D8DB" },
-  Attorney:      { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
-  Adjuster:      { bg: "#ffe4e6", color: "#e05252", border: "#fecdd3" },
-  Court:         { bg: "#f3e8ff", color: "#9966cc", border: "#f3e8ff" },
-  Expert:        { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
-  Miscellaneous: { bg: "var(--c-hover)", color: "#8A9096", border: "var(--c-border)" },
+  Client:             { bg: "#E4E7EB", color: "#5599cc", border: "#D6D8DB" },
+  Prosecutor:         { bg: "#fef9c3", color: "#1E2A3A", border: "#fef9c3" },
+  Judge:              { bg: "#f3e8ff", color: "#9966cc", border: "#f3e8ff" },
+  Court:              { bg: "#f3e8ff", color: "#9966cc", border: "#f3e8ff" },
+  Witness:            { bg: "#fef3c7", color: "#e07a30", border: "#fde68a" },
+  Expert:             { bg: "#dcfce7", color: "#4CAE72", border: "#bbf7d0" },
+  "Family Member":    { bg: "#ffe4e6", color: "#e05252", border: "#fecdd3" },
+  "Social Worker":    { bg: "#E4E7EB", color: "#5599cc", border: "#D6D8DB" },
+  "Treatment Provider": { bg: "#ccfbf1", color: "#44bbaa", border: "#ccfbf1" },
 };
 
 const CONTACT_NOTE_TYPES = [
@@ -7760,8 +7075,8 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
   const assocCases = useMemo(() => {
     if (contact.category === "Expert" || contact.category === "Adjuster" || contact.category === "Miscellaneous") return fetchedAssocCases;
     if (!allCases) return [];
-    if (contact.category === "Client")   return allCases.filter(c => c.client === contact.name && !c.deletedAt);
-    if (contact.category === "Attorney") return allCases.filter(c => c.plaintiff === contact.name && !c.deletedAt);
+    if (contact.category === "Client")   return allCases.filter(c => c.defendantName === contact.name && !c.deletedAt);
+    if (contact.category === "Attorney") return allCases.filter(c => c.prosecutor === contact.name && !c.deletedAt);
     if (contact.category === "Court")    return allCases.filter(c => c.judge === contact.name && !c.deletedAt);
     return [];
   }, [contact, allCases, fetchedAssocCases]);
@@ -8484,8 +7799,8 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
                   </td></tr>
                 ) : filtered.map(c => {
                   const catStyle = CONTACT_CAT_STYLE[c.category] || CONTACT_CAT_STYLE.Miscellaneous;
-                  const caseCount = c.category === "Client"   ? allCases.filter(a => a.client === c.name && !a.deletedAt).length
-                                  : c.category === "Attorney" ? allCases.filter(a => a.plaintiff === c.name && !a.deletedAt).length
+                  const caseCount = c.category === "Client"   ? allCases.filter(a => a.defendantName === c.name && !a.deletedAt).length
+                                  : c.category === "Attorney" ? allCases.filter(a => a.prosecutor === c.name && !a.deletedAt).length
                                   : c.category === "Court"    ? allCases.filter(a => a.judge === c.name && !a.deletedAt).length
                                   : (contactCaseCounts[c.id] || 0);
                   const isChecked = mergeSelected.has(c.id);
@@ -8684,34 +7999,33 @@ function AddStaffModal({ onSave, onClose }) {
 const CASE_FIELD_MAP = [
   { key: "title", label: "Case Title" },
   { key: "caseNum", label: "Case Number" },
-  { key: "client", label: "Client" },
-  { key: "insured", label: "Insured" },
-  { key: "plaintiff", label: "Plaintiff(s)" },
-  { key: "defendant", label: "Defendant(s)" },
-  { key: "opposingCounsel", label: "Opposing Counsel" },
-  { key: "shortCaseNum", label: "Short Case Number" },
+  { key: "defendantName", label: "Defendant Name" },
+  { key: "prosecutor", label: "Prosecutor" },
+  { key: "chargeDescription", label: "Charge Description" },
+  { key: "chargeStatute", label: "Statute" },
+  { key: "chargeClass", label: "Charge Class" },
+  { key: "caseType", label: "Case Type" },
   { key: "county", label: "County" },
   { key: "court", label: "Court" },
-  { key: "claimNum", label: "Claim Number" },
-  { key: "fileNum", label: "File Number" },
-  { key: "adjuster", label: "Adjuster" },
+  { key: "courtDivision", label: "Court Division" },
+  { key: "custodyStatus", label: "Custody Status" },
+  { key: "bondAmount", label: "Bond Amount" },
+  { key: "judge", label: "Judge" },
   { key: "type", label: "Case Type" },
   { key: "status", label: "Status" },
   { key: "stage", label: "Stage" },
-  { key: "judge", label: "Judge" },
-  { key: "mediator", label: "Mediator" },
-  { key: "expert", label: "Expert" },
+  { key: "dispositionType", label: "Disposition" },
+  { key: "arrestDate", label: "Arrest Date" },
+  { key: "arraignmentDate", label: "Arraignment Date" },
+  { key: "nextCourtDate", label: "Next Court Date" },
   { key: "trialDate", label: "Trial Date" },
-  { key: "answerFiled", label: "Answer Filed" },
-  { key: "writtenDisc", label: "Written Discovery" },
-  { key: "partyDepo", label: "Party Depositions" },
-  { key: "mediation", label: "Mediation Date" },
-  { key: "dol", label: "Date of Loss" },
-  { key: "_leadAttorneyName", label: "Lead Attorney Name" },
+  { key: "sentencingDate", label: "Sentencing Date" },
+  { key: "dispositionDate", label: "Disposition Date" },
+  { key: "_assignedAttorneyName", label: "Assigned Attorney Name" },
   { key: "_secondAttorneyName", label: "2nd Attorney Name" },
-  { key: "_paralegalName", label: "Paralegal 1 Name" },
-  { key: "_paralegal2Name", label: "Paralegal 2 Name" },
-  { key: "_legalAssistantName", label: "Legal Assistant Name" },
+  { key: "_paralegalName", label: "Paralegal Name" },
+  { key: "_investigatorName", label: "Investigator Name" },
+  { key: "_socialWorkerName", label: "Social Worker Name" },
   { key: "_todayDate", label: "Today's Date" },
 ];
 
@@ -8757,11 +8071,11 @@ function buildPartyFieldMap(parties) { // eslint-disable-line no-unused-vars
 
 function getCaseFieldValue(c, key, parties) {
   if (key === "_todayDate") return new Date().toLocaleDateString();
-  if (key === "_leadAttorneyName") return USERS.find(u => u.id === c.leadAttorney)?.name || "";
+  if (key === "_assignedAttorneyName") return USERS.find(u => u.id === c.assignedAttorney)?.name || "";
   if (key === "_secondAttorneyName") return USERS.find(u => u.id === c.secondAttorney)?.name || "";
   if (key === "_paralegalName") return USERS.find(u => u.id === c.paralegal)?.name || "";
-  if (key === "_paralegal2Name") return USERS.find(u => u.id === c.paralegal2)?.name || "";
-  if (key === "_legalAssistantName") return USERS.find(u => u.id === c.legalAssistant)?.name || "";
+  if (key === "_investigatorName") return USERS.find(u => u.id === c.investigator)?.name || "";
+  if (key === "_socialWorkerName") return USERS.find(u => u.id === c.socialWorker)?.name || "";
   if (key.startsWith("_party_") && parties) {
     const m = key.match(/^_party_(.+?)_(\d+)_(.+)$/);
     if (m) {
@@ -8802,8 +8116,8 @@ function getCaseFieldValue(c, key, parties) {
   return c[key] || "";
 }
 
-const TEMPLATE_CATEGORIES = ["Pleadings", "Letters", "Subpoenas", "Reports", "General"];
-const LETTER_SUB_TYPES = ["Client", "Insurance", "Attorney", "Other"];
+const TEMPLATE_CATEGORIES = ["Motions", "Orders", "Notices", "Subpoenas", "Client Letters", "General"];
+const LETTER_SUB_TYPES = ["Client", "Prosecutor", "Court", "Other"];
 const CATEGORY_COLORS = { Pleadings: "#dbeafe", Letters: "#fef3c7", Subpoenas: "#fce7f3", Reports: "#d1fae5", General: "#E4E7EB" };
 
 function getPartyName(p) {
@@ -8811,7 +8125,7 @@ function getPartyName(p) {
   return p.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
 }
 
-function getPlaceholderSuggestions(token, caseData, parties, insurance, experts) {
+function getPlaceholderSuggestions(token, caseData, parties, experts) {
   const key = token.toLowerCase();
   const suggestions = [];
   const allParties = parties || [];
@@ -8820,7 +8134,7 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
   if (/^plaintiffs$/.test(key)) {
     const names = allParties.filter(p => /plaintiff/i.test(p.partyType)).map(getPartyName).filter(Boolean);
     if (names.length) suggestions.push({ label: "All Plaintiffs", value: names.join(",\n") });
-    if (!names.length && caseData.plaintiff) suggestions.push({ label: "Plaintiff", value: caseData.plaintiff });
+    if (!names.length && caseData.prosecutor) suggestions.push({ label: "Prosecutor", value: caseData.prosecutor });
   } else if (/^defendants$/.test(key)) {
     const names = allParties.filter(p => /defendant/i.test(p.partyType)).map(getPartyName).filter(Boolean);
     if (names.length) suggestions.push({ label: "All Defendants", value: names.join(",\n") });
@@ -8836,14 +8150,14 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
       const name = getPartyName(p);
       if (name) suggestions.push({ label: `${p.partyType}: ${name}`, value: name });
     });
-    if (!suggestions.length && caseData.plaintiff) suggestions.push({ label: "Plaintiff", value: caseData.plaintiff });
+    if (!suggestions.length && caseData.prosecutor) suggestions.push({ label: "Prosecutor", value: caseData.prosecutor });
   } else if (/^(client|client_name|our_client)/.test(key)) {
     if (ourClient) {
       const d = ourClient.data || {};
       const name = ourClient.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
       if (name) suggestions.push({ label: "Our Client", value: name });
     }
-    if (!suggestions.length && caseData.client) suggestions.push({ label: "Client", value: caseData.client });
+    if (!suggestions.length && caseData.defendantName) suggestions.push({ label: "Defendant", value: caseData.defendantName });
   } else if (/^(client_address|our_client_address)/.test(key)) {
     if (ourClient) {
       const d = ourClient.data || {};
@@ -8861,27 +8175,21 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
     if (caseData.county) suggestions.push({ label: "County", value: caseData.county });
   } else if (/^(date|today|todays_date|current_date)/.test(key)) {
     suggestions.push({ label: "Today", value: new Date().toLocaleDateString() });
-  } else if (/^(lead_attorney|attorney_name|attorney$|counsel$)/.test(key)) {
-    const lead = USERS.find(u => u.id === caseData.leadAttorney);
-    if (lead) suggestions.push({ label: "Lead Attorney", value: lead.name });
+  } else if (/^(lead_attorney|attorney_name|attorney$|counsel$|assigned_attorney)/.test(key)) {
+    const lead = USERS.find(u => u.id === caseData.assignedAttorney);
+    if (lead) suggestions.push({ label: "Assigned Attorney", value: lead.name });
     const second = USERS.find(u => u.id === caseData.secondAttorney);
     if (second) suggestions.push({ label: "2nd Attorney", value: second.name });
-  } else if (/^(opposing_counsel|opp_counsel)/.test(key)) {
-    if (caseData.opposingCounsel) suggestions.push({ label: "Opposing Counsel", value: caseData.opposingCounsel });
+  } else if (/^(opposing_counsel|opp_counsel|prosecutor)/.test(key)) {
+    if (caseData.prosecutor) suggestions.push({ label: "Prosecutor", value: caseData.prosecutor });
   } else if (/^(case_title|case_style|case_name|title$|style)/.test(key)) {
     if (caseData.title) suggestions.push({ label: "Case Title", value: caseData.title });
-  } else if (/^(insured|insured_name)/.test(key)) {
-    if (caseData.insured) suggestions.push({ label: "Insured", value: caseData.insured });
-  } else if (/^(claim_number|claim_no|claim_num)/.test(key)) {
-    if (caseData.claimNum) suggestions.push({ label: "Claim Number", value: caseData.claimNum });
-  } else if (/^(file_number|file_no|file_num)/.test(key)) {
-    if (caseData.fileNum) suggestions.push({ label: "File Number", value: caseData.fileNum });
+  } else if (/^(defendant_name|defendant$)/.test(key)) {
+    if (caseData.defendantName) suggestions.push({ label: "Defendant", value: caseData.defendantName });
   } else if (/^(trial_date)/.test(key)) {
     if (caseData.trialDate) suggestions.push({ label: "Trial Date", value: caseData.trialDate });
-  } else if (/^(date_of_loss|dol$)/.test(key)) {
-    if (caseData.dol) suggestions.push({ label: "Date of Loss", value: caseData.dol });
-  } else if (/^(mediator|mediator_name)/.test(key)) {
-    if (caseData.mediator) suggestions.push({ label: "Mediator", value: caseData.mediator });
+  } else if (/^(arrest_date)/.test(key)) {
+    if (caseData.arrestDate) suggestions.push({ label: "Arrest Date", value: caseData.arrestDate });
   } else if (/^(expert|expert_name)/.test(key)) {
     (experts || []).forEach(ex => {
       const name = ex.data?.name || "";
@@ -8891,9 +8199,12 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
   } else if (/^(paralegal|paralegal_name)/.test(key)) {
     const para = USERS.find(u => u.id === caseData.paralegal);
     if (para) suggestions.push({ label: "Paralegal", value: para.name });
-  } else if (/^(legal_assistant|la_name)/.test(key)) {
-    const la = USERS.find(u => u.id === caseData.legalAssistant);
-    if (la) suggestions.push({ label: "Legal Assistant", value: la.name });
+  } else if (/^(investigator|investigator_name)/.test(key)) {
+    const inv = USERS.find(u => u.id === caseData.investigator);
+    if (inv) suggestions.push({ label: "Investigator", value: inv.name });
+  } else if (/^(social_worker|sw_name)/.test(key)) {
+    const sw = USERS.find(u => u.id === caseData.socialWorker);
+    if (sw) suggestions.push({ label: "Social Worker", value: sw.name });
   } else if (/defendant.*address/.test(key)) {
     allParties.filter(p => /defendant/i.test(p.partyType)).forEach(p => {
       const d = p.data || {};
@@ -8908,20 +8219,10 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
       const name = p.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.lastName].filter(Boolean).join(" ");
       if (addr) suggestions.push({ label: `${name} Address`, value: addr });
     });
-  } else if (/^(adjuster|adjuster_name|insurance_adjuster)/.test(key)) {
-    (insurance || []).forEach(ins => {
-      const d = ins.data || {};
-      if (d.adjusterName) suggestions.push({ label: `${d.company || "Policy"} Adjuster`, value: d.adjusterName });
-    });
-  } else if (/^(insurance_company|carrier)/.test(key)) {
-    (insurance || []).forEach(ins => {
-      const d = ins.data || {};
-      if (d.company) suggestions.push({ label: `Insurance: ${d.company}`, value: d.company });
-    });
   } else if (/^(state$|state_name)/.test(key)) {
     suggestions.push({ label: "Alabama", value: "Alabama" });
   } else if (/^(signature$)/.test(key)) {
-    const lead = USERS.find(u => u.id === caseData.leadAttorney);
+    const lead = USERS.find(u => u.id === caseData.assignedAttorney);
     if (lead) suggestions.push({ label: `${lead.name}`, value: lead.name });
   } else if (/^(client_type)/.test(key)) {
     if (ourClient) {
@@ -8935,20 +8236,14 @@ function getPlaceholderSuggestions(token, caseData, parties, insurance, experts)
     if (!suggestions.length && caseData.defendant) suggestions.push({ label: "Defendant", value: caseData.defendant });
   } else if (/^(attorney_code|bar_number|bar_num)/.test(key)) {
   } else if (/^(attorney_firm|firm_name|firm$)/.test(key)) {
-    suggestions.push({ label: "Webster Henry", value: "Webster Henry" });
+    suggestions.push({ label: "Mobile County Public Defender's Office", value: "Mobile County Public Defender's Office" });
   } else if (/^(attorney_address)/.test(key)) {
-    const lead = USERS.find(u => u.id === caseData.leadAttorney);
-    if (lead) {
-      const offices = { "Mobile": "51 St. Joseph Street, Suite 1510, Mobile, AL 36602", "Birmingham": "2100 Southbridge Pkwy., Suite 530, Birmingham, AL 35209", "Montgomery": "445 Dexter Avenue, Suite 4050, Montgomery, AL 36104" };
-      Object.entries(offices).forEach(([name, addr]) => {
-        suggestions.push({ label: `${name} Office`, value: addr });
-      });
-    }
+    suggestions.push({ label: "Office Address", value: "205 Government Street, Mobile, AL 36602" });
   } else if (/^(attorney_phone)/.test(key)) {
-    const lead = USERS.find(u => u.id === caseData.leadAttorney);
+    const lead = USERS.find(u => u.id === caseData.assignedAttorney);
     if (lead?.phone) suggestions.push({ label: `${lead.name}`, value: lead.phone });
   } else if (/^(attorney_email)/.test(key)) {
-    const lead = USERS.find(u => u.id === caseData.leadAttorney);
+    const lead = USERS.find(u => u.id === caseData.assignedAttorney);
     if (lead?.email) suggestions.push({ label: `${lead.name}`, value: lead.email });
   } else if (/^(today_date|todays_date)/.test(key)) {
     suggestions.push({ label: "Today", value: new Date().toLocaleDateString() });
@@ -8981,42 +8276,46 @@ const PLEADING_SIGNATURE_PLACEHOLDERS = [
   { token: "ATTORNEY_EMAIL", label: "Attorney Email" },
 ];
 
-function buildAllCaseFields(caseData, parties, insurance, experts) {
+function buildAllCaseFields(caseData, parties, experts) {
   const fields = [];
   const add = (cat, label, value) => { if (value) fields.push({ category: cat, label, value: String(value) }); };
   add("Case Info", "Case Title", caseData.title);
   add("Case Info", "Case Number", caseData.caseNum);
-  add("Case Info", "Short Case Number", caseData.shortCaseNum);
-  add("Case Info", "File Number", caseData.fileNum);
-  add("Case Info", "Claim Number", caseData.claimNum);
+  add("Case Info", "Defendant", caseData.defendantName);
+  add("Case Info", "Prosecutor", caseData.prosecutor);
+  add("Case Info", "Charge Description", caseData.chargeDescription);
+  add("Case Info", "Charge Statute", caseData.chargeStatute);
+  add("Case Info", "Charge Class", caseData.chargeClass);
+  add("Case Info", "Case Type", caseData.caseType);
   add("Case Info", "Court", caseData.court);
+  add("Case Info", "Court Division", caseData.courtDivision);
   add("Case Info", "County", caseData.county);
   add("Case Info", "Judge", caseData.judge);
-  add("Case Info", "Mediator", caseData.mediator);
-  add("Case Info", "Opposing Counsel", caseData.opposingCounsel);
   add("Case Info", "Status", caseData.status);
   add("Case Info", "Stage", caseData.stage);
-  add("Case Info", "Type", caseData.type);
+  add("Case Info", "Custody Status", caseData.custodyStatus);
+  add("Case Info", "Bond Amount", caseData.bondAmount);
   add("Case Info", "State", "Alabama");
   const fmt = d => { try { return new Date(d).toLocaleDateString(); } catch { return ""; } };
-  add("Dates", "Date of Loss", caseData.dol ? fmt(caseData.dol) : "");
+  add("Dates", "Arrest Date", caseData.arrestDate ? fmt(caseData.arrestDate) : "");
+  add("Dates", "Arraignment Date", caseData.arraignmentDate ? fmt(caseData.arraignmentDate) : "");
+  add("Dates", "Next Court Date", caseData.nextCourtDate ? fmt(caseData.nextCourtDate) : "");
   add("Dates", "Trial Date", caseData.trialDate ? fmt(caseData.trialDate) : "");
-  add("Dates", "Mediation Date", caseData.mediation ? fmt(caseData.mediation) : "");
-  add("Dates", "Answer Filed", caseData.answerFiled ? fmt(caseData.answerFiled) : "");
-  add("Dates", "Written Discovery", caseData.writtenDisc ? fmt(caseData.writtenDisc) : "");
-  add("Dates", "Party Depositions", caseData.partyDepo ? fmt(caseData.partyDepo) : "");
+  add("Dates", "Sentencing Date", caseData.sentencingDate ? fmt(caseData.sentencingDate) : "");
+  add("Dates", "Disposition Date", caseData.dispositionDate ? fmt(caseData.dispositionDate) : "");
   add("Dates", "Today's Date", new Date().toLocaleDateString());
-  const lead = USERS.find(u => u.id === caseData.leadAttorney);
+  const lead = USERS.find(u => u.id === caseData.assignedAttorney);
   const second = USERS.find(u => u.id === caseData.secondAttorney);
   const para = USERS.find(u => u.id === caseData.paralegal);
-  const la = USERS.find(u => u.id === caseData.legalAssistant);
-  if (lead) { add("Staff", "Lead Attorney", lead.name); add("Staff", "Lead Attorney Email", lead.email); add("Staff", "Lead Attorney Phone", lead.phone); }
+  const inv = USERS.find(u => u.id === caseData.investigator);
+  const sw = USERS.find(u => u.id === caseData.socialWorker);
+  if (lead) { add("Staff", "Assigned Attorney", lead.name); add("Staff", "Assigned Attorney Email", lead.email); add("Staff", "Assigned Attorney Phone", lead.phone); }
   if (second) { add("Staff", "2nd Attorney", second.name); add("Staff", "2nd Attorney Email", second.email); add("Staff", "2nd Attorney Phone", second.phone); }
   if (para) { add("Staff", "Paralegal", para.name); add("Staff", "Paralegal Email", para.email); add("Staff", "Paralegal Phone", para.phone); }
-  if (la) { add("Staff", "Legal Assistant", la.name); add("Staff", "Legal Assistant Email", la.email); add("Staff", "Legal Assistant Phone", la.phone); }
-  add("Staff", "Firm", "Webster Henry");
-  const offices = { "Mobile": "51 St. Joseph Street, Suite 1510, Mobile, AL 36602", "Birmingham": "2100 Southbridge Pkwy., Suite 530, Birmingham, AL 35209", "Montgomery": "445 Dexter Avenue, Suite 4050, Montgomery, AL 36104" };
-  Object.entries(offices).forEach(([name, addr]) => add("Staff", `${name} Office Address`, addr));
+  if (inv) { add("Staff", "Investigator", inv.name); add("Staff", "Investigator Email", inv.email); add("Staff", "Investigator Phone", inv.phone); }
+  if (sw) { add("Staff", "Social Worker", sw.name); add("Staff", "Social Worker Email", sw.email); add("Staff", "Social Worker Phone", sw.phone); }
+  add("Staff", "Office", "Mobile County Public Defender's Office");
+  add("Staff", "Office Address", "205 Government Street, Mobile, AL 36602");
   (parties || []).forEach(p => {
     const d = p.data || {};
     const name = p.entityKind === "corporation" ? (d.entityName || "") : [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ");
@@ -9043,25 +8342,6 @@ function buildAllCaseFields(caseData, parties, insurance, experts) {
       if (d.principalPlaceOfBusiness) add("Parties", `${prefix} — Principal Place of Business`, d.principalPlaceOfBusiness);
     }
   });
-  (insurance || []).forEach(ins => {
-    const d = ins.data || {};
-    const label = d.company || d.carrier || "Policy";
-    if (d.company) add("Insurance", `${label} — Carrier`, d.company);
-    if (d.adjusterName) add("Insurance", `${label} — Adjuster`, d.adjusterName);
-    if (d.adjusterPhone) add("Insurance", `${label} — Adjuster Phone`, d.adjusterPhone);
-    if (d.adjusterEmail) add("Insurance", `${label} — Adjuster Email`, d.adjusterEmail);
-    if (d.adjusterFax) add("Insurance", `${label} — Adjuster Fax`, d.adjusterFax);
-    if (d.adjusterAddress) add("Insurance", `${label} — Adjuster Address`, d.adjusterAddress);
-    if (d.policyNum) add("Insurance", `${label} — Policy #`, d.policyNum);
-    if (d.claimNum) add("Insurance", `${label} — Claim #`, d.claimNum);
-    if (d.coverageType) add("Insurance", `${label} — Coverage Type`, d.coverageType);
-    if (d.policyLimit) add("Insurance", `${label} — Policy Limit`, `$${d.policyLimit}`);
-    if (d.reservationOfRights) add("Insurance", `${label} — Reservation of Rights`, d.reservationOfRights);
-    if (d.rorDate) add("Insurance", `${label} — ROR Date`, fmt(d.rorDate));
-    if (d.tenderDate) add("Insurance", `${label} — Tender Date`, fmt(d.tenderDate));
-    if (d.denialDate) add("Insurance", `${label} — Denial Date`, fmt(d.denialDate));
-    if (d.sirAmount) add("Insurance", `${label} — SIR/Deductible`, d.sirAmount);
-  });
   (experts || []).forEach(ex => {
     const d = ex.data || {};
     if (!d.name) return;
@@ -9080,7 +8360,7 @@ function buildAllCaseFields(caseData, parties, insurance, experts) {
   return fields;
 }
 
-function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insurance, experts }) {
+function GenerateDocumentModal({ caseData, currentUser, onClose, parties, experts }) {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -9123,7 +8403,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
       if (ph.mapping && ph.mapping !== "_manual") {
         v[ph.token] = getCaseFieldValue(caseData, ph.mapping, parties || []);
       } else {
-        const sugs = getPlaceholderSuggestions(ph.token, caseData, parties, insurance, experts);
+        const sugs = getPlaceholderSuggestions(ph.token, caseData, parties, experts);
         v[ph.token] = sugs.length === 1 ? sugs[0].value : "";
       }
     }
@@ -9138,21 +8418,11 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
           if (/addressee|recipient|to_name/.test(k) && name) v[ph.token] = v[ph.token] || name;
           if (/address|to_address/.test(k) && addr) v[ph.token] = v[ph.token] || addr;
         }
-      } else if (tmpl.subType === "Insurance") {
-        const ins = (insurance || [])[0];
-        if (ins) {
-          const d = ins.data || {};
-          for (const ph of tmpl.placeholders) {
-            const k = ph.token.toLowerCase();
-            if (/addressee|recipient|to_name|adjuster/.test(k) && d.adjusterName) v[ph.token] = v[ph.token] || d.adjusterName;
-            if (/company|carrier/.test(k) && d.company) v[ph.token] = v[ph.token] || d.company;
-          }
-        }
       } else if (tmpl.subType === "Attorney") {
-        if (caseData.opposingCounsel) {
+        if (caseData.prosecutor) {
           for (const ph of tmpl.placeholders) {
             const k = ph.token.toLowerCase();
-            if (/addressee|recipient|to_name|attorney/.test(k)) v[ph.token] = v[ph.token] || caseData.opposingCounsel;
+            if (/addressee|recipient|to_name|attorney/.test(k)) v[ph.token] = v[ph.token] || caseData.prosecutor;
           }
         }
       }
@@ -9252,10 +8522,10 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, insura
             const sectionLabel = (label) => (
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--c-text2)", textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 0 4px", borderTop: "1px solid var(--c-border)", marginTop: 10 }}>{label}</div>
             );
-            const allFields = buildAllCaseFields(caseData, parties, insurance, experts);
+            const allFields = buildAllCaseFields(caseData, parties, experts);
             const fieldCategories = [...new Set(allFields.map(f => f.category))];
             const renderPh = (ph) => {
-              const sugs = getPlaceholderSuggestions(ph.token, caseData, parties, insurance, experts);
+              const sugs = getPlaceholderSuggestions(ph.token, caseData, parties, experts);
               const isOpen = browseOpen === ph.token;
               return (
                 <div key={ph.token} style={{ marginBottom: 14 }}>
@@ -9418,7 +8688,7 @@ function DocumentsView({ currentUser }) {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
             {filtered.map(t => {
-              const canEdit = t.createdBy === currentUser.id || hasRole(currentUser, "Shareholder");
+              const canEdit = t.createdBy === currentUser.id || hasRole(currentUser, "Public Defender");
               return (
               <div key={t.id} style={{ padding: 16, borderRadius: 10, border: "1px solid var(--c-border)", background: "var(--c-bg2)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -9699,7 +8969,7 @@ function DocumentsView({ currentUser }) {
                     if (idx === -1) return alert("Could not locate the selected text. Try selecting a more unique phrase.");
                     const overlap = manualPhs.some(p => !(idx + text.length <= p.start || idx >= p.end));
                     if (overlap) return alert("This selection overlaps with an existing placeholder.");
-                    const label = prompt("Name this placeholder (e.g., 'Client Name', 'Settlement Amount'):");
+                    const label = prompt("Name this placeholder (e.g., 'Client Name', 'Charge Description'):");
                     if (!label || !label.trim()) return;
                     const token = label.trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
                     setWizard(w => ({
@@ -9997,7 +9267,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, userOffices, setUser
       <div className="content">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
           {filteredStaff.map(u => {
-            const mine = allCases.filter(c => c.leadAttorney === u.id || c.secondAttorney === u.id || c.paralegal === u.id || c.paralegal2 === u.id || c.legalAssistant === u.id);
+            const mine = allCases.filter(c => c.assignedAttorney === u.id || c.secondAttorney === u.id || c.paralegal === u.id || c.investigator === u.id || c.socialWorker === u.id);
             const offices = userOffices[u.id] || [];
             const isConfirming = confirmDeleteId === u.id;
             const isExpanded = expandedStaffId === u.id;

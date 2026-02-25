@@ -1,7 +1,7 @@
-# MattrMindr — Case Management System
+# MattrMindr — Criminal Defense Case Management System
 
 ## Overview
-A legal practice management app for Webster Henry law firm. Tracks civil litigation cases and matters, manages deadlines, assigns tasks, and generates firm-wide reports.
+A case management system for the Mobile County Public Defender's Office. Tracks criminal defense cases and matters, manages deadlines, assigns tasks, tracks charges and custody/bond status, performs conflict checks, and generates office-wide reports.
 
 ## Stack
 - **Frontend**: React 19 (Create React App), port 5000
@@ -27,13 +27,13 @@ server/
   index.js          — Express entry point, session middleware, CORS, prod static serving
   db.js             — pg Pool configured from DATABASE_URL
   schema.js         — Creates all DB tables (run once)
-  seed.js           — Seeds USERS, CASES, DEADLINES from firmData.js
+  seed.js           — Seeds USERS from firmData.js
   email.js          — SendGrid email utility (temp passwords, password resets)
   middleware/
     auth.js         — requireAuth middleware
   routes/
     auth.js         — login, logout, me, change-password, forgot-password, reset-password, send-temp-password
-    cases.js        — CRUD /api/cases
+    cases.js        — CRUD /api/cases, GET /api/cases/conflict-check
     tasks.js        — CRUD /api/tasks (bulk create, complete)
     deadlines.js    — GET/POST/PUT /api/deadlines (key dates auto-sync to deadlines)
     notes.js        — GET/POST/DELETE /api/notes
@@ -47,7 +47,6 @@ server/
     inbound-email.js — POST /api/inbound-email (SendGrid Inbound Parse webhook, no auth)
     templates.js    — CRUD /api/templates, document generation with docxtemplater, pleading assembly
     parties.js      — CRUD /api/parties (case parties: individuals & corporations)
-    insurance.js    — CRUD /api/insurance (case insurance policies with coverage tracking)
     experts.js      — CRUD /api/experts (case experts with contact card integration)
     misc-contacts.js — CRUD /api/misc-contacts (case miscellaneous contacts)
     time-entries.js — CRUD /api/time-entries (manual time log entries per user/case)
@@ -68,44 +67,89 @@ lextrack/
 ```
 
 ## Key Features
-- Customizable Dashboard: per-user widget system with add/remove/reorder via Customize modal; widgets: stat cards (Active Records, Upcoming Deadlines, My Open Tasks, Trials in 90 Days), Upcoming Deadlines list, Trials Within 90 Days, My Tasks, Pinned Cases, Recent Activity, Overdue Tasks, My Time (period toggle: Day/Week/Month/Quarter/Year); layout stored in `localStorage` as `dashboard_layout_${userId}`; widget registry in `DASHBOARD_WIDGETS` array; grid grouping: adjacent quarter-sized → grid4, adjacent half-sized → grid2, full → own row
+
+### Case Management
+- **Case Types**: Felony, Misdemeanor, Juvenile, Probation Violation, Mental Health/Commitment, Appeal, Other
+- **Case Stages**: Arraignment, Preliminary Hearing, Grand Jury/Indictment, Pre-Trial Motions, Plea Negotiations, Trial, Sentencing, Post-Conviction, Appeal
+- **Case Statuses**: Active, Closed, Pending, Disposed, Transferred
+- **Criminal-Specific Fields**: Defendant name, prosecutor, charge description/statute/class, court division (Circuit/District/Juvenile), custody status, bond amount/conditions, jail location, arrest/arraignment/next court/trial/sentencing/disposition dates, investigator, social worker
+
+### Charge Tracking
+- Multiple charges per case stored as JSONB array
+- Each charge: statute, description, class (Class A/B/C Felony, Misdemeanor A/B/C, Violation, Other), original/amended flag, disposition (Guilty Plea, Not Guilty Verdict, Nolle Prosequi, Dismissed, Acquitted, Convicted), disposition date
+- Inline editing on Details tab
+
+### Conflict Check
+- Automatic on new case creation: triggered when defendant name is entered
+- Searches existing cases (defendant names, titles) and contacts for matches
+- Displays warning panel with matching cases and contacts before case creation proceeds
+- Backend endpoint: GET /api/cases/conflict-check?name=<name>
+
+### Core Features
+- Customizable Dashboard: per-user widget system with add/remove/reorder
 - Cases & Matters view with filtering, sorting, pagination
-- Case Detail Overlay: editable fields (plaintiff, defendant, opposing counsel, short case number, county, court, etc.), task/note/link management, activity log, correspondence tab
+- Case Detail Overlay: editable criminal defense fields, task/note/link management, activity log, correspondence tab, charges section
 - Deadline Tracker: calendar grid, list view, iCal feed import, court rules calculator
 - Tasks View: filterable task list with inline editing, auto-escalation, recurring tasks
-- Reports: 10 pre-built report types with CSV export and print
-- Time Log: unified time tracking view; derives entries from task completions, notes, and correspondence; supports manual time entries via `time_entries` table; inline editing for Detail and Time cells (auto-save on blur); Add Entry modal with smart case selector ("Touched Today" grouping, "My Office"/"My Matters" quick filters); CSV export includes all entry types; persistent entries — manual entries store `case_title`/`file_num` at creation time so deleted cases still display correctly; derived entries use `?includeDeleted=true` cases lookup
+- Reports: pre-built report types with CSV export and print
+- Time Log: unified time tracking view; derives entries from task completions, notes, and correspondence; supports manual time entries
 - Staff Directory with admin controls (role/office management, send temp passwords, remove staff)
-- Contacts: auto-populated contacts (Clients, Attorneys, Courts + manual Experts/Miscellaneous), with phone/email/fax/address, associated cases, persistent notes, and soft-delete with 30-day recovery. Category-specific fields: Attorney→Firm, Adjuster/Expert→Company, Court→County. Attorney and Court contacts support Staff accordion (debounced auto-save, accordion UI like case parties). Attorney staff types: Legal Assistant, Paralegal, Receptionist, Other. Court staff types: Judicial Assistant, Clerk, Court Reporter, Bailiff, Other. Staff fields: name (single), phone, email. All contact categories show case count in table and associated cases list in detail overlay (Expert/Adjuster/Miscellaneous counts fetched via batch API from case_experts/case_insurance/case_misc_contacts).
+- Contacts: auto-populated contacts with phone/email/fax/address, associated cases, persistent notes, and soft-delete
 - AI Search: Natural language search across all case data via OpenAI gpt-5-mini
 - Confidential Cases: access-restricted to assigned team members + App Admin
-- Case Parties: accordion-style party management on Details tab; Individual (name/DOB/SSN last 4/driver's license/employer/occupation/marital status/minor flag/date of death/address/phones/other contacts/email/represented-by/notes) and Corporation (entity name/type/state of incorporation/principal place of business/registered agent/address/POC/notes) types; any party type selectable; "Our Client" flag (exclusive — only one party at a time) and "Pro Se" flag (hides Represented By); integrated with document generator placeholders
-- Medical Summary: per-party medical treatment tracking tab (between Details and Billing Summary); parties added from Details tab party list; per-entry fields: provider (shared datalist with Billing Summary providers), date of service, collapsible summary textarea; DOB field shared across Details/Medical/Billing tabs; per-party filtering by provider and date range; per-party print view (MedicalPrintView component); persisted in `medical_summary` JSONB column on cases table; autosaved with case data
-- Case Experts: accordion-style expert management on Details tab (right column); Types: Treating Physician, Retained, Rebuttal; auto-links to Expert contact cards by name (creates new if not found); syncs phone/email/fax/address/company to contact card; case-specific fields: specialty/area of expertise, assigned party, testimony type (Deposition/Live/Both), rate, CV/resume link, retained date, report date, deposition date, notes
-- Miscellaneous Contacts: accordion-style contact management on Details tab (right column, below Experts); Types: Police Officer, Witness, Consultant, Investigator, Process Server, Court Reporter, Guardian ad Litem, Mediator, Other; common fields: name, phone, email, address, company/agency, notes; type-specific fields: Police Officer→Badge/ID#,Report#,Department; Witness→Relationship to Case; Consultant/Investigator→Specialty/Area; Investigator→License#; "Associated With" dropdown links to parties, experts, or other misc contacts on the case; auto-links to Miscellaneous contact cards on name blur (creates new if not found); syncs phone/email/address/company to contact card
-- Document Generator: upload .docx templates with `<<PLACEHOLDER>>` auto-detection + manual text highlighting; template categories (Pleadings/Letters/Subpoenas/Reports/General); Letter sub-types (Client/Insurance/Attorney/Other) with smart addressee auto-fill; smart placeholder suggestions at generation time (rule-based keyword matching from case/party/insurance data); empty placeholders produce `<<NAME>>` in output; Pleading templates auto-include Case Header (caption block), Signature Block, and optional Certificate of Service; system templates stored in `server/system-templates/`; CoS repeats served-party attorney blocks for each non-client party (looks up attorney contacts via representedBy field, handles Pro Se parties); pleading section detection: when uploading a Pleadings template, the system scans the .docx for existing header/caption, signature block, and CoS sections — if detected, user chooses per-section whether to use the system-provided version or keep the document's own (stored as `use_system_header`, `use_system_signature`, `use_system_cos` on `doc_templates`); visibility (global/personal); full re-edit of placeholders restricted to creator + Shareholders; backward compatible with old mapped templates
+- Case Parties: accordion-style party management on Details tab (types: Defendant, Co-Defendant, Victim, Witness)
+- Case Experts: accordion-style expert management on Details tab
+- Document Generator: upload .docx templates with placeholder auto-detection; template categories (Motions, Orders, Notices, Subpoenas, Client Letters, General)
 - Email Correspondence: SendGrid Inbound Parse captures emails to case-{id}@mail.mattrmindr.com
-- Authentication: bcrypt passwords, temp password emails, forgot/reset password flow, forced password change on first login
+
+### Removed Features (from civil version)
+- Insurance tracking (removed entirely)
+- Billing Summary (removed)
+- Medical Summary (removed)
+- Case Expenses (removed)
+- Multi-office support (simplified to single Mobile office)
+
+## Staff Roles
+- Public Defender
+- Assistant Public Defender
+- Investigator
+- Legal Assistant
+- Paralegal
+- Social Worker
+- Admin
+- App Admin
+
+## Team Assignment Fields
+- Assigned Attorney (replaces leadAttorney)
+- 2nd Attorney
+- Paralegal
+- Investigator
+- Social Worker
 
 ## Auth System
 - Passwords stored as bcrypt hashes in `password_hash` column
-- Password requirements: 8+ chars, 1 uppercase, 1 lowercase, 1 number, 1 special character (enforced on backend + frontend)
+- Password requirements: 8+ chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
 - `must_change_password` flag forces password change after temp password login
-- `temp_password` column stores plaintext temp passwords (cleared after use)
 - Admin (App Admin role) can send temp passwords to any user via Staff Directory
 - Forgot Password: sends reset code via email, valid for 1 hour
 - New users automatically receive temp password email on creation
-- Users can change their own password from the sidebar
-- Deleted/deactivated users cannot log in; active sessions are invalidated via auth middleware
-- User soft-delete: `deleted_at` column on users table; App Admin can deactivate and restore staff
-- Only App Admin can create or delete users; only App Admin can view deactivated staff list
+- Access control: `requirePD` middleware (Public Defender role required for admin actions)
 
 ## Architecture Notes
 - **DB migration path**: All DB access via REST API — swap `DATABASE_URL` to point to Supabase, swap `express-session` for JWT, done.
 - **Standard SQL only**: No Replit-specific extensions — schema is portable.
-- **Task chains**: Completing certain tasks auto-generates follow-up tasks (`TASK_CHAINS`, `DUAL_CHAINS`) — business logic stays client-side for now.
-- **Auto-escalation**: Task priority rises automatically as due date approaches. Thresholds are customizable per-task (default: Medium ≤30d, High ≤14d, Urgent ≤7d). Stored in `escalate_medium_days`, `escalate_high_days`, `escalate_urgent_days` columns.
+- **Task chains**: Completing certain tasks auto-generates follow-up tasks — business logic stays client-side.
+- **Auto-escalation**: Task priority rises automatically as due date approaches.
 - **Activity logging**: Tracked per-case via `/api/activity`.
+
+## Contact Categories
+Client, Prosecutor, Judge, Court, Witness, Expert, Family Member, Social Worker, Treatment Provider
+
+## Note Types
+General, Attorney Note, Client Contact, Court / Hearing, Investigation, Plea Discussion, Witness Interview, Social Work, Internal
+
+## Link Categories
+General, Motions, Discovery, Police Reports, Photographs, Expert Reports, Court Orders, Plea Agreements, Sentencing, Other
 
 ## Color Palette
 | Token | Light | Dark |
@@ -130,19 +174,18 @@ lextrack/
 | Table | Purpose |
 |-------|---------|
 | users | Staff members with auth fields |
-| cases | All cases/matters with full field set |
+| cases | All cases/matters with criminal defense fields (defendant_name, prosecutor, charge_description, charge_statute, charge_class, case_type, custody_status, bond_amount, bond_conditions, jail_location, court_division, arrest/arraignment/next_court/sentencing/disposition dates, charges JSONB, investigator, social_worker) |
 | tasks | User-created tasks per case |
 | deadlines | Court/filing deadlines |
 | case_notes | Per-case notes |
 | case_links | Per-case document links |
 | case_activity | Per-case activity log |
-| contacts | Clients, attorneys, courts, experts (+ firm/company/county fields) |
+| contacts | Prosecutors, judges, courts, witnesses, experts, family members, etc. |
 | contact_notes | Per-contact notes |
 | contact_staff | Staff members under attorney/court contacts (JSONB data) |
 | case_correspondence | Inbound emails captured via SendGrid |
 | doc_templates | Document templates (.docx with placeholders, category, sub_type) |
-| case_parties | Per-case parties (individuals & corporations, JSONB data) |
-| case_insurance | Per-case insurance policies with coverage tracking (JSONB data) |
+| case_parties | Per-case parties: Defendant, Co-Defendant, Victim, Witness (JSONB data) |
 | case_experts | Per-case experts with contact card links (JSONB data) |
 | case_misc_contacts | Per-case miscellaneous contacts (JSONB data, typed) |
 | time_entries | Manual time log entries per user/case |

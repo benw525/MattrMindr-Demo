@@ -3,7 +3,6 @@ const path = require("path");
 const vm   = require("vm");
 const pool = require("./db");
 
-// Load firmData.js from the React src folder and parse it in a sandbox
 const firmDataSrc = fs.readFileSync(
   path.join(__dirname, "../lextrack/src/firmData.js"), "utf8"
 ).replace(/export const /g, "var ");
@@ -11,7 +10,7 @@ const firmDataSrc = fs.readFileSync(
 const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(firmDataSrc, sandbox);
-const { USERS, CASES, DEADLINES } = sandbox;
+const { USERS, CASES } = sandbox;
 
 const orNull = (val) => (val && String(val).trim() && String(val) !== "0") ? val : null;
 
@@ -20,7 +19,6 @@ async function seed() {
   try {
     await client.query("BEGIN");
 
-    // Users
     console.log(`Seeding ${USERS.length} users...`);
     for (const u of USERS) {
       await client.query(
@@ -32,55 +30,40 @@ async function seed() {
       );
     }
 
-    // Cases — use OVERWRITE ON CONFLICT so re-seeding is safe
     console.log(`Seeding ${CASES.length} cases...`);
     for (const c of CASES) {
       await client.query(
         `INSERT INTO cases
-          (id, case_num, title, client, insured, plaintiff, claim_num, file_num, adjuster,
-           type, status, stage, lead_attorney, second_attorney, paralegal,
-           trial_date, answer_filed, written_disc, party_depo, expert_depo,
-           witness_depo, mediation, mediator, judge, dol)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+          (id, case_num, title, defendant_name, prosecutor, county, court, court_division,
+           case_type, type, status, stage,
+           assigned_attorney, second_attorney, paralegal, investigator, social_worker,
+           arrest_date, arraignment_date, next_court_date, trial_date, sentencing_date, disposition_date,
+           judge)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
          ON CONFLICT (id) DO UPDATE SET
-           case_num=$2, title=$3, client=$4, insured=$5, plaintiff=$6,
-           claim_num=$7, file_num=$8, adjuster=$9, type=$10, status=$11, stage=$12,
-           lead_attorney=$13, second_attorney=$14, paralegal=$15,
-           trial_date=$16, answer_filed=$17, written_disc=$18, party_depo=$19,
-           expert_depo=$20, witness_depo=$21, mediation=$22, mediator=$23, judge=$24, dol=$25`,
+           case_num=$2, title=$3, defendant_name=$4, prosecutor=$5, county=$6, court=$7, court_division=$8,
+           case_type=$9, type=$10, status=$11, stage=$12,
+           assigned_attorney=$13, second_attorney=$14, paralegal=$15, investigator=$16, social_worker=$17,
+           arrest_date=$18, arraignment_date=$19, next_court_date=$20, trial_date=$21, sentencing_date=$22, disposition_date=$23,
+           judge=$24`,
         [
-          c.id, c.caseNum || "", c.title, c.client || "", c.insured || "",
-          c.plaintiff || "", c.claimNum || "", c.fileNum || "", c.adjuster || c.claimSpec || "",
-          c.type || "Civil Litigation", c.status || "Active", c.stage || "Pleadings",
-          orNull(c.leadAttorney), orNull(c.secondAttorney), orNull(c.paralegal),
-          orNull(c.trialDate), orNull(c.answerFiled), orNull(c.writtenDisc),
-          orNull(c.partyDepo), orNull(c.expertDepo), orNull(c.witnessDepo),
-          orNull(c.mediation), c.mediator || "", c.judge || "", orNull(c.dol),
+          c.id, c.caseNum || "", c.title, c.defendantName || "", c.prosecutor || "",
+          c.county || "", c.court || "", c.courtDivision || "",
+          c.caseType || "Felony", c.type || "Felony", c.status || "Active", c.stage || "Arraignment",
+          orNull(c.assignedAttorney), orNull(c.secondAttorney), orNull(c.paralegal),
+          orNull(c.investigator), orNull(c.socialWorker),
+          orNull(c.arrestDate), orNull(c.arraignmentDate), orNull(c.nextCourtDate),
+          orNull(c.trialDate), orNull(c.sentencingDate), orNull(c.dispositionDate),
+          c.judge || "",
         ]
       );
     }
 
-    // Advance the cases serial sequence so new cases don't collide with seeded IDs
-    const maxCaseId = Math.max(...CASES.map(c => c.id));
-    await client.query(`SELECT setval('cases_id_seq', $1, true)`, [maxCaseId]);
-    console.log(`Cases sequence advanced to ${maxCaseId}`);
-
-    // Deadlines
-    console.log(`Seeding ${DEADLINES.length} deadlines...`);
-    for (const d of DEADLINES) {
-      await client.query(
-        `INSERT INTO deadlines (id, case_id, title, date, type, rule, assigned)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (id) DO UPDATE SET
-           case_id=$2, title=$3, date=$4, type=$5, rule=$6, assigned=$7`,
-        [d.id, d.caseId, d.title, d.date, d.type || "Filing", d.rule || "", orNull(d.assigned)]
-      );
+    if (CASES.length > 0) {
+      const maxCaseId = Math.max(...CASES.map(c => c.id));
+      await client.query(`SELECT setval('cases_id_seq', $1, true)`, [maxCaseId]);
+      console.log(`Cases sequence advanced to ${maxCaseId}`);
     }
-
-    // Advance deadlines sequence
-    const maxDlId = Math.max(...DEADLINES.map(d => d.id));
-    await client.query(`SELECT setval('deadlines_id_seq', $1, true)`, [maxDlId]);
-    console.log(`Deadlines sequence advanced to ${maxDlId}`);
 
     await client.query("COMMIT");
     console.log("Seed complete.");

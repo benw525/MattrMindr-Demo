@@ -8,45 +8,42 @@ const toFrontend = (row) => ({
   id: row.id,
   caseNum: row.case_num,
   title: row.title,
-  client: row.client,
-  insured: row.insured,
-  plaintiff: row.plaintiff,
-  defendant: row.defendant,
-  opposingCounsel: row.opposing_counsel,
-  shortCaseNum: row.short_case_num,
+  defendantName: row.defendant_name,
+  prosecutor: row.prosecutor,
   county: row.county,
   court: row.court,
-  claimNum: row.claim_num,
-  fileNum: row.file_num,
-  adjuster: row.adjuster,
+  courtDivision: row.court_division,
+  chargeDescription: row.charge_description,
+  chargeStatute: row.charge_statute,
+  chargeClass: row.charge_class,
+  caseType: row.case_type,
   type: row.type,
   status: row.status,
   stage: row.stage,
-  leadAttorney: row.lead_attorney || 0,
+  custodyStatus: row.custody_status,
+  bondAmount: row.bond_amount,
+  bondConditions: row.bond_conditions,
+  jailLocation: row.jail_location,
+  dispositionType: row.disposition_type,
+  assignedAttorney: row.assigned_attorney || 0,
   secondAttorney: row.second_attorney || 0,
   paralegal: row.paralegal || 0,
-  paralegal2: row.paralegal2 || 0,
-  legalAssistant: row.legal_assistant || 0,
+  investigator: row.investigator || 0,
+  socialWorker: row.social_worker || 0,
   offices: row.offices || [],
+  arrestDate: row.arrest_date ? row.arrest_date.toISOString().split("T")[0] : "",
+  arraignmentDate: row.arraignment_date ? row.arraignment_date.toISOString().split("T")[0] : "",
+  nextCourtDate: row.next_court_date ? row.next_court_date.toISOString().split("T")[0] : "",
   trialDate: row.trial_date ? row.trial_date.toISOString().split("T")[0] : "",
-  answerFiled: row.answer_filed ? row.answer_filed.toISOString().split("T")[0] : "",
-  writtenDisc: row.written_disc ? row.written_disc.toISOString().split("T")[0] : "",
-  partyDepo: row.party_depo ? row.party_depo.toISOString().split("T")[0] : "",
-  expertDepo: row.expert_depo ? row.expert_depo.toISOString().split("T")[0] : "",
-  witnessDepo: row.witness_depo ? row.witness_depo.toISOString().split("T")[0] : "",
-  mediation: row.mediation ? row.mediation.toISOString().split("T")[0] : "",
-  mediator: row.mediator,
+  sentencingDate: row.sentencing_date ? row.sentencing_date.toISOString().split("T")[0] : "",
+  dispositionDate: row.disposition_date ? row.disposition_date.toISOString().split("T")[0] : "",
   judge: row.judge,
-  dol: row.dol ? row.dol.toISOString().split("T")[0] : "",
-  expert: row.expert || "",
+  charges: Array.isArray(row.charges) ? row.charges : [],
   _customFields: Array.isArray(row.custom_fields) ? row.custom_fields : [],
   _customDates: Array.isArray(row.custom_dates) ? row.custom_dates : [],
   _hiddenFields: Array.isArray(row.hidden_fields) ? row.hidden_fields : [],
-  billingParties: Array.isArray(row.billing_parties) ? row.billing_parties : [],
-  caseExpenses: Array.isArray(row.case_expenses) ? row.case_expenses : [],
   confidential: !!row.confidential,
   _customTeam: Array.isArray(row.custom_team) ? row.custom_team : [],
-  medicalSummary: Array.isArray(row.medical_summary) ? row.medical_summary : [],
   deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
 });
 
@@ -58,14 +55,14 @@ const canAccessCase = (row, req) => {
   if (!row.confidential) return true;
   if (isAppAdmin(req)) return true;
   const uid = req.session.userId;
-  if ([row.lead_attorney, row.second_attorney, row.paralegal, row.paralegal2, row.legal_assistant].includes(uid)) return true;
+  if ([row.assigned_attorney, row.second_attorney, row.paralegal, row.investigator, row.social_worker].includes(uid)) return true;
   const customTeam = Array.isArray(row.custom_team) ? row.custom_team : [];
   return customTeam.some(m => m.userId === uid);
 };
 
-const requireShareholder = (req, res, next) => {
-  if (req.session.userRole !== "Shareholder") {
-    return res.status(403).json({ error: "Shareholders only" });
+const requirePD = (req, res, next) => {
+  if (req.session.userRole !== "Public Defender") {
+    return res.status(403).json({ error: "Public Defender only" });
   }
   next();
 };
@@ -92,6 +89,29 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/conflict-check", requireAuth, async (req, res) => {
+  try {
+    const name = (req.query.name || "").trim();
+    if (!name || name.length < 2) return res.json({ cases: [], contacts: [] });
+    const pattern = `%${name}%`;
+    const caseResults = await pool.query(
+      "SELECT id, case_num, title, defendant_name, status FROM cases WHERE deleted_at IS NULL AND (defendant_name ILIKE $1 OR title ILIKE $1) LIMIT 20",
+      [pattern]
+    );
+    const contactResults = await pool.query(
+      "SELECT id, name, category FROM contacts WHERE deleted_at IS NULL AND name ILIKE $1 LIMIT 20",
+      [pattern]
+    );
+    return res.json({
+      cases: caseResults.rows.map(r => ({ id: r.id, caseNum: r.case_num, title: r.title, defendantName: r.defendant_name, status: r.status })),
+      contacts: contactResults.rows.map(r => ({ id: r.id, name: r.name, category: r.category })),
+    });
+  } catch (err) {
+    console.error("Conflict check error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.get("/:id", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1", [req.params.id]);
@@ -109,29 +129,27 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO cases
-        (case_num, title, client, insured, plaintiff, defendant, opposing_counsel, short_case_num, county, court,
-         claim_num, file_num, adjuster,
-         type, status, stage, lead_attorney, second_attorney, paralegal, paralegal2, legal_assistant,
-         trial_date, answer_filed, written_disc, party_depo, expert_depo,
-         witness_depo, mediation, mediator, judge, dol, custom_fields, offices, expert, custom_dates, billing_parties, case_expenses, hidden_fields, confidential, custom_team, medical_summary)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+        (case_num, title, defendant_name, prosecutor, county, court, court_division,
+         charge_description, charge_statute, charge_class, case_type, type, status, stage,
+         custody_status, bond_amount, bond_conditions, jail_location, disposition_type,
+         assigned_attorney, second_attorney, paralegal, investigator, social_worker,
+         arrest_date, arraignment_date, next_court_date, trial_date, sentencing_date, disposition_date,
+         judge, charges, custom_fields, custom_dates, hidden_fields, offices, confidential, custom_team)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
        RETURNING *`,
       [
-        d.caseNum || "", d.title, d.client || "", d.insured || "",
-        d.plaintiff || "", d.defendant || "", d.opposingCounsel || "", d.shortCaseNum || "", d.county || "", d.court || "",
-        d.claimNum || "", d.fileNum || "", d.adjuster || "",
-        d.type || "Civil Litigation", d.status || "Active", d.stage || "Pleadings",
-        orNull(d.leadAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.paralegal2), orNull(d.legalAssistant),
-        orNull(d.trialDate), orNull(d.answerFiled), orNull(d.writtenDisc),
-        orNull(d.partyDepo), orNull(d.expertDepo), orNull(d.witnessDepo),
-        orNull(d.mediation), d.mediator || "", d.judge || "",
-        orNull(d.dol), JSON.stringify(d._customFields || []), d.offices || [],
-        d.expert || "", JSON.stringify(d._customDates || []),
-        JSON.stringify(d.billingParties || []), JSON.stringify(d.caseExpenses || []),
-        JSON.stringify(d._hiddenFields || []),
-        !!d.confidential,
-        JSON.stringify(d._customTeam || []),
-        JSON.stringify(d.medicalSummary || []),
+        d.caseNum || "", d.title, d.defendantName || "", d.prosecutor || "",
+        d.county || "", d.court || "", d.courtDivision || "",
+        d.chargeDescription || "", d.chargeStatute || "", d.chargeClass || "",
+        d.caseType || "Felony", d.type || "Felony", d.status || "Active", d.stage || "Arraignment",
+        d.custodyStatus || "", d.bondAmount || "", d.bondConditions || "", d.jailLocation || "", d.dispositionType || "",
+        orNull(d.assignedAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.investigator), orNull(d.socialWorker),
+        orNull(d.arrestDate), orNull(d.arraignmentDate), orNull(d.nextCourtDate),
+        orNull(d.trialDate), orNull(d.sentencingDate), orNull(d.dispositionDate),
+        d.judge || "", JSON.stringify(d.charges || []),
+        JSON.stringify(d._customFields || []), JSON.stringify(d._customDates || []),
+        JSON.stringify(d._hiddenFields || []), d.offices || [],
+        !!d.confidential, JSON.stringify(d._customTeam || []),
       ]
     );
     return res.status(201).json(toFrontend(rows[0]));
@@ -149,31 +167,26 @@ router.put("/:id", requireAuth, async (req, res) => {
     if (!canAccessCase(existing.rows[0], req)) return res.status(403).json({ error: "Access denied — this case is confidential" });
     const { rows } = await pool.query(
       `UPDATE cases SET
-        case_num=$1, title=$2, client=$3, insured=$4, plaintiff=$5,
-        defendant=$6, opposing_counsel=$7, short_case_num=$8, county=$9, court=$10,
-        claim_num=$11, file_num=$12, adjuster=$13, type=$14, status=$15,
-        stage=$16, lead_attorney=$17, second_attorney=$18, paralegal=$19, paralegal2=$20, legal_assistant=$21,
-        trial_date=$22, answer_filed=$23, written_disc=$24, party_depo=$25,
-        expert_depo=$26, witness_depo=$27, mediation=$28, mediator=$29,
-        judge=$30, dol=$31, custom_fields=$32, offices=$33, expert=$34, custom_dates=$35,
-        billing_parties=$36, case_expenses=$37, hidden_fields=$38, confidential=$39, custom_team=$40, medical_summary=$41
-       WHERE id=$42 AND deleted_at IS NULL RETURNING *`,
+        case_num=$1, title=$2, defendant_name=$3, prosecutor=$4, county=$5, court=$6, court_division=$7,
+        charge_description=$8, charge_statute=$9, charge_class=$10, case_type=$11, type=$12, status=$13, stage=$14,
+        custody_status=$15, bond_amount=$16, bond_conditions=$17, jail_location=$18, disposition_type=$19,
+        assigned_attorney=$20, second_attorney=$21, paralegal=$22, investigator=$23, social_worker=$24,
+        arrest_date=$25, arraignment_date=$26, next_court_date=$27, trial_date=$28, sentencing_date=$29, disposition_date=$30,
+        judge=$31, charges=$32, custom_fields=$33, custom_dates=$34, hidden_fields=$35, offices=$36, confidential=$37, custom_team=$38
+       WHERE id=$39 AND deleted_at IS NULL RETURNING *`,
       [
-        d.caseNum || "", d.title, d.client || "", d.insured || "",
-        d.plaintiff || "", d.defendant || "", d.opposingCounsel || "", d.shortCaseNum || "", d.county || "", d.court || "",
-        d.claimNum || "", d.fileNum || "", d.adjuster || "",
-        d.type || "Civil Litigation", d.status || "Active", d.stage || "Pleadings",
-        orNull(d.leadAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.paralegal2), orNull(d.legalAssistant),
-        orNull(d.trialDate), orNull(d.answerFiled), orNull(d.writtenDisc),
-        orNull(d.partyDepo), orNull(d.expertDepo), orNull(d.witnessDepo),
-        orNull(d.mediation), d.mediator || "", d.judge || "",
-        orNull(d.dol), JSON.stringify(d._customFields || []), d.offices || [],
-        d.expert || "", JSON.stringify(d._customDates || []),
-        JSON.stringify(d.billingParties || []), JSON.stringify(d.caseExpenses || []),
-        JSON.stringify(d._hiddenFields || []),
-        !!d.confidential,
-        JSON.stringify(d._customTeam || []),
-        JSON.stringify(d.medicalSummary || []),
+        d.caseNum || "", d.title, d.defendantName || "", d.prosecutor || "",
+        d.county || "", d.court || "", d.courtDivision || "",
+        d.chargeDescription || "", d.chargeStatute || "", d.chargeClass || "",
+        d.caseType || "Felony", d.type || "Felony", d.status || "Active", d.stage || "Arraignment",
+        d.custodyStatus || "", d.bondAmount || "", d.bondConditions || "", d.jailLocation || "", d.dispositionType || "",
+        orNull(d.assignedAttorney), orNull(d.secondAttorney), orNull(d.paralegal), orNull(d.investigator), orNull(d.socialWorker),
+        orNull(d.arrestDate), orNull(d.arraignmentDate), orNull(d.nextCourtDate),
+        orNull(d.trialDate), orNull(d.sentencingDate), orNull(d.dispositionDate),
+        d.judge || "", JSON.stringify(d.charges || []),
+        JSON.stringify(d._customFields || []), JSON.stringify(d._customDates || []),
+        JSON.stringify(d._hiddenFields || []), d.offices || [],
+        !!d.confidential, JSON.stringify(d._customTeam || []),
         req.params.id,
       ]
     );
@@ -185,7 +198,7 @@ router.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, requireShareholder, async (req, res) => {
+router.delete("/:id", requireAuth, requirePD, async (req, res) => {
   try {
     const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: "Not found or already deleted" });
@@ -202,7 +215,7 @@ router.delete("/:id", requireAuth, requireShareholder, async (req, res) => {
   }
 });
 
-router.post("/:id/restore", requireAuth, requireShareholder, async (req, res) => {
+router.post("/:id/restore", requireAuth, requirePD, async (req, res) => {
   try {
     const { rows } = await pool.query(
       "UPDATE cases SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING *",

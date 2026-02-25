@@ -162,11 +162,8 @@ export const apiCreateParty   = (data)   => apiFetch("/api/parties",       { met
 export const apiUpdateParty   = (id, data) => apiFetch(`/api/parties/${id}`, { method: "PUT",    body: data });
 export const apiDeleteParty   = (id)     => apiFetch(`/api/parties/${id}`, { method: "DELETE" });
 
-// Insurance
-export const apiGetInsurance    = (caseId) => apiFetch(`/api/insurance/${caseId}`);
-export const apiCreateInsurance = (data)   => apiFetch("/api/insurance",       { method: "POST",   body: data });
-export const apiUpdateInsurance = (id, data) => apiFetch(`/api/insurance/${id}`, { method: "PUT",    body: data });
-export const apiDeleteInsurance = (id)     => apiFetch(`/api/insurance/${id}`, { method: "DELETE" });
+// Conflict Check
+export const apiConflictCheck  = (name)   => apiFetch(`/api/cases/conflict-check?name=${encodeURIComponent(name)}`);
 
 // Experts
 export const apiGetExperts    = (caseId) => apiFetch(`/api/experts/${caseId}`);
