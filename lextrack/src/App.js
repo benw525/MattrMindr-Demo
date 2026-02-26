@@ -4763,10 +4763,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 11, color: "#8A9096", fontWeight: 400 }}>
                     Email: <span style={{ fontFamily: "monospace", color: "#1E2A3A", cursor: "pointer" }} onClick={() => {
-                      navigator.clipboard.writeText(`case-${c.id}@mail.mattrmindr.com`);
+                      navigator.clipboard.writeText(`case-${c.id}@mcpd.mattrmindr.com`);
                       setCorrCopied(true);
                       setTimeout(() => setCorrCopied(false), 2000);
-                    }}>{corrCopied ? "Copied!" : `case-${c.id}@mail.mattrmindr.com`}</span>
+                    }}>{corrCopied ? "Copied!" : `case-${c.id}@mcpd.mattrmindr.com`}</span>
                   </span>
                   <button className="btn btn-outline btn-sm" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => {
                     setCorrLoading(true);
@@ -4779,7 +4779,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
               {!corrLoading && correspondence.length === 0 && (
                 <div style={{ fontSize: 13, color: "#8A9096", fontStyle: "italic", padding: "20px 0" }}>
-                  No correspondence received yet. CC or forward emails to <span style={{ fontFamily: "monospace", color: "#1E2A3A" }}>case-{c.id}@mail.mattrmindr.com</span> and they will appear here, including any attachments.
+                  No correspondence received yet. CC or forward emails to <span style={{ fontFamily: "monospace", color: "#1E2A3A" }}>case-{c.id}@mcpd.mattrmindr.com</span> and they will appear here, including any attachments.
                 </div>
               )}
 

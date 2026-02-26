@@ -136,7 +136,7 @@ All agents accessible via `/api/ai-agents/*` endpoints, require authentication. 
 - Co-Defendants: accordion-style co-defendant management on Details tab (below Charges/Case Info grid). Fields: name (first/middle/last), DOB, case number, charges, attorney, status (Pre-Trial/Pled Out/Convicted/Acquitted/Charges Dismissed/Cooperating Witness/Fugitive), joint/severed (Joint/Severed/Pending Severance Motion), cooperation notes, general notes. Uses `case_parties` table with partyType="Co-Defendant", entityKind="individual", all fields in JSONB `data` column
 - Case Experts: accordion-style expert management on Details tab
 - Document Generator: upload .docx templates with placeholder auto-detection; template categories (Motions, Orders, Notices, Subpoenas, Client Letters, General)
-- Email Correspondence: SendGrid Inbound Parse captures emails to case-{id}@mail.mattrmindr.com
+- Email Correspondence: SendGrid Inbound Parse captures emails to case-{id}@mcpd.mattrmindr.com
 - Filings: court filing management in dedicated Filings tab. PDF-only upload with auto AI classification (names filing, identifies filing party, extracts filing date). Inbound email PDF attachments auto-create filings and trigger AI classification. Per-filing actions: download, classify, summarize, delete. Filter by filing party. Source tracking (email vs upload). Color-coded party badges (State=red, Defendant=blue, Co-Defendant=purple, Court=green)
 
 ### Removed Features (from civil version)
