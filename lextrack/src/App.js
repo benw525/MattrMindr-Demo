@@ -6739,6 +6739,8 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
   const [aiState, setAiState] = useState({ loading: false, result: null, error: null });
   const [docType, setDocType] = useState("Motion to Suppress");
   const [docInstructions, setDocInstructions] = useState("");
+  const [caseSearch, setCaseSearch] = useState("");
+  const [caseDropOpen, setCaseDropOpen] = useState(false);
 
   const activeCases = allCases.filter(c => c.status !== "Closed");
   const selectedCase = allCases.find(c => String(c.id) === String(selectedCaseId));
@@ -6782,6 +6784,8 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
     setAiState({ loading: false, result: null, error: null });
     setDocType("Motion to Suppress");
     setDocInstructions("");
+    setCaseSearch("");
+    setCaseDropOpen(false);
   };
 
   const needsCase = activeAgent && agents.find(a => a.id === activeAgent)?.needsCase;
@@ -6821,19 +6825,44 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
             </div>
 
             {needsCase && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text)", marginBottom: 4, display: "block" }}>Select Case</label>
-                <select value={selectedCaseId} onChange={e => { setSelectedCaseId(e.target.value); setAiState({ loading: false, result: null, error: null }); }} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13, background: "var(--c-bg)", color: "var(--c-text)" }}>
-                  <option value="">— Choose a case —</option>
-                  {activeCases.map(c => (
-                    <option key={c.id} value={c.id}>{c.defendantName || c.title}</option>
-                  ))}
-                </select>
-                {selectedCase && (
-                  <div style={{ fontSize: 11, color: "var(--c-text2)", marginTop: 6, lineHeight: 1.5 }}>
-                    <strong>{selectedCase.title}</strong> · {selectedCase.stage} · {selectedCase.caseType}
-                    {selectedCase.deathPenalty && <span style={{ color: "#dc2626", fontWeight: 700, marginLeft: 6 }}>DP</span>}
+              <div style={{ marginBottom: 16, position: "relative" }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text)", marginBottom: 4, display: "block" }}>Search Case</label>
+                {selectedCase ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", background: "var(--c-bg)" }}>
+                    <div style={{ flex: 1, fontSize: 13, color: "var(--c-text)" }}>
+                      <strong>{selectedCase.defendantName || selectedCase.title}</strong>
+                      <span style={{ color: "var(--c-text2)", marginLeft: 6, fontSize: 11 }}>{selectedCase.stage} · {selectedCase.caseType}{selectedCase.deathPenalty ? " · " : ""}</span>
+                      {selectedCase.deathPenalty && <span style={{ color: "#dc2626", fontWeight: 700, fontSize: 11 }}>DP</span>}
+                    </div>
+                    <button onClick={() => { setSelectedCaseId(""); setCaseSearch(""); setAiState({ loading: false, result: null, error: null }); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#8A9096", padding: "0 2px" }}>✕</button>
                   </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      value={caseSearch}
+                      onChange={e => { setCaseSearch(e.target.value); setCaseDropOpen(true); }}
+                      onFocus={() => setCaseDropOpen(true)}
+                      placeholder="Type defendant name to search..."
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13, background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
+                    />
+                    {caseDropOpen && (() => {
+                      const q = caseSearch.toLowerCase().trim();
+                      const filtered = q ? activeCases.filter(c => (c.defendantName || "").toLowerCase().includes(q) || (c.title || "").toLowerCase().includes(q) || (c.caseNumber || "").toLowerCase().includes(q)) : activeCases;
+                      return filtered.length > 0 ? (
+                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: "0 0 6px 6px", maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                          {filtered.slice(0, 20).map(c => (
+                            <div key={c.id} onClick={() => { setSelectedCaseId(String(c.id)); setCaseSearch(""); setCaseDropOpen(false); setAiState({ loading: false, result: null, error: null }); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "var(--c-text)", borderBottom: "1px solid var(--c-border)" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <div style={{ fontWeight: 500 }}>{c.defendantName || c.title}</div>
+                              <div style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseNumber || "—"} · {c.stage} · {c.caseType}{c.deathPenalty ? " · " : ""}{c.deathPenalty && <span style={{ color: "#dc2626", fontWeight: 700 }}>DP</span>}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : q ? (
+                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: "0 0 6px 6px", padding: "12px", fontSize: 12, color: "var(--c-text2)", textAlign: "center" }}>No matching cases</div>
+                      ) : null;
+                    })()}
+                  </>
                 )}
               </div>
             )}
