@@ -2981,30 +2981,19 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeTab === "correspondence") {
-      setCorrLoading(true);
-      apiGetCorrespondence(c.id).then(setCorrespondence).catch(() => {}).finally(() => setCorrLoading(false));
-    }
-    if (activeTab === "files") {
-      setDocsLoading(true);
-      apiGetCaseDocuments(c.id).then(setCaseDocuments).catch(() => {}).finally(() => setDocsLoading(false));
-    }
-    if (activeTab === "filings") {
-      setFilingsLoading(true);
-      apiGetFilings(c.id).then(setFilings).catch(() => {}).finally(() => setFilingsLoading(false));
-    }
-    if (activeTab === "activity") {
-      apiGetActivity(c.id).then(fresh => onRefreshActivity(c.id, fresh)).catch(() => {});
-    }
-    if (activeTab === "details") {
-      setPartiesLoading(true);
-      apiGetParties(c.id).then(setParties).catch(() => {}).finally(() => setPartiesLoading(false));
-
-      setExpertsLoading(true);
-      apiGetExperts(c.id).then(setExperts).catch(() => {}).finally(() => setExpertsLoading(false));
-      setMiscContactsLoading(true);
-      apiGetMiscContacts(c.id).then(setMiscContacts).catch(() => {}).finally(() => setMiscContactsLoading(false));
-    }
+    setCorrLoading(true);
+    apiGetCorrespondence(c.id).then(setCorrespondence).catch(() => {}).finally(() => setCorrLoading(false));
+    setDocsLoading(true);
+    apiGetCaseDocuments(c.id).then(setCaseDocuments).catch(() => {}).finally(() => setDocsLoading(false));
+    setFilingsLoading(true);
+    apiGetFilings(c.id).then(setFilings).catch(() => {}).finally(() => setFilingsLoading(false));
+    apiGetActivity(c.id).then(fresh => onRefreshActivity(c.id, fresh)).catch(() => {});
+    setPartiesLoading(true);
+    apiGetParties(c.id).then(setParties).catch(() => {}).finally(() => setPartiesLoading(false));
+    setExpertsLoading(true);
+    apiGetExperts(c.id).then(setExperts).catch(() => {}).finally(() => setExpertsLoading(false));
+    setMiscContactsLoading(true);
+    apiGetMiscContacts(c.id).then(setMiscContacts).catch(() => {}).finally(() => setMiscContactsLoading(false));
     const timersRef = partyTimers.current;
     const pendingRef = partyPendingData.current;
 
@@ -3042,7 +3031,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       });
       miscContactTimers.current = {};
     };
-  }, [activeTab, c.id]);
+  }, [c.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleContactClick = async (name) => {
     if (!name || !name.trim()) return;
