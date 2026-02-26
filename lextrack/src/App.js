@@ -15,7 +15,7 @@ import {
   apiAiSearch,
   apiChargeAnalysis, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary, apiDocSummary, apiTaskSuggestions,
   apiGetCaseDocuments, apiUploadCaseDocument, apiSummarizeDocument, apiDownloadDocument, apiDeleteCaseDocument, apiUpdateCaseDocument,
-  apiGetFilings, apiUploadFiling, apiDownloadFiling, apiDeleteFiling, apiSummarizeFiling, apiUpdateFiling, apiClassifyFiling,
+  apiGetFilings, apiUploadFiling, apiDeleteFiling, apiSummarizeFiling, apiUpdateFiling, apiClassifyFiling,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
   apiConflictCheck,
@@ -4844,18 +4844,23 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                               {email.attachments.map((att, idx) => {
                                 const isPreviewable = /^(image\/|application\/pdf)/.test(att.contentType);
-                                const previewUrl = `/api/correspondence/attachment/${email.id}/${idx}?inline=true`;
-                                const downloadUrl = `/api/correspondence/attachment/${email.id}/${idx}`;
                                 const icon = att.contentType?.startsWith("image/") ? "🖼" : att.contentType === "application/pdf" ? "📄" : "📎";
                                 return (
                                   <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                                     <button
-                                      onClick={() => {
-                                        if (isPreviewable) {
-                                          setAttachmentPreview({ url: previewUrl, filename: att.filename, contentType: att.contentType, downloadUrl });
-                                        } else {
-                                          window.open(downloadUrl, "_blank");
-                                        }
+                                      onClick={async () => {
+                                        try {
+                                          const res = await fetch(`/api/correspondence/attachment/${email.id}/${idx}?inline=true`, { credentials: "include" });
+                                          if (!res.ok) throw new Error("Failed to load attachment");
+                                          const blob = await res.blob();
+                                          const typedBlob = new Blob([blob], { type: att.contentType || "application/octet-stream" });
+                                          const blobUrl = URL.createObjectURL(typedBlob);
+                                          if (isPreviewable) {
+                                            setAttachmentPreview({ url: blobUrl, filename: att.filename, contentType: att.contentType, blobUrl });
+                                          } else {
+                                            const a = document.createElement("a"); a.href = blobUrl; a.download = att.filename; a.click(); URL.revokeObjectURL(blobUrl);
+                                          }
+                                        } catch (err) { alert("Failed to load attachment: " + err.message); }
                                       }}
                                       style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", background: "#E4E7EB", borderRadius: 6, border: "1px solid #D6D8DB", cursor: "pointer", minWidth: 90, textAlign: "center" }}
                                       title={isPreviewable ? "Click to preview" : "Click to download"}
@@ -4899,7 +4904,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
 
         {attachmentPreview && (
           <div
-            onClick={() => setAttachmentPreview(null)}
+            onClick={() => { if (attachmentPreview.blobUrl) URL.revokeObjectURL(attachmentPreview.blobUrl); setAttachmentPreview(null); }}
             style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
           >
             <div
@@ -4909,13 +4914,12 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", borderBottom: "1px solid var(--c-border)", flexShrink: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-h)" }}>{attachmentPreview.filename}</div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <a
-                    href={attachmentPreview.downloadUrl}
-                    download
-                    style={{ padding: "5px 14px", fontSize: 12, fontWeight: 600, background: "#1E2A3A", color: "#fff", borderRadius: 4, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
-                  >Download</a>
                   <button
-                    onClick={() => setAttachmentPreview(null)}
+                    onClick={() => { const a = document.createElement("a"); a.href = attachmentPreview.url; a.download = attachmentPreview.filename; a.click(); }}
+                    style={{ padding: "5px 14px", fontSize: 12, fontWeight: 600, background: "#1E2A3A", color: "#fff", borderRadius: 4, border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+                  >Download</button>
+                  <button
+                    onClick={() => { if (attachmentPreview.blobUrl) URL.revokeObjectURL(attachmentPreview.blobUrl); setAttachmentPreview(null); }}
                     style={{ background: "transparent", border: "none", fontSize: 20, color: "#8A9096", cursor: "pointer", padding: "2px 6px", lineHeight: 1 }}
                   >✕</button>
                 </div>
@@ -4930,7 +4934,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     <div style={{ fontSize: 48, marginBottom: 12 }}>📎</div>
                     <div>Preview not available for this file type.</div>
                     <div style={{ marginTop: 8 }}>
-                      <a href={attachmentPreview.downloadUrl} download style={{ color: "#1E2A3A" }}>Download to view</a>
+                      <button onClick={() => { const a = document.createElement("a"); a.href = attachmentPreview.url; a.download = attachmentPreview.filename; a.click(); }} style={{ color: "#1E2A3A", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: 14 }}>Download to view</button>
                     </div>
                   </div>
                 )}
@@ -5069,7 +5073,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         <span style={{ fontSize: 10, color: "#8A9096" }}>{f.uploadedByName ? `by ${f.uploadedByName}` : ""}{f.sourceEmailFrom ? `from ${f.sourceEmailFrom}` : ""}</span>
                         <span style={{ fontSize: 10, color: "#8A9096" }}>{new Date(f.createdAt).toLocaleDateString()}</span>
                         <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                          <button onClick={async () => { try { const blob = await apiDownloadFiling(f.id); const url = URL.createObjectURL(blob); setViewingFilingBlob(url); setViewingFilingId(f.id); } catch (err) { alert("View failed: " + err.message); } }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #D1D5DB", background: "#fff", cursor: "pointer" }}>View</button>
+                          <button onClick={async () => { try { const res = await fetch(`/api/filings/${f.id}/download?inline=true`, { credentials: "include" }); if (!res.ok) throw new Error("View failed"); const blob = await res.blob(); const pdfBlob = new Blob([blob], { type: "application/pdf" }); const url = URL.createObjectURL(pdfBlob); setViewingFilingBlob(url); setViewingFilingId(f.id); } catch (err) { alert("View failed: " + err.message); } }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #D1D5DB", background: "#fff", cursor: "pointer" }}>View</button>
                           <button disabled={filingClassifying === f.id} onClick={async () => { setFilingClassifying(f.id); try { const { classification } = await apiClassifyFiling(f.id); setFilings(prev => prev.map(x => x.id === f.id ? { ...x, filename: classification.suggestedName || x.filename, filedBy: classification.filedBy || x.filedBy, docType: classification.docType || x.docType, filingDate: classification.filingDate || x.filingDate, summary: classification.summary || x.summary } : x)); log("Filing classified", `${classification.suggestedName || f.filename}`); } catch (err) { alert("Classification failed: " + err.message); } setFilingClassifying(null); }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #D97706", background: "#FEF3C7", color: "#92400E", cursor: "pointer" }}>{filingClassifying === f.id ? "Classifying..." : "⚡ Classify"}</button>
                           <button disabled={filingSummarizing === f.id} onClick={async () => { setFilingSummarizing(f.id); try { const { summary } = await apiSummarizeFiling(f.id); setFilings(prev => prev.map(x => x.id === f.id ? { ...x, summary } : x)); log("Filing summarized", f.filename); } catch (err) { alert("Summary failed: " + err.message); } setFilingSummarizing(null); }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #6366F1", background: "#EEF2FF", color: "#4338CA", cursor: "pointer" }}>{filingSummarizing === f.id ? "Summarizing..." : (f.summary ? "⚡ Re-summarize" : "⚡ Summarize")}</button>
                           {canRemove && <button onClick={async () => { if (!window.confirm("Delete this filing?")) return; try { await apiDeleteFiling(f.id); setFilings(prev => prev.filter(x => x.id !== f.id)); log("Filing deleted", f.filename); } catch (err) { alert("Delete failed: " + err.message); } }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #EF4444", background: "#FEF2F2", color: "#DC2626", cursor: "pointer" }}>Delete</button>}

@@ -98,8 +98,9 @@ router.get("/:id/download", requireAuth, async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     const doc = rows[0];
     if (!(await verifyCaseAccess(req, doc.case_id))) return res.status(403).json({ error: "Access denied" });
+    const disposition = req.query.inline === "true" ? "inline" : "attachment";
     res.setHeader("Content-Type", doc.content_type);
-    res.setHeader("Content-Disposition", `attachment; filename="${doc.filename}"`);
+    res.setHeader("Content-Disposition", `${disposition}; filename="${doc.filename}"`);
     return res.send(doc.file_data);
   } catch (err) {
     console.error("Filing download error:", err);

@@ -5,7 +5,7 @@ const pool = require("../db");
 const { extractText } = require("../utils/extract-text");
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, fieldSize: 50 * 1024 * 1024 } });
 
 router.post("/", upload.any(), async (req, res) => {
   try {
