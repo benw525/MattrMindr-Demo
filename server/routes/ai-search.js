@@ -258,6 +258,7 @@ ${caseSummaries.join("\n")}`;
         { role: "user", content: userPrompt },
       ],
       max_completion_tokens: 4096,
+      store: false,
     });
 
     const raw = (completion.choices[0]?.message?.content || "[]").trim();

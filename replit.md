@@ -81,7 +81,7 @@ lextrack/
 - Inline editing on Details tab
 
 ### AI Agents (server/routes/ai-agents.js)
-Six AI-powered agents using OpenAI (`gpt-4o-mini`) via existing integration:
+Six AI-powered agents using OpenAI (`gpt-4o-mini`) via existing integration. All API calls use `store: false` to prevent data retention and model training:
 1. **Charge Analysis** — Analyzes Alabama Code sections, sentencing ranges, mandatory minimums, diversion eligibility. Available in New Case modal (after entering charges) and case detail Overview tab
 2. **Deadline Generator** — Generates procedural deadlines based on Alabama Rules of Criminal Procedure and case stage. In case detail deadlines section with "Suggest" button; each suggestion has one-click "Add" to create real deadline records
 3. **Case Strategy** — Full defense strategy analysis including motions, plea negotiation, sentencing exposure, investigation priorities. Death penalty cases get capital-specific analysis. "Strategy" button in case detail header; results can be saved as case notes

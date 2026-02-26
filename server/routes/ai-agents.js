@@ -19,6 +19,7 @@ async function aiCall(systemPrompt, userPrompt, jsonMode = false) {
     ],
     temperature: 0.3,
     max_tokens: 4000,
+    store: false,
     ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
   });
   return resp.choices[0].message.content;
