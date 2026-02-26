@@ -2149,6 +2149,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const [page, setPage] = useState(1);
   const [attyFilter, setAttyFilter] = useState("All");
   const [divisionFilter, setDivisionFilter] = useState("All");
+  const [stageFilter, setStageFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [sortCol, setSortCol] = useState("title");
   const [sortDir, setSortDir] = useState("asc");
@@ -2235,6 +2236,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
       if (statusFilter !== "All" && statusFilter !== "Deleted" && c.status !== statusFilter) return false;
       if (attyFilter !== "All" && c.assignedAttorney !== Number(attyFilter) && c.secondAttorney !== Number(attyFilter)) return false;
       if (divisionFilter !== "All" && c.courtDivision !== divisionFilter) return false;
+      if (stageFilter !== "All" && c.stage !== stageFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         return c.title?.toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q) || (c.defendantName || "").toLowerCase().includes(q) || (c.prosecutor || "").toLowerCase().includes(q) || (c.county || "").toLowerCase().includes(q) || (c.court || "").toLowerCase().includes(q) || (c.chargeDescription || "").toLowerCase().includes(q);
@@ -2257,11 +2259,11 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
       return (sortDir === "asc" ? 1 : -1) * av.localeCompare(bv);
     });
     return list;
-  }, [allCases, statusFilter, attyFilter, divisionFilter, search, sortCol, sortDir]);
+  }, [allCases, statusFilter, attyFilter, divisionFilter, stageFilter, search, sortCol, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => setPage(1), [search, statusFilter, attyFilter, divisionFilter, sortCol]);
+  useEffect(() => setPage(1), [search, statusFilter, attyFilter, divisionFilter, stageFilter, sortCol]);
 
   const caseTasks = useMemo(() => selectedCase ? tasks.filter(t => t.caseId === selectedCase.id) : [], [tasks, selectedCase]);
   const caseDeadlines = useMemo(() => selectedCase ? deadlines.filter(d => d.caseId === selectedCase.id) : [], [deadlines, selectedCase]);
@@ -2291,6 +2293,10 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
             <option value="Circuit">Circuit Court</option>
             <option value="District">District Court</option>
             <option value="Juvenile">Juvenile Court</option>
+          </select>
+          <select style={{ width: 160 }} value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
+            <option value="All">All Stages</option>
+            {["Arraignment", "Preliminary Hearing", "Grand Jury/Indictment", "Pre-Trial Motions", "Plea Negotiations", "Trial", "Sentencing", "Post-Conviction", "Appeal"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select style={{ width: 160 }} value={attyFilter} onChange={e => setAttyFilter(e.target.value)}>
             <option value="All">All Attorneys</option>
