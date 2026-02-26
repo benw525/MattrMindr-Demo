@@ -9033,6 +9033,8 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
   });
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
 
+  const [allStaffExpanded, setAllStaffExpanded] = useState(true);
+
   const savePins = (next) => { setPinnedIds(next); localStorage.setItem("lextrack-pinned-staff", JSON.stringify(next)); };
   const togglePin = (id) => { const next = pinnedIds.includes(id) ? pinnedIds.filter(x => x !== id) : [...pinnedIds, id]; savePins(next); };
 
@@ -9182,7 +9184,15 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
             )}
           </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
+        <div style={{ marginBottom: 0 }}>
+          <button
+            onClick={() => setAllStaffExpanded(!allStaffExpanded)}
+            style={{ background: "transparent", border: "none", padding: "0 0 12px 0", fontSize: 14, fontWeight: 600, color: "var(--c-text-h)", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, fontFamily: "'Playfair Display',serif" }}
+          >
+            {allStaffExpanded ? "▾" : "▸"} All Staff ({filteredStaff.length})
+          </button>
+        </div>
+        {allStaffExpanded && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
           {filteredStaff.map(u => {
             const mine = allCases.filter(c => c.assignedAttorney === u.id || c.secondAttorney === u.id || c.trialCoordinator === u.id || c.investigator === u.id || c.socialWorker === u.id);
             const isConfirming = confirmDeleteId === u.id;
@@ -9258,7 +9268,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
               </div>
             );
           })}
-        </div>
+        </div>}
         {canAdmin && deletedUsers.length > 0 && (
           <div style={{ marginTop: 32 }}>
             <button
