@@ -2951,6 +2951,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [caseDocuments, setCaseDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [docUploadType, setDocUploadType] = useState("Police Report");
+  const [docFilterType, setDocFilterType] = useState("All");
   const [docSummarizing, setDocSummarizing] = useState(null);
   const [expandedDocId, setExpandedDocId] = useState(null);
   const canRemove = isAttorney(currentUser);
@@ -4707,7 +4708,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   const saved = await apiUploadCaseDocument(formData);
                   setCaseDocuments(prev => [saved, ...prev]);
                   fileInput.value = "";
-                  onLogActivity("Document Uploaded", `${saved.filename} (${saved.docType})`);
+                  log("Document Uploaded", `${saved.filename} (${saved.docType})`);
                 } catch (err) { alert("Upload failed: " + err.message); }
               }} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 16 }}>
                 <div style={{ flex: 1, minWidth: 180 }}>
@@ -4725,12 +4726,20 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             </div>
 
             <div className="case-overlay-section">
-              <div className="case-overlay-section-title" style={{ marginBottom: 12 }}>
-                Documents {caseDocuments.length > 0 && <span style={{ fontSize: 11, color: "#8A9096", fontWeight: 400, marginLeft: 6 }}>({caseDocuments.length})</span>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                <div className="case-overlay-section-title" style={{ marginBottom: 0 }}>
+                  Documents {caseDocuments.length > 0 && <span style={{ fontSize: 11, color: "#8A9096", fontWeight: 400, marginLeft: 6 }}>({docFilterType === "All" ? caseDocuments.length : caseDocuments.filter(d => d.docType === docFilterType).length}{docFilterType !== "All" ? ` of ${caseDocuments.length}` : ""})</span>}
+                </div>
+                {caseDocuments.length > 0 && (
+                  <select value={docFilterType} onChange={e => setDocFilterType(e.target.value)} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 5, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)" }}>
+                    <option value="All">All Types</option>
+                    {[...new Set(caseDocuments.map(d => d.docType))].sort().map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                )}
               </div>
               {docsLoading && <div style={{ fontSize: 12, color: "#8A9096", padding: "12px 0" }}>Loading...</div>}
               {!docsLoading && caseDocuments.length === 0 && <div className="empty" style={{ fontSize: 12 }}>No documents uploaded yet</div>}
-              {caseDocuments.map(doc => (
+              {caseDocuments.filter(d => docFilterType === "All" || d.docType === docFilterType).map(doc => (
                 <div key={doc.id} style={{ borderBottom: "1px solid var(--c-border)", padding: "12px 0" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -4761,7 +4770,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                         try {
                           await apiDeleteCaseDocument(doc.id);
                           setCaseDocuments(prev => prev.filter(d => d.id !== doc.id));
-                          onLogActivity("Document Deleted", doc.filename);
+                          log("Document Deleted", doc.filename);
                         } catch (err) { alert("Delete failed: " + err.message); }
                       }}>Delete</button>
                     </div>
