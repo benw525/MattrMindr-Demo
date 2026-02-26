@@ -1,0 +1,299 @@
+const express = require("express");
+const OpenAI = require("openai");
+const pool = require("../db");
+const { requireAuth } = require("../middleware/auth");
+
+const router = express.Router();
+
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
+
+async function aiCall(systemPrompt, userPrompt, jsonMode = false) {
+  const resp = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 4000,
+    ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+  });
+  return resp.choices[0].message.content;
+}
+
+router.post("/charge-analysis", requireAuth, async (req, res) => {
+  try {
+    const { chargeDescription, chargeStatute, chargeClass, caseType, courtDivision, charges } = req.body;
+    const chargesText = (charges || []).map((c, i) =>
+      `Charge ${i + 1}: ${c.description || ""} | Statute: ${c.statute || ""} | Class: ${c.class || ""} | ${c.amended ? "Amended" : "Original"}`
+    ).join("\n");
+    const systemPrompt = `You are a criminal defense legal research assistant specializing in Alabama law. Analyze the charges and provide a structured analysis. Be specific about Alabama Code sections, sentencing ranges, and mandatory minimums. Format your response in clear sections with headers using markdown.`;
+    const userPrompt = `Analyze the following criminal charges for a ${caseType || "criminal"} case in ${courtDivision || ""} court:
+
+Primary Charge: ${chargeDescription || "Not specified"}
+Statute: ${chargeStatute || "Not specified"}
+Charge Class: ${chargeClass || "Not specified"}
+${chargesText ? `\nAdditional Charges:\n${chargesText}` : ""}
+
+Provide:
+1. **Statutory Analysis** — Identify the Alabama Code section(s), explain the elements of each offense
+2. **Severity & Sentencing Range** — Class, minimum/maximum sentences, any mandatory minimums
+3. **Capital Offense Assessment** — Whether any charge qualifies as a capital offense under Alabama law
+4. **Enhancement Factors** — Habitual offender, weapon enhancements, or other sentence multipliers to watch for
+5. **Diversion Eligibility** — Whether pretrial diversion, drug court, mental health court, or youthful offender status may apply
+6. **Defense Considerations** — Common defenses or constitutional issues for these types of charges`;
+
+    const result = await aiCall(systemPrompt, userPrompt);
+    res.json({ result });
+  } catch (err) {
+    console.error("Charge analysis error:", err);
+    res.status(500).json({ error: "AI analysis failed" });
+  }
+});
+
+router.post("/deadline-generator", requireAuth, async (req, res) => {
+  try {
+    const { caseId, stage, chargeClass, caseType, courtDivision, arrestDate, arraignmentDate, trialDate, nextCourtDate, existingDeadlines } = req.body;
+    const deadlinesList = (existingDeadlines || []).map(d => `- ${d.title} (${d.date})`).join("\n") || "None";
+    const systemPrompt = `You are an Alabama criminal procedure expert. Generate upcoming procedural deadlines based on the Alabama Rules of Criminal Procedure and case details. Return ONLY valid JSON with a "deadlines" array. Each deadline object must have: "title" (string), "date" (YYYY-MM-DD string), "rule" (the Alabama rule reference), "type" (one of: Filing, Hearing, Court Date, Deadline). Base dates relative to today: ${new Date().toISOString().split("T")[0]}. If exact dates cannot be determined, estimate based on typical timelines.`;
+    const userPrompt = `Case details:
+Stage: ${stage || "Unknown"}
+Charge Class: ${chargeClass || "Unknown"}
+Case Type: ${caseType || "Unknown"}
+Court Division: ${courtDivision || "Unknown"}
+Arrest Date: ${arrestDate || "Unknown"}
+Arraignment Date: ${arraignmentDate || "Unknown"}
+Trial Date: ${trialDate || "Not set"}
+Next Court Date: ${nextCourtDate || "Not set"}
+
+Existing Deadlines:
+${deadlinesList}
+
+Generate 4-8 upcoming procedural deadlines that this case likely needs, considering the current stage and Alabama criminal procedure rules. Include speedy trial deadlines, motion filing windows, discovery deadlines, and any stage-specific deadlines. Do not duplicate existing deadlines.`;
+
+    const raw = await aiCall(systemPrompt, userPrompt, true);
+    const parsed = JSON.parse(raw);
+    res.json({ deadlines: parsed.deadlines || [] });
+  } catch (err) {
+    console.error("Deadline generator error:", err);
+    res.status(500).json({ error: "AI deadline generation failed" });
+  }
+});
+
+router.post("/case-strategy", requireAuth, async (req, res) => {
+  try {
+    const { caseId } = req.body;
+    if (!caseId) return res.status(400).json({ error: "caseId required" });
+
+    const [caseRes, notesRes, tasksRes, deadlinesRes] = await Promise.all([
+      pool.query("SELECT * FROM cases WHERE id = $1", [caseId]),
+      pool.query("SELECT body, type FROM case_notes WHERE case_id = $1 ORDER BY created_at DESC LIMIT 10", [caseId]),
+      pool.query("SELECT title, status, priority FROM tasks WHERE case_id = $1", [caseId]),
+      pool.query("SELECT title, date, type FROM deadlines WHERE case_id = $1", [caseId]),
+    ]);
+
+    const c = caseRes.rows[0];
+    if (!c) return res.status(404).json({ error: "Case not found" });
+
+    const charges = c.charges || [];
+    const chargesText = charges.map((ch, i) =>
+      `${i + 1}. ${ch.description || ""} (${ch.statute || ""}) — ${ch.class || ""}, ${ch.disposition || "No disposition"}`
+    ).join("\n") || "No charges entered";
+
+    const notesText = notesRes.rows.map(n => `[${n.type}] ${(n.body || "").substring(0, 300)}`).join("\n") || "No notes";
+    const tasksText = tasksRes.rows.map(t => `${t.title} (${t.status}, ${t.priority})`).join(", ") || "No tasks";
+
+    const systemPrompt = `You are a senior criminal defense attorney advising a public defender in Mobile County, Alabama. Provide strategic analysis and defense recommendations. Be practical, specific, and action-oriented. Format with markdown headers and bullet points.${c.death_penalty ? "\n\nCRITICAL: This is a DEATH PENALTY / CAPITAL case. Include capital defense-specific strategies, mitigation investigation requirements, and Eighth Amendment considerations." : ""}`;
+
+    const userPrompt = `Case: ${c.title}
+Defendant: ${c.defendant_name || "Unknown"}
+Case Type: ${c.case_type || "Unknown"} | Division: ${c.court_division || "Unknown"}
+Stage: ${c.stage || "Unknown"} | Status: ${c.status || "Unknown"}
+Charge Class: ${c.charge_class || "Unknown"}
+Custody Status: ${c.custody_status || "Unknown"} | Bond: ${c.bond_amount ? "$" + c.bond_amount : "Unknown"}
+${c.death_penalty ? "⚠️ DEATH PENALTY CASE" : ""}
+
+Charges:
+${chargesText}
+
+Recent Notes:
+${notesText}
+
+Current Tasks: ${tasksText}
+
+Provide:
+1. **Case Assessment** — Overall strengths and weaknesses
+2. **Defense Strategies** — 3-5 specific defense approaches to consider
+3. **Key Motions** — Motions to file and their strategic purpose
+4. **Plea Negotiation** — Leverage points and potential plea outcomes
+5. **Sentencing Exposure** — Best/worst case sentencing scenarios
+6. **Investigation Priorities** — What facts, witnesses, or evidence to pursue
+7. **Mitigating Factors** — Areas to investigate for mitigation`;
+
+    const result = await aiCall(systemPrompt, userPrompt);
+    res.json({ result });
+  } catch (err) {
+    console.error("Case strategy error:", err);
+    res.status(500).json({ error: "AI strategy analysis failed" });
+  }
+});
+
+router.post("/draft-document", requireAuth, async (req, res) => {
+  try {
+    const { caseId, documentType, customInstructions } = req.body;
+    if (!caseId || !documentType) return res.status(400).json({ error: "caseId and documentType required" });
+
+    const caseRes = await pool.query("SELECT * FROM cases WHERE id = $1", [caseId]);
+    const c = caseRes.rows[0];
+    if (!c) return res.status(404).json({ error: "Case not found" });
+
+    const charges = (c.charges || []).map(ch =>
+      `${ch.description || ""} (${ch.statute || ""}) — ${ch.class || ""}`
+    ).join("; ") || "Not specified";
+
+    const systemPrompt = `You are a criminal defense attorney drafting legal documents for the Mobile County Public Defender's Office in Alabama. Draft professional, court-ready documents following Alabama court formatting conventions. Include proper case captions, legal citations, and prayer for relief. Use formal legal language appropriate for Alabama circuit/district courts.`;
+
+    const userPrompt = `Draft a ${documentType} for:
+
+Case: ${c.title}
+Case Number: ${c.case_num || "Pending"}
+Court: ${c.court || "Mobile County"} ${c.court_division || ""} Court
+Judge: ${c.judge || "Honorable Judge"}
+Defendant: ${c.defendant_name || "Unknown"}
+Prosecutor: ${c.prosecutor || "State of Alabama"}
+Charges: ${charges}
+Stage: ${c.stage || "Unknown"}
+Custody: ${c.custody_status || "Unknown"}
+Bond: ${c.bond_amount ? "$" + c.bond_amount : "N/A"}
+Arrest Date: ${c.arrest_date || "Unknown"}
+Trial Date: ${c.trial_date || "Not set"}
+
+${customInstructions ? `Additional Instructions: ${customInstructions}` : ""}
+
+Draft the complete document with proper formatting, caption, body, signature block, and certificate of service.`;
+
+    const result = await aiCall(systemPrompt, userPrompt);
+    res.json({ result });
+  } catch (err) {
+    console.error("Document draft error:", err);
+    res.status(500).json({ error: "AI document drafting failed" });
+  }
+});
+
+router.post("/case-triage", requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const isAdmin = req.session.role === "App Admin" || req.session.role === "Managing Attorney";
+
+    const casesQ = isAdmin
+      ? "SELECT id, case_num, title, defendant_name, case_type, stage, status, court_division, charge_class, custody_status, death_penalty, trial_date, next_court_date, arrest_date, lead_attorney FROM cases WHERE status = 'Active' AND deleted_at IS NULL ORDER BY trial_date ASC NULLS LAST LIMIT 100"
+      : "SELECT id, case_num, title, defendant_name, case_type, stage, status, court_division, charge_class, custody_status, death_penalty, trial_date, next_court_date, arrest_date, lead_attorney FROM cases WHERE status = 'Active' AND deleted_at IS NULL AND (lead_attorney = $1 OR second_attorney = $1) ORDER BY trial_date ASC NULLS LAST LIMIT 100";
+
+    const [casesRes, tasksRes, deadlinesRes, usersRes] = await Promise.all([
+      isAdmin ? pool.query(casesQ) : pool.query(casesQ, [userId]),
+      pool.query("SELECT case_id, title, due, priority, status FROM tasks WHERE status != 'Completed'"),
+      pool.query("SELECT case_id, title, date FROM deadlines WHERE date >= CURRENT_DATE"),
+      pool.query("SELECT id, name FROM users"),
+    ]);
+
+    const userMap = {};
+    usersRes.rows.forEach(u => { userMap[u.id] = u.name; });
+
+    const tasksByCase = {};
+    tasksRes.rows.forEach(t => {
+      if (!tasksByCase[t.case_id]) tasksByCase[t.case_id] = [];
+      tasksByCase[t.case_id].push(t);
+    });
+
+    const deadlinesByCase = {};
+    deadlinesRes.rows.forEach(d => {
+      if (!deadlinesByCase[d.case_id]) deadlinesByCase[d.case_id] = [];
+      deadlinesByCase[d.case_id].push(d);
+    });
+
+    const today = new Date().toISOString().split("T")[0];
+    const caseSummaries = casesRes.rows.map(c => {
+      const tasks = tasksByCase[c.id] || [];
+      const deadlines = deadlinesByCase[c.id] || [];
+      const overdue = tasks.filter(t => t.due && t.due < today && t.status !== "Completed").length;
+      const upcomingDeadlines = deadlines.filter(d => {
+        const diff = (new Date(d.date) - new Date()) / (1000 * 60 * 60 * 24);
+        return diff <= 14;
+      }).length;
+
+      return `ID:${c.id} | "${c.title}" | Case#:${c.case_num || "N/A"} | Defendant:${c.defendant_name || "N/A"} | Type:${c.case_type} | Stage:${c.stage} | Division:${c.court_division || "N/A"} | ChargeClass:${c.charge_class || "N/A"} | Custody:${c.custody_status || "N/A"} | DeathPenalty:${c.death_penalty ? "YES" : "no"} | Trial:${c.trial_date || "Not set"} | NextCourt:${c.next_court_date || "Not set"} | Attorney:${userMap[c.lead_attorney] || "Unassigned"} | OverdueTasks:${overdue} | DeadlinesIn14d:${upcomingDeadlines} | OpenTasks:${tasks.length}`;
+    }).join("\n");
+
+    const systemPrompt = `You are a case management triage assistant for a public defender's office. Analyze the active caseload and return a JSON object with a "cases" array. Each entry must have: "id" (number — the case ID), "title" (string), "urgency" (1-10 scale, 10 = most urgent), "reason" (one sentence explaining why this case is urgent), "action" (one specific next step the attorney should take). Rank by urgency descending. Return top 8 most urgent cases. Today is ${today}.
+
+Priority factors (highest to lowest):
+- Death penalty cases always rank highest
+- Upcoming trial dates within 30 days
+- Clients in custody
+- Overdue tasks or imminent deadlines
+- Cases with no recent activity
+- Higher charge classes`;
+
+    const raw = await aiCall(systemPrompt, `Active caseload:\n${caseSummaries}`, true);
+    const parsed = JSON.parse(raw);
+    res.json({ cases: parsed.cases || [] });
+  } catch (err) {
+    console.error("Case triage error:", err);
+    res.status(500).json({ error: "AI triage failed" });
+  }
+});
+
+router.post("/client-summary", requireAuth, async (req, res) => {
+  try {
+    const { caseId } = req.body;
+    if (!caseId) return res.status(400).json({ error: "caseId required" });
+
+    const [caseRes, activityRes, deadlinesRes, usersRes] = await Promise.all([
+      pool.query("SELECT * FROM cases WHERE id = $1", [caseId]),
+      pool.query("SELECT action, detail, ts FROM case_activity WHERE case_id = $1 ORDER BY ts DESC LIMIT 10", [caseId]),
+      pool.query("SELECT title, date FROM deadlines WHERE case_id = $1 AND date >= CURRENT_DATE ORDER BY date ASC LIMIT 5", [caseId]),
+      pool.query("SELECT id, name FROM users"),
+    ]);
+
+    const c = caseRes.rows[0];
+    if (!c) return res.status(404).json({ error: "Case not found" });
+
+    const userMap = {};
+    usersRes.rows.forEach(u => { userMap[u.id] = u.name; });
+
+    const charges = (c.charges || []).map(ch => ch.description || ch.statute || "").filter(Boolean).join(", ") || "Not specified";
+    const activity = activityRes.rows.map(a => `${a.action}: ${(a.detail || "").substring(0, 100)}`).join("\n") || "No recent activity";
+    const deadlines = deadlinesRes.rows.map(d => `${d.title} — ${d.date}`).join("\n") || "No upcoming deadlines";
+
+    const systemPrompt = `You are writing a case status update for a criminal defendant or their family. Use simple, clear language — no legal jargon. Write in a warm but professional tone. Keep it concise (under 300 words). Use short paragraphs. Explain what has happened, what is coming next, and what the client should do or prepare for. Do NOT give legal advice — just factual status updates.`;
+
+    const userPrompt = `Write a plain-language case status summary:
+
+Case: ${c.title}
+Client: ${c.defendant_name || "the client"}
+Attorney: ${userMap[c.lead_attorney] || "Your attorney"}
+Current Stage: ${c.stage || "Ongoing"}
+Charges: ${charges}
+Custody Status: ${c.custody_status || "Not specified"}
+Bond: ${c.bond_amount ? "$" + c.bond_amount : "Not specified"}
+Next Court Date: ${c.next_court_date || "Not yet scheduled"}
+Trial Date: ${c.trial_date || "Not yet scheduled"}
+
+Recent Activity:
+${activity}
+
+Upcoming Dates:
+${deadlines}`;
+
+    const result = await aiCall(systemPrompt, userPrompt);
+    res.json({ result });
+  } catch (err) {
+    console.error("Client summary error:", err);
+    res.status(500).json({ error: "AI summary generation failed" });
+  }
+});
+
+module.exports = router;

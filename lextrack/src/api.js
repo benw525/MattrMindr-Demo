@@ -89,6 +89,14 @@ export const apiGetContactCaseCounts = ()        => apiFetch("/api/contacts/case
 // AI Search
 export const apiAiSearch = (query) => apiFetch("/api/ai-search", { method: "POST", body: { query } });
 
+// AI Agents
+export const apiChargeAnalysis   = (data) => apiFetch("/api/ai-agents/charge-analysis",   { method: "POST", body: data });
+export const apiDeadlineGenerator = (data) => apiFetch("/api/ai-agents/deadline-generator", { method: "POST", body: data });
+export const apiCaseStrategy     = (data) => apiFetch("/api/ai-agents/case-strategy",     { method: "POST", body: data });
+export const apiDraftDocument    = (data) => apiFetch("/api/ai-agents/draft-document",    { method: "POST", body: data });
+export const apiCaseTriage       = ()     => apiFetch("/api/ai-agents/case-triage",       { method: "POST", body: {} });
+export const apiClientSummary    = (data) => apiFetch("/api/ai-agents/client-summary",    { method: "POST", body: data });
+
 // Contact Notes
 export const apiGetContactNotes    = (contactId) => apiFetch(`/api/contact-notes/${contactId}`);
 export const apiCreateContactNote  = (data)      => apiFetch("/api/contact-notes",       { method: "POST",   body: data });

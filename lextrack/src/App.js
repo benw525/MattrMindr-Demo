@@ -13,6 +13,7 @@ import {
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
   apiGetContactStaff, apiCreateContactStaff, apiUpdateContactStaff, apiDeleteContactStaff,
   apiAiSearch,
+  apiChargeAnalysis, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
   apiConflictCheck,
@@ -1494,12 +1495,52 @@ function Toggle({ on, onChange, color = "#1E2A3A" }) {
   );
 }
 
+// ─── Reusable AI Panel Component ────────────────────────────────────────────
+function AiPanel({ title, result, loading, error, onRun, onClose, actions, children }) {
+  return (
+    <div style={{ background: "linear-gradient(135deg, #f8f6f0, #f3f0e8)", border: "1px solid #d4c9a8", borderRadius: 8, padding: "14px 16px", marginTop: 10, fontSize: 13 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: loading || result || error || children ? 10 : 0 }}>
+        <div style={{ fontWeight: 600, color: "#1E2A3A", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 14 }}>⚡</span> {title}
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {result && onRun && <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={onRun}>↻ Retry</button>}
+          {actions}
+          {onClose && <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#8A9096", padding: "0 2px" }} onClick={onClose}>✕</button>}
+        </div>
+      </div>
+      {loading && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 0", color: "#8A9096" }}>
+          <div style={{ width: 16, height: 16, border: "2px solid #d4c9a8", borderTopColor: "#b8860b", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          <span style={{ fontSize: 12 }}>AI is analyzing...</span>
+        </div>
+      )}
+      {error && <div style={{ color: "#dc2626", fontSize: 12, padding: "8px 0" }}>{error}</div>}
+      {result && (
+        <div style={{ fontSize: 12, lineHeight: 1.7, color: "#1E2A3A", whiteSpace: "pre-wrap", maxHeight: 400, overflowY: "auto", padding: "4px 0" }}>
+          {result.split("\n").map((line, i) => {
+            if (line.startsWith("## ")) return <div key={i} style={{ fontWeight: 700, fontSize: 14, marginTop: 12, marginBottom: 4, color: "#1E2A3A" }}>{line.replace(/^## /, "")}</div>;
+            if (line.startsWith("### ")) return <div key={i} style={{ fontWeight: 600, fontSize: 13, marginTop: 10, marginBottom: 2, color: "#1E2A3A" }}>{line.replace(/^### /, "")}</div>;
+            if (line.startsWith("**") && line.endsWith("**")) return <div key={i} style={{ fontWeight: 700, marginTop: 8, marginBottom: 2 }}>{line.replace(/\*\*/g, "")}</div>;
+            if (line.startsWith("- ") || line.startsWith("* ")) return <div key={i} style={{ paddingLeft: 12, position: "relative" }}><span style={{ position: "absolute", left: 0 }}>•</span>{line.replace(/^[-*] /, "").replace(/\*\*(.+?)\*\*/g, "$1")}</div>;
+            if (line.match(/^\d+\.\s/)) return <div key={i} style={{ paddingLeft: 4 }}>{line.replace(/\*\*(.+?)\*\*/g, "$1")}</div>;
+            if (line.trim() === "") return <div key={i} style={{ height: 6 }} />;
+            return <div key={i}>{line.replace(/\*\*(.+?)\*\*/g, "$1")}</div>;
+          })}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 // ─── New Case Modal ──────────────────────────────────────────────────────────
 function NewCaseModal({ onSave, onClose }) {
   const [form, setForm] = useState({ caseNum: "", title: "", defendantName: "", prosecutor: "", county: "", court: "", courtDivision: "", chargeDescription: "", chargeStatute: "", chargeClass: "", caseType: "Felony", stage: "Arraignment", assignedAttorney: 0, secondAttorney: 0, trialCoordinator: 0, investigator: 0, socialWorker: 0, arrestDate: "", notes: "", deathPenalty: false });
   const [autoTasks, setAutoTasks] = useState(true);
   const [conflicts, setConflicts] = useState(null);
   const [conflictChecking, setConflictChecking] = useState(false);
+  const [chargeAi, setChargeAi] = useState({ loading: false, result: null, error: null, show: false });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const checkConflicts = async (name) => {
     if (!name || name.trim().length < 2) { setConflicts(null); return; }
@@ -1572,6 +1613,25 @@ function NewCaseModal({ onSave, onClose }) {
           <div className="form-group"><label>Charge Statute</label><input value={form.chargeStatute} onChange={e => set("chargeStatute", e.target.value)} /></div>
           <div className="form-group"><label>Arrest Date</label><input type="date" value={form.arrestDate} onChange={e => set("arrestDate", e.target.value)} /></div>
         </div>
+        {(form.chargeDescription || form.chargeStatute) && (
+          <div style={{ marginBottom: 10 }}>
+            {!chargeAi.show ? (
+              <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#b8860b", borderColor: "#d4c9a8" }} onClick={() => {
+                setChargeAi({ loading: true, result: null, error: null, show: true });
+                apiChargeAnalysis({ chargeDescription: form.chargeDescription, chargeStatute: form.chargeStatute, chargeClass: form.chargeClass, caseType: form.caseType, courtDivision: form.courtDivision })
+                  .then(r => setChargeAi(p => ({ ...p, loading: false, result: r.result })))
+                  .catch(e => setChargeAi(p => ({ ...p, loading: false, error: e.message })));
+              }}>⚡ Analyze Charges</button>
+            ) : (
+              <AiPanel title="Charge Analysis" result={chargeAi.result} loading={chargeAi.loading} error={chargeAi.error} onClose={() => setChargeAi({ loading: false, result: null, error: null, show: false })} onRun={() => {
+                setChargeAi({ loading: true, result: null, error: null, show: true });
+                apiChargeAnalysis({ chargeDescription: form.chargeDescription, chargeStatute: form.chargeStatute, chargeClass: form.chargeClass, caseType: form.caseType, courtDivision: form.courtDivision })
+                  .then(r => setChargeAi(p => ({ ...p, loading: false, result: r.result })))
+                  .catch(e => setChargeAi(p => ({ ...p, loading: false, error: e.message })));
+              }} />
+            )}
+          </div>
+        )}
         <div className="form-row">
           <div className="form-group"><label>Stage</label>
             <select value={form.stage} onChange={e => set("stage", e.target.value)}>
@@ -1702,6 +1762,7 @@ const DASHBOARD_WIDGETS = [
   { id: "recent-activity", label: "Recent Activity", size: "half", icon: "🕐" },
   { id: "overdue", label: "Overdue Tasks", size: "half", icon: "⚠️" },
   { id: "my-time", label: "My Time", size: "half", icon: "⏱️" },
+  { id: "ai-triage", label: "AI Case Triage", size: "full", icon: "⚡" },
 ];
 const DEFAULT_LAYOUT = ["stat-active", "stat-deadlines", "stat-tasks", "stat-trials", "deadlines", "trials", "tasks"];
 const getDashboardLayout = (userId) => { try { return JSON.parse(localStorage.getItem(`dashboard_layout_${userId}`)) || DEFAULT_LAYOUT; } catch { return DEFAULT_LAYOUT; } };
@@ -1869,6 +1930,9 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
   const [showCustomize, setShowCustomize] = useState(false);
   const [expandedTask, setExpandedTask] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [triageResults, setTriageResults] = useState(null);
+  const [triageLoading, setTriageLoading] = useState(false);
+  const [triageError, setTriageError] = useState(null);
   const [layout, setLayout] = useState(() => getDashboardLayout(currentUser.id));
   const [pinnedIds, setPinnedIds] = useState(() => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]"); } catch { return []; } });
   useEffect(() => { setLayout(getDashboardLayout(currentUser.id)); try { setPinnedIds(JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]")); } catch { setPinnedIds([]); } }, [currentUser.id]);
@@ -2084,6 +2148,41 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
         );
       case "my-time":
         return <MyTimeWidget key={widgetId} currentUser={currentUser} />;
+      case "ai-triage":
+        return (
+          <div className="card" key={widgetId}>
+            <div className="card-header">
+              <div className="card-title">⚡ AI Case Triage</div>
+              <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#b8860b", borderColor: "#d4c9a8" }} onClick={() => {
+                setTriageLoading(true); setTriageError(null);
+                apiCaseTriage().then(r => { setTriageResults(r.cases || []); setTriageLoading(false); }).catch(e => { setTriageError(e.message); setTriageLoading(false); });
+              }}>{triageResults ? "↻ Refresh" : "⚡ Run Triage"}</button>
+            </div>
+            {triageLoading && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 0", color: "#8A9096", fontSize: 12 }}>
+                <div style={{ width: 16, height: 16, border: "2px solid #d4c9a8", borderTopColor: "#b8860b", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                AI is analyzing your caseload...
+              </div>
+            )}
+            {triageError && <div style={{ color: "#dc2626", fontSize: 12, padding: "8px 0" }}>{triageError}</div>}
+            {!triageLoading && !triageResults && !triageError && (
+              <div style={{ fontSize: 12, color: "#8A9096", padding: "16px 0", textAlign: "center" }}>Click "Run Triage" to get AI-powered case prioritization</div>
+            )}
+            {triageResults && triageResults.map((t, i) => {
+              const caseObj = allCases.find(cc => cc.id === t.id);
+              return (
+                <div key={t.id || i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: i < triageResults.length - 1 ? "1px solid var(--c-border2)" : "none", cursor: caseObj ? "pointer" : "default" }} onClick={() => caseObj && onSelectCase(caseObj)}>
+                  <div style={{ minWidth: 28, height: 28, borderRadius: "50%", background: t.urgency >= 8 ? "#dc2626" : t.urgency >= 5 ? "#e07a30" : "#b8860b", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{t.urgency}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "var(--c-text)" }}>{t.title}</div>
+                    <div style={{ fontSize: 11, color: "#8A9096", marginTop: 2 }}>{t.reason}</div>
+                    <div style={{ fontSize: 11, color: "#b8860b", marginTop: 2, fontWeight: 500 }}>→ {t.action}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
       default:
         return null;
     }
@@ -2161,6 +2260,9 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const [aiQuery, setAiQuery] = useState("");
   const [aiResults, setAiResults] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [triageResults, setTriageResults] = useState(null);
+  const [triageLoading, setTriageLoading] = useState(false);
+  const [triageShow, setTriageShow] = useState(false);
   const [aiError, setAiError] = useState("");
   const [pinnedIds, setPinnedIds] = useState(() => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]"); } catch { return []; } });
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
@@ -2308,10 +2410,35 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
             {allAttorneys.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
           <input style={{ width: 200 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <button className="btn btn-outline btn-sm" style={{ color: "#b8860b", borderColor: "#d4c9a8", fontSize: 12 }} onClick={() => {
+            setTriageShow(true); setTriageLoading(true);
+            apiCaseTriage().then(r => { setTriageResults(r.cases || []); setTriageLoading(false); }).catch(() => setTriageLoading(false));
+          }}>⚡ Triage</button>
           <button className="btn btn-gold" onClick={() => setShowModal(true)}>+ New Case</button>
         </div>
       </div>
       <div className="content">
+        {triageShow && (
+          <div style={{ marginBottom: 16 }}>
+            <AiPanel title="AI Case Triage" loading={triageLoading} onClose={() => { setTriageShow(false); setTriageResults(null); }}
+              onRun={() => { setTriageLoading(true); apiCaseTriage().then(r => { setTriageResults(r.cases || []); setTriageLoading(false); }).catch(() => setTriageLoading(false)); }}
+            >
+              {triageResults && triageResults.map((t, i) => {
+                const caseObj = allCases.find(cc => cc.id === t.id);
+                return (
+                  <div key={t.id || i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < triageResults.length - 1 ? "1px solid #e8e0d0" : "none", cursor: caseObj ? "pointer" : "default" }} onClick={() => caseObj && setSelectedCase(caseObj)}>
+                    <div style={{ minWidth: 26, height: 26, borderRadius: "50%", background: t.urgency >= 8 ? "#dc2626" : t.urgency >= 5 ? "#e07a30" : "#b8860b", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{t.urgency}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: "#1E2A3A" }}>{t.title}</div>
+                      <div style={{ fontSize: 11, color: "#8A9096", marginTop: 1 }}>{t.reason}</div>
+                      <div style={{ fontSize: 11, color: "#b8860b", marginTop: 1, fontWeight: 500 }}>→ {t.action}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </AiPanel>
+          </div>
+        )}
         <div style={{ marginBottom: 16, display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ position: "relative", flex: 1 }}>
             <input
@@ -2746,6 +2873,11 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [showTeamPopup, setShowTeamPopup] = useState(false);
   const [showDocGen, setShowDocGen] = useState(false);
   const [activityFilter, setActivityFilter] = useState("all");
+  const [aiStrategy, setAiStrategy] = useState({ loading: false, result: null, error: null, show: false });
+  const [aiDraft, setAiDraft] = useState({ loading: false, result: null, error: null, show: false, docType: "Motion to Suppress", instructions: "" });
+  const [aiDeadlines, setAiDeadlines] = useState({ loading: false, deadlines: null, error: null, show: false });
+  const [aiClientSummary, setAiClientSummary] = useState({ loading: false, result: null, error: null, show: false });
+  const [aiChargeAnalysis, setAiChargeAnalysis] = useState({ loading: false, result: null, error: null, show: false });
   const canRemove = isAttorney(currentUser);
   const canDelete = isAppAdmin(currentUser);
 
@@ -3024,6 +3156,79 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       {showDocGen && (
         <GenerateDocumentModal caseData={draft} currentUser={currentUser} onClose={() => setShowDocGen(false)} parties={parties} experts={experts} />
       )}
+      {aiStrategy.show && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAiStrategy({ loading: false, result: null, error: null, show: false })}>
+          <div className="modal" style={{ maxWidth: 700, maxHeight: "85vh", overflow: "auto" }}>
+            <div className="modal-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>⚡ Defense Strategy Analysis</span>
+              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8A9096" }} onClick={() => setAiStrategy({ loading: false, result: null, error: null, show: false })}>✕</button>
+            </div>
+            <div className="modal-sub">{draft.title} — {draft.defendantName || "Defendant"}</div>
+            <AiPanel title="Strategy Analysis" result={aiStrategy.result} loading={aiStrategy.loading} error={aiStrategy.error}
+              onRun={() => {
+                setAiStrategy(p => ({ ...p, loading: true, result: null, error: null }));
+                apiCaseStrategy({ caseId: c.id }).then(r => setAiStrategy(p => ({ ...p, loading: false, result: r.result }))).catch(e => setAiStrategy(p => ({ ...p, loading: false, error: e.message })));
+              }}
+              actions={aiStrategy.result ? (
+                <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => {
+                  onAddNote({ caseId: c.id, body: aiStrategy.result, type: "Strategy" });
+                  onLogActivity("AI Strategy Saved", "Defense strategy analysis saved as note");
+                  alert("Strategy saved as case note.");
+                }}>Save as Note</button>
+              ) : null}
+            />
+          </div>
+        </div>
+      )}
+      {aiDraft.show && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAiDraft({ loading: false, result: null, error: null, show: false, docType: "Motion to Suppress", instructions: "" })}>
+          <div className="modal" style={{ maxWidth: 700, maxHeight: "85vh", overflow: "auto" }}>
+            <div className="modal-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>⚡ AI Document Draft</span>
+              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8A9096" }} onClick={() => setAiDraft({ loading: false, result: null, error: null, show: false, docType: "Motion to Suppress", instructions: "" })}>✕</button>
+            </div>
+            <div className="modal-sub">{draft.title}</div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: "#1E2A3A", marginBottom: 4, display: "block" }}>Document Type</label>
+              <select value={aiDraft.docType} onChange={e => setAiDraft(p => ({ ...p, docType: e.target.value }))} style={{ width: "100%", padding: "8px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13 }}>
+                {["Motion to Suppress", "Motion to Dismiss", "Bond Reduction Motion", "Continuance Request", "Discovery Demand", "Plea Agreement Draft", "Sentencing Memorandum", "Motion for Speedy Trial"].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: "#1E2A3A", marginBottom: 4, display: "block" }}>Additional Instructions (optional)</label>
+              <textarea value={aiDraft.instructions} onChange={e => setAiDraft(p => ({ ...p, instructions: e.target.value }))} style={{ width: "100%", minHeight: 60, padding: "8px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 12, resize: "vertical", fontFamily: "inherit" }} placeholder="e.g. Focus on Fourth Amendment issues, include specific facts about the traffic stop..." />
+            </div>
+            {!aiDraft.result && !aiDraft.loading && (
+              <button className="btn btn-gold" style={{ width: "100%" }} onClick={() => {
+                setAiDraft(p => ({ ...p, loading: true, result: null, error: null }));
+                apiDraftDocument({ caseId: c.id, documentType: aiDraft.docType, customInstructions: aiDraft.instructions })
+                  .then(r => setAiDraft(p => ({ ...p, loading: false, result: r.result })))
+                  .catch(e => setAiDraft(p => ({ ...p, loading: false, error: e.message })));
+              }}>Generate Draft</button>
+            )}
+            {(aiDraft.loading || aiDraft.result || aiDraft.error) && (
+              <AiPanel title={aiDraft.docType} result={aiDraft.result} loading={aiDraft.loading} error={aiDraft.error}
+                onRun={() => {
+                  setAiDraft(p => ({ ...p, loading: true, result: null, error: null }));
+                  apiDraftDocument({ caseId: c.id, documentType: aiDraft.docType, customInstructions: aiDraft.instructions })
+                    .then(r => setAiDraft(p => ({ ...p, loading: false, result: r.result })))
+                    .catch(e => setAiDraft(p => ({ ...p, loading: false, error: e.message })));
+                }}
+                actions={aiDraft.result ? (
+                  <Fragment>
+                    <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => { navigator.clipboard.writeText(aiDraft.result); }}>Copy</button>
+                    <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => {
+                      onAddNote({ caseId: c.id, body: aiDraft.result, type: "Draft" });
+                      onLogActivity("AI Draft Saved", `${aiDraft.docType} draft saved as note`);
+                      alert("Draft saved as case note.");
+                    }}>Save as Note</button>
+                  </Fragment>
+                ) : null}
+              />
+            )}
+          </div>
+        </div>
+      )}
       {showDeleteConfirm && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
           <div className="modal-box" style={{ maxWidth: 440 }}>
@@ -3218,8 +3423,13 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               style={editMode ? { background: "#1E2A3A", color: "#fff", border: "1px solid #1E2A3A", lineHeight: "20px" } : { lineHeight: "20px" }}
               onClick={() => setEditMode(e => !e)}
             >{editMode ? "✓ Done" : "✎ Edit"}</button>
+            <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px", color: "#b8860b", borderColor: "#d4c9a8" }} onClick={() => {
+              setAiStrategy(p => ({ ...p, show: true, loading: true, result: null, error: null }));
+              apiCaseStrategy({ caseId: c.id }).then(r => setAiStrategy(p => ({ ...p, loading: false, result: r.result }))).catch(e => setAiStrategy(p => ({ ...p, loading: false, error: e.message })));
+            }}>⚡ Strategy</button>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => setShowPrint(true)}>🖨 Print</button>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => { if (parties.length === 0) apiGetParties(c.id).then(setParties).catch(() => {}); setShowDocGen(true); }}>📄 Generate</button>
+            <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px", color: "#b8860b", borderColor: "#d4c9a8" }} onClick={() => setAiDraft(p => ({ ...p, show: true }))}>⚡ AI Draft</button>
             {canDelete && (
               <button className="btn btn-outline btn-sm" style={{ color: "#e05252", borderColor: "#fca5a5", lineHeight: "20px" }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
             )}
@@ -3242,6 +3452,45 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         {/* ── Overview Tab ── */}
         {activeTab === "overview" && (
           <div className="case-overlay-body">
+
+            {/* AI Quick Actions Bar */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+              <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#b8860b", borderColor: "#d4c9a8" }} onClick={() => {
+                setAiClientSummary({ loading: true, result: null, error: null, show: true });
+                apiClientSummary({ caseId: c.id }).then(r => setAiClientSummary(p => ({ ...p, loading: false, result: r.result }))).catch(e => setAiClientSummary(p => ({ ...p, loading: false, error: e.message })));
+              }}>⚡ Client Summary</button>
+              <button className="btn btn-outline btn-sm" style={{ fontSize: 11, color: "#b8860b", borderColor: "#d4c9a8" }} onClick={() => {
+                setAiChargeAnalysis({ loading: true, result: null, error: null, show: true });
+                apiChargeAnalysis({ chargeDescription: draft.chargeDescription, chargeStatute: draft.chargeStatute, chargeClass: draft.chargeClass, caseType: draft.caseType, courtDivision: draft.courtDivision, charges: draft._charges || [] })
+                  .then(r => setAiChargeAnalysis(p => ({ ...p, loading: false, result: r.result }))).catch(e => setAiChargeAnalysis(p => ({ ...p, loading: false, error: e.message })));
+              }}>⚡ Analyze Charges</button>
+            </div>
+
+            {aiClientSummary.show && (
+              <div style={{ marginBottom: 16 }}>
+                <AiPanel title="Client Communication Summary" result={aiClientSummary.result} loading={aiClientSummary.loading} error={aiClientSummary.error}
+                  onClose={() => setAiClientSummary({ loading: false, result: null, error: null, show: false })}
+                  onRun={() => {
+                    setAiClientSummary({ loading: true, result: null, error: null, show: true });
+                    apiClientSummary({ caseId: c.id }).then(r => setAiClientSummary(p => ({ ...p, loading: false, result: r.result }))).catch(e => setAiClientSummary(p => ({ ...p, loading: false, error: e.message })));
+                  }}
+                  actions={aiClientSummary.result ? <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => navigator.clipboard.writeText(aiClientSummary.result)}>Copy</button> : null}
+                />
+              </div>
+            )}
+
+            {aiChargeAnalysis.show && (
+              <div style={{ marginBottom: 16 }}>
+                <AiPanel title="Charge Analysis" result={aiChargeAnalysis.result} loading={aiChargeAnalysis.loading} error={aiChargeAnalysis.error}
+                  onClose={() => setAiChargeAnalysis({ loading: false, result: null, error: null, show: false })}
+                  onRun={() => {
+                    setAiChargeAnalysis({ loading: true, result: null, error: null, show: true });
+                    apiChargeAnalysis({ chargeDescription: draft.chargeDescription, chargeStatute: draft.chargeStatute, chargeClass: draft.chargeClass, caseType: draft.caseType, courtDivision: draft.courtDivision, charges: draft._charges || [] })
+                      .then(r => setAiChargeAnalysis(p => ({ ...p, loading: false, result: r.result }))).catch(e => setAiChargeAnalysis(p => ({ ...p, loading: false, error: e.message })));
+                  }}
+                />
+              </div>
+            )}
 
             {/* Two-column: Details + Key Dates */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 48px", marginBottom: 32 }}>
@@ -3380,8 +3629,16 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             {/* Three-column: Deadlines | Tasks | Notes */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.4fr", gap: "0 32px" }}>
               <div className="case-overlay-section">
-                <div className="case-overlay-section-title">Deadlines ({deadlines.length})</div>
-                {deadlines.length === 0 && <div style={{ fontSize: 12, color: "#8A9096" }}>None on record.</div>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div className="case-overlay-section-title">Deadlines ({deadlines.length})</div>
+                  <button className="btn btn-outline btn-sm" style={{ fontSize: 10, color: "#b8860b", borderColor: "#d4c9a8", padding: "2px 8px" }} onClick={() => {
+                    setAiDeadlines({ loading: true, deadlines: null, error: null, show: true });
+                    apiDeadlineGenerator({ caseId: c.id, stage: draft.stage, chargeClass: draft.chargeClass, caseType: draft.caseType, courtDivision: draft.courtDivision, arrestDate: draft.arrestDate, arraignmentDate: draft.arraignmentDate, trialDate: draft.trialDate, nextCourtDate: draft.nextCourtDate, existingDeadlines: deadlines.map(d => ({ title: d.title, date: d.date })) })
+                      .then(r => setAiDeadlines(p => ({ ...p, loading: false, deadlines: r.deadlines })))
+                      .catch(e => setAiDeadlines(p => ({ ...p, loading: false, error: e.message })));
+                  }}>⚡ Suggest</button>
+                </div>
+                {deadlines.length === 0 && !aiDeadlines.show && <div style={{ fontSize: 12, color: "#8A9096" }}>None on record.</div>}
                 {[...deadlines].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map(d => {
                   const days = daysUntil(d.date); const col = urgencyColor(days);
                   return (
@@ -3398,6 +3655,34 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     </div>
                   );
                 })}
+                {aiDeadlines.show && (
+                  <div style={{ marginTop: 8 }}>
+                    {aiDeadlines.loading && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", color: "#8A9096", fontSize: 11 }}>
+                        <div style={{ width: 14, height: 14, border: "2px solid #d4c9a8", borderTopColor: "#b8860b", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                        Generating deadlines...
+                      </div>
+                    )}
+                    {aiDeadlines.error && <div style={{ fontSize: 11, color: "#dc2626", padding: "4px 0" }}>{aiDeadlines.error}</div>}
+                    {aiDeadlines.deadlines && aiDeadlines.deadlines.map((d, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px dashed #d4c9a8", fontSize: 11 }}>
+                        <span style={{ fontSize: 10, color: "#b8860b" }}>⚡</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: "#1E2A3A", fontWeight: 500 }}>{d.title}</div>
+                          <div style={{ color: "#8A9096", fontSize: 10 }}>{d.date} · {d.rule || d.type || ""}</div>
+                        </div>
+                        <button className="btn btn-outline btn-sm" style={{ fontSize: 9, padding: "1px 6px" }} onClick={() => {
+                          onAddDeadline({ caseId: c.id, title: d.title, date: d.date, type: d.type || "Filing", rule: d.rule || "" });
+                          setAiDeadlines(p => ({ ...p, deadlines: p.deadlines.filter((_, j) => j !== i) }));
+                        }}>+ Add</button>
+                      </div>
+                    ))}
+                    {aiDeadlines.deadlines && aiDeadlines.deadlines.length === 0 && <div style={{ fontSize: 11, color: "#8A9096", padding: "4px 0" }}>No additional deadlines suggested.</div>}
+                    {(aiDeadlines.deadlines || aiDeadlines.error) && (
+                      <button style={{ fontSize: 10, color: "#8A9096", background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginTop: 4 }} onClick={() => setAiDeadlines({ loading: false, deadlines: null, error: null, show: false })}>Dismiss</button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="case-overlay-section">

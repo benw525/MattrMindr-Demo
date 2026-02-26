@@ -80,6 +80,17 @@ lextrack/
 - Each charge: statute, description, class (Class A/B/C Felony, Misdemeanor A/B/C, Violation, Other), original/amended flag, disposition (Guilty Plea, Not Guilty Verdict, Nolle Prosequi, Dismissed, Acquitted, Convicted), disposition date
 - Inline editing on Details tab
 
+### AI Agents (server/routes/ai-agents.js)
+Six AI-powered agents using OpenAI (`gpt-4o-mini`) via existing integration:
+1. **Charge Analysis** — Analyzes Alabama Code sections, sentencing ranges, mandatory minimums, diversion eligibility. Available in New Case modal (after entering charges) and case detail Overview tab
+2. **Deadline Generator** — Generates procedural deadlines based on Alabama Rules of Criminal Procedure and case stage. In case detail deadlines section with "Suggest" button; each suggestion has one-click "Add" to create real deadline records
+3. **Case Strategy** — Full defense strategy analysis including motions, plea negotiation, sentencing exposure, investigation priorities. Death penalty cases get capital-specific analysis. "Strategy" button in case detail header; results can be saved as case notes
+4. **Document Drafting** — Generates first drafts of motions (suppress, dismiss, bond reduction, continuance, discovery, plea agreement, sentencing memo, speedy trial). "AI Draft" button in case detail header opens modal with document type selector
+5. **Case Triage** — Ranks active cases by urgency (death penalty, trial dates, custody, overdue tasks). Dashboard widget (add via Customize) and "Triage" button in Cases view topbar. Each result shows urgency score (1-10), reason, and next action
+6. **Client Communication Summary** — Plain-language case status update for sharing with clients/families. "Client Summary" button in case detail Overview tab with copy functionality
+
+All agents accessible via `/api/ai-agents/*` endpoints, require authentication. Frontend API helpers in `api.js`. Reusable `AiPanel` component for consistent UI rendering.
+
 ### Conflict Check
 - Automatic on new case creation: triggered when defendant name is entered
 - Searches existing cases (defendant names, titles) and contacts for matches
