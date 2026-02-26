@@ -108,6 +108,77 @@ router.post("/", upload.any(), async (req, res) => {
     );
 
     console.log(`Inbound email saved: case ${caseId}, from ${fromEmail}, subject "${subject}", ${attachments.length} attachments`);
+
+    const pdfAttachments = attachments.filter(a => a.contentType === "application/pdf");
+    for (const pdfAtt of pdfAttachments) {
+      try {
+        const fileBuffer = Buffer.from(pdfAtt.data, "base64");
+        let extractedText = "";
+        try {
+          const pdfParse = require("pdf-parse");
+          const parsed = await pdfParse(fileBuffer);
+          extractedText = parsed.text || "";
+        } catch (pErr) {
+          console.error("PDF text extraction error for filing:", pErr.message);
+        }
+
+        const { rows: filingRows } = await pool.query(
+          `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, source, source_email_from)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', $8)
+           RETURNING id`,
+          [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, pdfAtt.size, fromEmail]
+        );
+
+        if (filingRows.length > 0 && extractedText) {
+          const filingId = filingRows[0].id;
+          try {
+            const OpenAI = require("openai");
+            const openai = new OpenAI({
+              apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+              baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+            });
+            const classifyPrompt = `You are a court filing classification assistant for a criminal defense public defender's office. Analyze the court filing text and classify it. Return ONLY valid JSON with these fields:
+- "suggestedName" (string — proper legal filing name)
+- "filedBy" (one of: "State", "Defendant", "Co-Defendant", "Court", "Other")
+- "docType" (string — filing type)
+- "filingDate" (string — YYYY-MM-DD format, or null if not found)
+- "summary" (string — 2-3 sentence summary)`;
+            const textSnippet = extractedText.substring(0, 12000);
+            const resp = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [
+                { role: "system", content: classifyPrompt },
+                { role: "user", content: `Classify this court filing:\n\n${textSnippet}` },
+              ],
+              temperature: 0.3,
+              max_tokens: 2000,
+              store: false,
+              response_format: { type: "json_object" },
+            });
+            const classification = JSON.parse(resp.choices[0].message.content);
+            const sets = [];
+            const setVals = [];
+            let si = 1;
+            if (classification.suggestedName) { sets.push(`filename = $${si++}`); setVals.push(classification.suggestedName); }
+            if (classification.filedBy) { sets.push(`filed_by = $${si++}`); setVals.push(classification.filedBy); }
+            if (classification.docType) { sets.push(`doc_type = $${si++}`); setVals.push(classification.docType); }
+            if (classification.filingDate) { sets.push(`filing_date = $${si++}`); setVals.push(classification.filingDate); }
+            if (classification.summary) { sets.push(`summary = $${si++}`); setVals.push(classification.summary); }
+            if (sets.length > 0) {
+              setVals.push(filingId);
+              await pool.query(`UPDATE case_filings SET ${sets.join(", ")} WHERE id = $${si}`, setVals);
+            }
+            console.log(`Filing auto-classified: ${classification.suggestedName || pdfAtt.filename} (${classification.filedBy || "unknown"})`);
+          } catch (classifyErr) {
+            console.error("Auto-classify filing error:", classifyErr.message);
+          }
+        }
+        console.log(`PDF filing created from email: ${pdfAtt.filename} for case ${caseId}`);
+      } catch (filingErr) {
+        console.error("Create filing from email error:", filingErr.message);
+      }
+    }
+
     return res.status(200).send("OK");
   } catch (err) {
     console.error("Inbound email error:", err);

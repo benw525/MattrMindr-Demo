@@ -160,6 +160,28 @@ async function createSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS case_filings (
+        id                SERIAL PRIMARY KEY,
+        case_id           INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+        filename          TEXT    NOT NULL,
+        original_filename TEXT    NOT NULL DEFAULT '',
+        content_type      TEXT    NOT NULL DEFAULT 'application/pdf',
+        file_data         BYTEA,
+        extracted_text    TEXT    NOT NULL DEFAULT '',
+        file_size         INTEGER NOT NULL DEFAULT 0,
+        filed_by          TEXT    NOT NULL DEFAULT '',
+        filing_date       DATE,
+        summary           TEXT,
+        doc_type          TEXT    NOT NULL DEFAULT '',
+        source            TEXT    NOT NULL DEFAULT 'upload',
+        source_email_from TEXT    NOT NULL DEFAULT '',
+        uploaded_by       INTEGER REFERENCES users(id),
+        uploaded_by_name  TEXT    NOT NULL DEFAULT '',
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS case_activity (
         id        SERIAL PRIMARY KEY,
         case_id   INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,

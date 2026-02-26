@@ -15,6 +15,7 @@ import {
   apiAiSearch,
   apiChargeAnalysis, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary, apiDocSummary, apiTaskSuggestions,
   apiGetCaseDocuments, apiUploadCaseDocument, apiSummarizeDocument, apiDownloadDocument, apiDeleteCaseDocument,
+  apiGetFilings, apiUploadFiling, apiDownloadFiling, apiDeleteFiling, apiSummarizeFiling, apiUpdateFiling, apiClassifyFiling,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
   apiGetParties, apiCreateParty, apiUpdateParty, apiDeleteParty,
   apiConflictCheck,
@@ -2957,6 +2958,15 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [docFilterType, setDocFilterType] = useState("All");
   const [docSummarizing, setDocSummarizing] = useState(null);
   const [expandedDocId, setExpandedDocId] = useState(null);
+  const [filings, setFilings] = useState([]);
+  const [filingsLoading, setFilingsLoading] = useState(false);
+  const [filingUploadFiledBy, setFilingUploadFiledBy] = useState("");
+  const [filingUploadDate, setFilingUploadDate] = useState("");
+  const [filingUploadDocType, setFilingUploadDocType] = useState("");
+  const [filingFilterBy, setFilingFilterBy] = useState("All");
+  const [filingSummarizing, setFilingSummarizing] = useState(null);
+  const [filingClassifying, setFilingClassifying] = useState(null);
+  const [expandedFilingId, setExpandedFilingId] = useState(null);
   const canRemove = isAttorney(currentUser);
   const canDelete = isAppAdmin(currentUser);
 
@@ -2972,6 +2982,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     if (activeTab === "files") {
       setDocsLoading(true);
       apiGetCaseDocuments(c.id).then(setCaseDocuments).catch(() => {}).finally(() => setDocsLoading(false));
+    }
+    if (activeTab === "filings") {
+      setFilingsLoading(true);
+      apiGetFilings(c.id).then(setFilings).catch(() => {}).finally(() => setFilingsLoading(false));
     }
     if (activeTab === "activity") {
       apiGetActivity(c.id).then(fresh => onRefreshActivity(c.id, fresh)).catch(() => {});
@@ -3527,9 +3541,12 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         <div className="case-overlay-tabs">
           <div className={`case-overlay-tab ${activeTab === "overview" ? "active" : ""}`} onClick={() => setActiveTab("overview")}>Overview</div>
           <div className={`case-overlay-tab ${activeTab === "details" ? "active" : ""}`} onClick={() => setActiveTab("details")}>Details</div>
-          <div className={`case-overlay-tab ${activeTab === "files" ? "active" : ""}`} onClick={() => setActiveTab("files")}>Files</div>
+          <div className={`case-overlay-tab ${activeTab === "files" ? "active" : ""}`} onClick={() => setActiveTab("files")}>Documents</div>
           <div className={`case-overlay-tab ${activeTab === "correspondence" ? "active" : ""}`} onClick={() => setActiveTab("correspondence")}>
             Correspondence {correspondence.length > 0 && <span style={{ fontSize: 10, color: "#8A9096", marginLeft: 4 }}>({correspondence.length})</span>}
+          </div>
+          <div className={`case-overlay-tab ${activeTab === "filings" ? "active" : ""}`} onClick={() => setActiveTab("filings")}>
+            Filings {filings.length > 0 && <span style={{ fontSize: 10, color: "#8A9096", marginLeft: 4 }}>({filings.length})</span>}
           </div>
           <div className={`case-overlay-tab ${activeTab === "activity" ? "active" : ""}`} onClick={() => setActiveTab("activity")}>
             Activity {activity.length > 0 && <span style={{ fontSize: 10, color: "#8A9096", marginLeft: 4 }}>({activity.length})</span>}
@@ -4899,6 +4916,122 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── Filings Tab ── */}
+        {activeTab === "filings" && (
+          <div className="case-overlay-body">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 16 }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", display: "block", marginBottom: 4 }}>Upload Filing (PDF only)</label>
+                <input type="file" accept=".pdf,application/pdf" id="filing-upload-input" style={{ fontSize: 12, width: "100%" }} onChange={async (e) => {
+                  const file = e.target.files[0]; if (!file) return;
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  formData.append("caseId", c.id);
+                  if (filingUploadFiledBy) formData.append("filedBy", filingUploadFiledBy);
+                  if (filingUploadDate) formData.append("filingDate", filingUploadDate);
+                  if (filingUploadDocType) formData.append("docType", filingUploadDocType);
+                  try {
+                    const saved = await apiUploadFiling(formData);
+                    setFilings(prev => [saved, ...prev]);
+                    log("Filing uploaded", `${file.name}`);
+                    e.target.value = "";
+                    setFilingClassifying(saved.id);
+                    try {
+                      const { classification } = await apiClassifyFiling(saved.id);
+                      setFilings(prev => prev.map(f => f.id === saved.id ? { ...f, filename: classification.suggestedName || f.filename, filedBy: classification.filedBy || f.filedBy, docType: classification.docType || f.docType, filingDate: classification.filingDate || f.filingDate, summary: classification.summary || f.summary } : f));
+                      log("Filing auto-classified", `${classification.suggestedName || file.name} → ${classification.filedBy || "Unknown"}`);
+                    } catch (classErr) { console.error("Auto-classify error:", classErr); }
+                    setFilingClassifying(null);
+                  } catch (err) { alert("Upload failed: " + err.message); setFilingClassifying(null); }
+                }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", display: "block", marginBottom: 4 }}>Filed By</label>
+                <select value={filingUploadFiledBy} onChange={e => setFilingUploadFiledBy(e.target.value)} style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid #D1D5DB" }}>
+                  <option value="">— Auto-detect —</option>
+                  <option>State</option><option>Defendant</option><option>Co-Defendant</option><option>Court</option><option>Other</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", display: "block", marginBottom: 4 }}>Filing Date</label>
+                <input type="date" value={filingUploadDate} onChange={e => setFilingUploadDate(e.target.value)} style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid #D1D5DB" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", display: "block", marginBottom: 4 }}>Doc Type</label>
+                <input type="text" placeholder="e.g., Motion to Suppress" value={filingUploadDocType} onChange={e => setFilingUploadDocType(e.target.value)} style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid #D1D5DB", width: 160 }} />
+              </div>
+            </div>
+
+            {filingClassifying && (
+              <div style={{ background: "#FEF9C3", border: "1px solid #FCD34D", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="spinner" style={{ width: 14, height: 14, border: "2px solid #D97706", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
+                AI is classifying the filing...
+              </div>
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: "#6B7280" }}>Filter by party:</label>
+              <select value={filingFilterBy} onChange={e => setFilingFilterBy(e.target.value)} style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid #D1D5DB" }}>
+                <option value="All">All</option>
+                <option>State</option><option>Defendant</option><option>Co-Defendant</option><option>Court</option><option>Other</option>
+              </select>
+              <span style={{ fontSize: 11, color: "#8A9096" }}>
+                {filings.length} filing{filings.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {filingsLoading ? <div style={{ textAlign: "center", padding: 40, color: "#8A9096" }}>Loading filings...</div> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {filings.filter(f => filingFilterBy === "All" || f.filedBy === filingFilterBy).map(f => {
+                  const partyColors = { State: "#DC2626", Defendant: "#2563EB", "Co-Defendant": "#7C3AED", Court: "#059669", Other: "#6B7280" };
+                  const partyColor = partyColors[f.filedBy] || "#6B7280";
+                  return (
+                    <div key={f.id} style={{ border: "1px solid #E5E7EB", borderRadius: 8, padding: "10px 14px", background: "#FAFBFC" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 150 }}>{f.filename}</span>
+                        {f.filedBy && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: partyColor, borderRadius: 4, padding: "2px 7px", textTransform: "uppercase" }}>{f.filedBy}</span>}
+                        {f.docType && <span style={{ fontSize: 10, color: "#6B7280", background: "#F3F4F6", borderRadius: 4, padding: "2px 7px" }}>{f.docType}</span>}
+                        {f.source === "email" && <span style={{ fontSize: 10, color: "#D97706", background: "#FEF3C7", borderRadius: 4, padding: "2px 7px" }}>📧 Email</span>}
+                        {f.filingDate && <span style={{ fontSize: 10, color: "#6B7280" }}>Filed: {new Date(f.filingDate).toLocaleDateString()}</span>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 10, color: "#8A9096" }}>{f.fileSize ? (f.fileSize / 1024).toFixed(0) + " KB" : ""}</span>
+                        <span style={{ fontSize: 10, color: "#8A9096" }}>{f.uploadedByName ? `by ${f.uploadedByName}` : ""}{f.sourceEmailFrom ? `from ${f.sourceEmailFrom}` : ""}</span>
+                        <span style={{ fontSize: 10, color: "#8A9096" }}>{new Date(f.createdAt).toLocaleDateString()}</span>
+                        <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                          <button onClick={async () => { try { const blob = await apiDownloadFiling(f.id); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = f.filename || "filing.pdf"; a.click(); URL.revokeObjectURL(url); } catch (err) { alert("Download failed: " + err.message); } }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #D1D5DB", background: "#fff", cursor: "pointer" }}>Download</button>
+                          <button disabled={filingClassifying === f.id} onClick={async () => { setFilingClassifying(f.id); try { const { classification } = await apiClassifyFiling(f.id); setFilings(prev => prev.map(x => x.id === f.id ? { ...x, filename: classification.suggestedName || x.filename, filedBy: classification.filedBy || x.filedBy, docType: classification.docType || x.docType, filingDate: classification.filingDate || x.filingDate, summary: classification.summary || x.summary } : x)); log("Filing classified", `${classification.suggestedName || f.filename}`); } catch (err) { alert("Classification failed: " + err.message); } setFilingClassifying(null); }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #D97706", background: "#FEF3C7", color: "#92400E", cursor: "pointer" }}>{filingClassifying === f.id ? "Classifying..." : "⚡ Classify"}</button>
+                          <button disabled={filingSummarizing === f.id} onClick={async () => { setFilingSummarizing(f.id); try { const { summary } = await apiSummarizeFiling(f.id); setFilings(prev => prev.map(x => x.id === f.id ? { ...x, summary } : x)); log("Filing summarized", f.filename); } catch (err) { alert("Summary failed: " + err.message); } setFilingSummarizing(null); }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #6366F1", background: "#EEF2FF", color: "#4338CA", cursor: "pointer" }}>{filingSummarizing === f.id ? "Summarizing..." : (f.summary ? "⚡ Re-summarize" : "⚡ Summarize")}</button>
+                          {canRemove && <button onClick={async () => { if (!window.confirm("Delete this filing?")) return; try { await apiDeleteFiling(f.id); setFilings(prev => prev.filter(x => x.id !== f.id)); log("Filing deleted", f.filename); } catch (err) { alert("Delete failed: " + err.message); } }} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "1px solid #EF4444", background: "#FEF2F2", color: "#DC2626", cursor: "pointer" }}>Delete</button>}
+                        </div>
+                      </div>
+                      {f.originalFilename && f.originalFilename !== f.filename && (
+                        <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, fontStyle: "italic" }}>Original: {f.originalFilename}</div>
+                      )}
+                      {f.summary && (
+                        <div style={{ marginTop: 8 }}>
+                          <button onClick={() => setExpandedFilingId(expandedFilingId === f.id ? null : f.id)} style={{ fontSize: 11, color: "#4F46E5", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}>{expandedFilingId === f.id ? "▾ Hide Summary" : "▸ View Summary"}</button>
+                          {expandedFilingId === f.id && (
+                            <div style={{ marginTop: 6 }}>
+                              <AiPanel content={f.summary} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {filings.length === 0 && !filingsLoading && (
+                  <div style={{ textAlign: "center", padding: 40, color: "#8A9096" }}>
+                    <div style={{ fontSize: 14, marginBottom: 8 }}>No filings yet</div>
+                    <div style={{ fontSize: 12 }}>Upload a PDF filing above, or forward an email with a PDF attachment to the case email alias to auto-create filings.</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -6838,6 +6971,9 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
   const [aiCenterTasks, setAiCenterTasks] = useState({ tasks: [], added: {} });
   const [docSummaryText, setDocSummaryText] = useState("");
   const [docSummaryType, setDocSummaryType] = useState("Police Report");
+  const [aiCenterFilings, setAiCenterFilings] = useState([]);
+  const [aiCenterSelectedFiling, setAiCenterSelectedFiling] = useState("");
+  const [aiCenterFilingResult, setAiCenterFilingResult] = useState(null);
   const [caseSearch, setCaseSearch] = useState("");
   const [caseDropOpen, setCaseDropOpen] = useState(false);
 
@@ -6853,6 +6989,7 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
     { id: "summary", icon: "💬", title: "Client Communication", desc: "Plain-language case status update suitable for sharing with clients and families.", needsCase: true },
     { id: "docsummary", icon: "📋", title: "Document Summary", desc: "Summarize police reports, witness statements, lab reports, and other case documents for defense-relevant details.", needsCase: true },
     { id: "tasksuggestions", icon: "✅", title: "Task Suggestions", desc: "Suggest concrete defense tasks based on case stage, charges, deadlines, and existing work — one-click to add.", needsCase: true },
+    { id: "filingclassifier", icon: "📁", title: "Filing Classifier", desc: "Classify court filings — auto-name, identify filing party (State, Defendant, Court), and summarize significance.", needsCase: true },
   ];
 
   const runAgent = async (agentId) => {
@@ -6881,6 +7018,12 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
         const tks = tsRes.tasks || [];
         setAiCenterTasks({ tasks: tks, added: {} });
         r = { result: tks.length ? "__TASK_SUGGESTIONS__" : "No tasks suggested for this case." };
+      } else if (agentId === "filingclassifier") {
+        if (!aiCenterSelectedFiling) throw new Error("Please select a filing to classify.");
+        const clRes = await apiClassifyFiling(Number(aiCenterSelectedFiling));
+        setAiCenterFilingResult(clRes.classification);
+        setAiCenterFilings(prev => prev.map(f => f.id === Number(aiCenterSelectedFiling) ? { ...f, filename: clRes.classification.suggestedName || f.filename, filedBy: clRes.classification.filedBy || f.filedBy, docType: clRes.classification.docType || f.docType, summary: clRes.classification.summary || f.summary } : f));
+        r = { result: "__FILING_CLASSIFIER__" };
       }
       setAiState({ loading: false, result: r.result, error: null });
     } catch (e) {
@@ -6895,9 +7038,18 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
     setDocInstructions("");
     setDocSummaryText("");
     setDocSummaryType("Police Report");
+    setAiCenterFilings([]);
+    setAiCenterSelectedFiling("");
+    setAiCenterFilingResult(null);
     setCaseSearch("");
     setCaseDropOpen(false);
   };
+
+  useEffect(() => {
+    if (activeAgent === "filingclassifier" && selectedCaseId) {
+      apiGetFilings(Number(selectedCaseId)).then(setAiCenterFilings).catch(() => setAiCenterFilings([]));
+    }
+  }, [activeAgent, selectedCaseId]);
 
   const needsCase = activeAgent && agents.find(a => a.id === activeAgent)?.needsCase;
   const canRun = activeAgent && (!needsCase || selectedCaseId);
@@ -7008,13 +7160,27 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
               </>
             )}
 
+            {activeAgent === "filingclassifier" && selectedCaseId && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text)", marginBottom: 4, display: "block" }}>Select Filing to Classify</label>
+                {aiCenterFilings.length === 0 ? (
+                  <div style={{ fontSize: 12, color: "var(--c-text2)", padding: "10px 0" }}>No filings found for this case. Upload filings in the case's Filings tab first.</div>
+                ) : (
+                  <select value={aiCenterSelectedFiling} onChange={e => { setAiCenterSelectedFiling(e.target.value); setAiCenterFilingResult(null); }} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13, background: "var(--c-bg)", color: "var(--c-text)" }}>
+                    <option value="">— Select a filing —</option>
+                    {aiCenterFilings.map(f => <option key={f.id} value={f.id}>{f.filename}{f.filedBy ? ` [${f.filedBy}]` : ""}{f.docType ? ` — ${f.docType}` : ""}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+
             {!aiState.result && !aiState.loading && (
-              <button className="btn btn-gold" style={{ width: "100%", opacity: (activeAgent === "docsummary" ? (canRun && docSummaryText.trim()) : canRun) ? 1 : 0.5 }} disabled={activeAgent === "docsummary" ? !(canRun && docSummaryText.trim()) : !canRun} onClick={() => runAgent(activeAgent)}>
+              <button className="btn btn-gold" style={{ width: "100%", opacity: (activeAgent === "docsummary" ? (canRun && docSummaryText.trim()) : (activeAgent === "filingclassifier" ? (canRun && aiCenterSelectedFiling) : canRun)) ? 1 : 0.5 }} disabled={activeAgent === "docsummary" ? !(canRun && docSummaryText.trim()) : (activeAgent === "filingclassifier" ? !(canRun && aiCenterSelectedFiling) : !canRun)} onClick={() => runAgent(activeAgent)}>
                 Run {agents.find(a => a.id === activeAgent)?.title}
               </button>
             )}
 
-            {(aiState.loading || aiState.result || aiState.error) && aiState.result !== "__TASK_SUGGESTIONS__" && !(aiState.loading && activeAgent === "tasksuggestions") && (
+            {(aiState.loading || aiState.result || aiState.error) && aiState.result !== "__TASK_SUGGESTIONS__" && aiState.result !== "__FILING_CLASSIFIER__" && !(aiState.loading && activeAgent === "tasksuggestions") && !(aiState.loading && activeAgent === "filingclassifier") && (
               <AiPanel title={agents.find(a => a.id === activeAgent)?.title} result={aiState.result} loading={aiState.loading} error={aiState.error}
                 onRun={() => runAgent(activeAgent)}
                 actions={aiState.result ? (
@@ -7074,6 +7240,44 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
             )}
             {aiState.loading && activeAgent === "tasksuggestions" && (
               <AiPanel title="Task Suggestions" result={null} loading={true} error={null} />
+            )}
+            {aiState.result === "__FILING_CLASSIFIER__" && aiCenterFilingResult && (
+              <div className="card" style={{ marginTop: 16, padding: 20 }}>
+                <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 12 }}>📁 Classification Result</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text2)" }}>Suggested Name:</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-h)" }}>{aiCenterFilingResult.suggestedName || "—"}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    {aiCenterFilingResult.filedBy && (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text2)" }}>Filed By:</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: { State: "#DC2626", Defendant: "#2563EB", "Co-Defendant": "#7C3AED", Court: "#059669", Other: "#6B7280" }[aiCenterFilingResult.filedBy] || "#6B7280", borderRadius: 4, padding: "2px 7px", textTransform: "uppercase" }}>{aiCenterFilingResult.filedBy}</span>
+                      </div>
+                    )}
+                    {aiCenterFilingResult.docType && (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text2)" }}>Type:</span>
+                        <span style={{ fontSize: 11, color: "var(--c-text)" }}>{aiCenterFilingResult.docType}</span>
+                      </div>
+                    )}
+                    {aiCenterFilingResult.filingDate && (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text2)" }}>Filing Date:</span>
+                        <span style={{ fontSize: 11, color: "var(--c-text)" }}>{aiCenterFilingResult.filingDate}</span>
+                      </div>
+                    )}
+                  </div>
+                  {aiCenterFilingResult.summary && (
+                    <div style={{ fontSize: 12, color: "var(--c-text)", lineHeight: 1.6, marginTop: 4, padding: 12, background: "var(--c-bg)", borderRadius: 8, border: "1px solid var(--c-border)" }}>{aiCenterFilingResult.summary}</div>
+                  )}
+                </div>
+                <button className="btn btn-outline btn-sm" style={{ marginTop: 12, fontSize: 11 }} onClick={() => { setAiState({ loading: false, result: null, error: null }); setAiCenterFilingResult(null); }}>Classify Another</button>
+              </div>
+            )}
+            {aiState.loading && activeAgent === "filingclassifier" && (
+              <AiPanel title="Filing Classifier" result={null} loading={true} error={null} />
             )}
           </div>
         )}

@@ -420,6 +420,66 @@ Suggest 5-8 specific, actionable tasks the defense team should prioritize next.`
   }
 });
 
+router.post("/classify-filing", requireAuth, async (req, res) => {
+  try {
+    const { filingId } = req.body;
+    if (!filingId) return res.status(400).json({ error: "filingId required" });
+
+    const { rows } = await pool.query(
+      "SELECT cf.*, c.title as case_title, c.defendant_name FROM case_filings cf JOIN cases c ON cf.case_id = c.id WHERE cf.id = $1",
+      [filingId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Filing not found" });
+    const filing = rows[0];
+
+    const userRole = req.session.userRole || "";
+    if (userRole !== "App Admin") {
+      const userId = req.session.userId;
+      const access = await pool.query(
+        "SELECT id FROM cases WHERE id = $1 AND (lead_attorney = $2 OR second_attorney = $3 OR trial_coordinator = $4 OR investigator = $5 OR social_worker = $6 OR confidential = false OR confidential IS NULL)",
+        [filing.case_id, userId, userId, userId, userId, userId]
+      );
+      if (access.rows.length === 0) return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (!filing.extracted_text) return res.status(400).json({ error: "No text could be extracted from this filing" });
+
+    const systemPrompt = `You are a court filing classification assistant for a criminal defense public defender's office. Analyze the court filing text and classify it. Return ONLY valid JSON with these fields:
+- "suggestedName" (string — proper legal filing name, e.g., "State's Motion to Compel Discovery", "Order Granting Continuance", "Defendant's Motion to Suppress Evidence")
+- "filedBy" (one of: "State", "Defendant", "Co-Defendant", "Court", "Other")
+- "docType" (string — filing type, e.g., "Motion to Suppress", "Discovery Response", "Court Order", "Arraignment Order", "Bond Hearing Order", "Plea Agreement", "Sentencing Order", "Notice of Appearance", "Subpoena", "Warrant", "Indictment", "Information", "Docket Entry", "Other")
+- "filingDate" (string — date found in the filing in YYYY-MM-DD format, or null if not found)
+- "summary" (string — 2-3 sentence summary of the filing's content and significance for the defense)
+
+Be precise about who filed the document. Look for signatures, captions, and headings to determine the filing party.`;
+
+    const textSnippet = filing.extracted_text.substring(0, 12000);
+    const userPrompt = `Classify this court filing from the case "${filing.case_title}" (Defendant: ${filing.defendant_name || "Unknown"}):\n\n${textSnippet}`;
+
+    const raw = await aiCall(systemPrompt, userPrompt, true);
+    const parsed = JSON.parse(raw);
+
+    const updates = [];
+    const vals = [];
+    let idx = 1;
+    if (parsed.suggestedName) { updates.push(`filename = $${idx++}`); vals.push(parsed.suggestedName); }
+    if (parsed.filedBy) { updates.push(`filed_by = $${idx++}`); vals.push(parsed.filedBy); }
+    if (parsed.docType) { updates.push(`doc_type = $${idx++}`); vals.push(parsed.docType); }
+    if (parsed.filingDate) { updates.push(`filing_date = $${idx++}`); vals.push(parsed.filingDate); }
+    if (parsed.summary) { updates.push(`summary = $${idx++}`); vals.push(parsed.summary); }
+
+    if (updates.length > 0) {
+      vals.push(filingId);
+      await pool.query(`UPDATE case_filings SET ${updates.join(", ")} WHERE id = $${idx}`, vals);
+    }
+
+    res.json({ classification: parsed });
+  } catch (err) {
+    console.error("Filing classification error:", err);
+    res.status(500).json({ error: "AI filing classification failed" });
+  }
+});
+
 router.post("/doc-summary", requireAuth, async (req, res) => {
   try {
     const { text, docType, caseTitle, defendantName } = req.body;

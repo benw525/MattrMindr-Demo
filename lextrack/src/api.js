@@ -114,6 +114,23 @@ export async function apiDownloadDocument(docId) {
 }
 export const apiDeleteCaseDocument = (docId) => apiFetch(`/api/case-documents/${docId}`, { method: "DELETE" });
 
+// Filings
+export const apiGetFilings = (caseId) => apiFetch(`/api/filings/${caseId}`);
+export async function apiUploadFiling(formData) {
+  const res = await fetch("/api/filings/upload", { method: "POST", credentials: "include", body: formData });
+  if (!res.ok) { let msg = `API error ${res.status}`; try { const j = await res.json(); msg = j.error || msg; } catch {} throw new Error(msg); }
+  return res.json();
+}
+export async function apiDownloadFiling(id) {
+  const res = await fetch(`/api/filings/${id}/download`, { credentials: "include" });
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  return res.blob();
+}
+export const apiDeleteFiling = (id) => apiFetch(`/api/filings/${id}`, { method: "DELETE" });
+export const apiSummarizeFiling = (id) => apiFetch(`/api/filings/${id}/summarize`, { method: "POST", body: {} });
+export const apiUpdateFiling = (id, data) => apiFetch(`/api/filings/${id}`, { method: "PUT", body: data });
+export const apiClassifyFiling = (filingId) => apiFetch("/api/ai-agents/classify-filing", { method: "POST", body: { filingId } });
+
 // Contact Notes
 export const apiGetContactNotes    = (contactId) => apiFetch(`/api/contact-notes/${contactId}`);
 export const apiCreateContactNote  = (data)      => apiFetch("/api/contact-notes",       { method: "POST",   body: data });
