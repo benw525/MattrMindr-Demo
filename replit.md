@@ -122,7 +122,7 @@ All agents accessible via `/api/ai-agents/*` endpoints, require authentication. 
 ### Core Features
 - Customizable Dashboard: per-user widget system with add/remove/reorder
 - Cases view with filtering, sorting, pagination (no "matters" concept — everything is a case)
-- Case Detail Overlay: editable criminal defense fields, task/note/link management, activity log, files tab (document upload/summary), correspondence tab, charges section
+- Case Detail Overlay: editable criminal defense fields, task/note/link management, activity log, files tab (document upload/summary), correspondence tab. Details tab layout: top-left = Charges, top-right = Case Info + Offices, below = Co-Defendants, Misc Contacts, Experts
 - Deadline Tracker: calendar grid, list view, iCal feed import, court rules calculator
 - Tasks View: filterable task list with inline editing, auto-escalation, recurring tasks
 - Reports: pre-built report types with CSV export and print
@@ -131,7 +131,7 @@ All agents accessible via `/api/ai-agents/*` endpoints, require authentication. 
 - Contacts: seeded with 47 contacts (20 prosecutors, 20 judges, 3 courts, 4 jails); categories: Client, Prosecutor, Judge, Court, Witness, Expert, Family Member, Social Worker, Treatment Provider, Miscellaneous; associated cases auto-linked by name matching
 - AI Search: Natural language search across all case data via OpenAI gpt-5-mini
 - Confidential Cases: access-restricted to assigned team members + App Admin
-- Case Parties: accordion-style party management on Details tab (types: Defendant, Co-Defendant, Victim, Witness)
+- Co-Defendants: accordion-style co-defendant management on Details tab (below Charges/Case Info grid). Fields: name (first/middle/last), DOB, case number, charges, attorney, status (Pre-Trial/Pled Out/Convicted/Acquitted/Charges Dismissed/Cooperating Witness/Fugitive), joint/severed (Joint/Severed/Pending Severance Motion), cooperation notes, general notes. Uses `case_parties` table with partyType="Co-Defendant", entityKind="individual", all fields in JSONB `data` column
 - Case Experts: accordion-style expert management on Details tab
 - Document Generator: upload .docx templates with placeholder auto-detection; template categories (Motions, Orders, Notices, Subpoenas, Client Letters, General)
 - Email Correspondence: SendGrid Inbound Parse captures emails to case-{id}@mail.mattrmindr.com
@@ -233,7 +233,7 @@ General, Motions, Discovery, Police Reports, Photographs, Expert Reports, Court 
 | contact_staff | Staff members under attorney/court contacts (JSONB data) |
 | case_correspondence | Inbound emails captured via SendGrid |
 | doc_templates | Document templates (.docx with placeholders, category, sub_type) |
-| case_parties | Per-case parties: Defendant, Co-Defendant, Victim, Witness (JSONB data) |
+| case_parties | Per-case co-defendants (partyType="Co-Defendant", entityKind="individual", JSONB data: firstName, middleName, lastName, dob, caseNumber, charges, attorney, status, jointSevered, cooperationNotes, notes) |
 | case_experts | Per-case experts with contact card links (JSONB data) |
 | case_misc_contacts | Per-case miscellaneous contacts (JSONB data, typed) |
 | time_entries | Manual time log entries per user/case |
