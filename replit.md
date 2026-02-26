@@ -91,6 +91,19 @@ Six AI-powered agents using OpenAI (`gpt-4o-mini`) via existing integration:
 
 All agents accessible via `/api/ai-agents/*` endpoints, require authentication. Frontend API helpers in `api.js`. Reusable `AiPanel` component for consistent UI rendering.
 
+### Mobile Responsiveness
+- **Breakpoints**: 768px (tablet/mobile) and 480px (small mobile)
+- **Sidebar**: Collapsible on mobile — hidden by default with slide-in animation via `.sidebar.open` class. Hamburger button (☰) visible in every view's topbar via `.hamburger-btn` (hidden on desktop). Backdrop overlay closes sidebar on tap. All nav items auto-close sidebar on click
+- **Hamburger prop**: Each view component receives `onMenuToggle` prop for the hamburger button
+- **Grids**: `.grid4` → 2 columns at 768px, 1 column at 480px. `.grid2` and `.form-row` → 1 column at 768px
+- **Modals**: `.modal` class uses `width: calc(100vw - 24px) !important; max-width: 620px` at 768px. All inline-width modals have `maxWidth: "calc(100vw - 24px)"` fallback
+- **Case Overlay**: Full-width (`left: 0`) on mobile; header wraps, tabs scroll horizontally, body padding reduced
+- **Tables**: Lower-priority columns hidden via `.hide-mobile` class (Case Type, Defendant, Arrest Date, Lead). `SortTh` component accepts `className` prop for this. Table cell padding reduced
+- **Touch targets**: Buttons get `min-height: 40px` on mobile (36px for btn-sm)
+- **Login box**: Responsive with max-width constraint
+- **Detail panel** (`.detail-panel`): Full-width on mobile
+- **Edit fields**: Stack label/value vertically at 480px via `flex-wrap: wrap`
+
 ### Conflict Check
 - Automatic on new case creation: triggered when defendant name is entered
 - Searches existing cases (defendant names, titles) and contacts for matches

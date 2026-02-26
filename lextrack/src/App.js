@@ -195,8 +195,8 @@ const Avatar = ({ userId, size = 28 }) => {
   return <div title={`${u.name} (${u.role})`} style={{ width: size, height: size, borderRadius: "50%", background: u.avatar, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 700, color: "#fff", fontFamily: "'Source Sans 3',sans-serif", flexShrink: 0 }}>{u.initials}</div>;
 };
 
-const SortTh = ({ col, label, sortCol, sortDir, onSort, style }) => (
-  <th style={{ cursor: "pointer", userSelect: "none", ...style }} onClick={() => onSort(col)}>
+const SortTh = ({ col, label, sortCol, sortDir, onSort, style, className }) => (
+  <th className={className} style={{ cursor: "pointer", userSelect: "none", ...style }} onClick={() => onSort(col)}>
     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
       {label}
       <span style={{ color: sortCol === col ? "#1E2A3A" : "#D6D8DB", fontSize: 10 }}>
@@ -542,6 +542,65 @@ body.dark-body { background: #0E1116; }
 .dark-mode-btn:hover { border-color: #1E2A3A; color: #1E2A3A; }
 .dark .dark-mode-btn { border-color: #27313D; color: #9DA7B3; }
 .dark .dark-mode-btn:hover { border-color: #4F7393; color: #4F7393; }
+.hamburger-btn { display: none; background: none; border: 1px solid var(--c-border); border-radius: 6px; padding: 6px 10px; font-size: 20px; cursor: pointer; color: var(--c-text); line-height: 1; }
+.sidebar-backdrop { display: none; }
+.hide-mobile { }
+@media (max-width: 768px) {
+  .hamburger-btn { display: flex; align-items: center; justify-content: center; }
+  .sidebar { position: fixed; z-index: 700; top: 0; bottom: 0; left: 0; transform: translateX(-100%); transition: transform 0.25s ease; }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 699; }
+  .content { padding: 14px 12px; }
+  .topbar { padding: 10px 12px; }
+  .topbar-title { font-size: 17px; }
+  .topbar-actions { width: 100%; }
+  .topbar-actions select, .topbar-actions input { width: 100% !important; min-width: 0 !important; }
+  .grid4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid2, .form-row { grid-template-columns: 1fr; }
+  .stat-value { font-size: 24px; }
+  .stat-card { padding: 14px 16px; }
+  .btn { min-height: 40px; padding: 8px 14px; }
+  .btn-sm { min-height: 36px; padding: 6px 10px; }
+  .modal { width: calc(100vw - 24px) !important; max-width: 620px; padding: 18px; border-radius: 8px; }
+  .detail-panel { width: 100% !important; }
+  .login-box { width: calc(100vw - 24px) !important; max-width: 400px; padding: 28px 20px; }
+  .print-doc { width: 100% !important; padding: 24px 16px; }
+  .case-overlay { left: 0 !important; }
+  .case-overlay-header { padding: 14px 12px; flex-wrap: wrap; }
+  .case-overlay-tabs { padding: 0 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .case-overlay-tab { padding: 10px 14px; white-space: nowrap; font-size: 12px; }
+  .case-overlay-body { padding: 16px 12px; }
+  .overlay-cols { grid-template-columns: 1fr; gap: 0; }
+  .edit-field-key { min-width: 110px; font-size: 11px; }
+  th { padding: 8px 8px; font-size: 10px; }
+  td { padding: 8px 8px; font-size: 12px; }
+  .hide-mobile { display: none !important; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+  .tab { white-space: nowrap; padding: 8px 12px; font-size: 12px; }
+  .pagination { font-size: 12px; flex-wrap: wrap; gap: 6px; }
+  .modal-title { font-size: 18px; }
+  .card-header { padding: 12px 14px; }
+  .card-title { font-size: 14px; }
+  .deadline-item { padding: 10px 12px; }
+  .note-item { padding: 8px 10px; }
+  .print-overlay { padding: 10px 8px; }
+  .modal-footer { gap: 8px; flex-wrap: wrap; }
+  .report-card { padding: 14px 16px; }
+}
+@media (max-width: 480px) {
+  .grid4 { grid-template-columns: 1fr; }
+  .stat-value { font-size: 22px; }
+  .topbar-title { font-size: 15px; }
+  .topbar-subtitle { font-size: 11px; }
+  .case-overlay-header { padding: 10px 10px; }
+  .case-overlay-body { padding: 12px 10px; }
+  .edit-field { flex-wrap: wrap; gap: 4px; }
+  .edit-field-key { min-width: 100%; font-size: 11px; }
+  .btn { font-size: 12px; }
+  .modal { padding: 14px; }
+  .modal-title { font-size: 16px; }
+  .content { padding: 10px 8px; }
+}
 `;
 
 
@@ -681,7 +740,7 @@ function FollowUpPromptModal({ prompt, onDecide }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal" style={{ width: 460 }}>
+      <div className="modal" style={{ width: 460, maxWidth: "calc(100vw - 24px)" }}>
         <div className="modal-title" style={{ marginBottom: 6 }}>Follow-up Task Completed</div>
         <div style={{ fontSize: 13, color: "#8A9096", marginBottom: 20 }}>
           "{target.title}" has been marked complete.
@@ -764,6 +823,7 @@ export default function App() {
   const [followUpPrompt,   setFollowUpPrompt]   = useState(null);
   const [pendingTimePrompt, setPendingTimePrompt] = useState(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("lextrack-dark") === "1");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showChangePw, setShowChangePw] = useState(false);
 
   useEffect(() => {
@@ -1222,7 +1282,8 @@ export default function App() {
 
   return (
     <div className={`app${darkMode ? " dark" : ""}`}>
-      <aside className="sidebar">
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
         <div className="sidebar-logo">
           <img src="/logo.png" alt="MattrMindr" style={{ height: 30 }} />
         </div>
@@ -1245,7 +1306,7 @@ export default function App() {
             { id: "contacts", icon: "📇", label: "Contacts" },
             { id: "staff", icon: "👥", label: "Staff" },
           ].map(item => (
-            <div key={item.id} className={`nav-item ${view === item.id ? "active" : ""}`} onClick={() => { setView(item.id); setSelectedCase(null); }}>
+            <div key={item.id} className={`nav-item ${view === item.id ? "active" : ""}`} onClick={() => { setView(item.id); setSelectedCase(null); setSidebarOpen(false); }}>
               <span className="nav-icon">{item.icon}</span>
               {item.label}
               {item.badge && <span className="nav-badge">{item.badge}</span>}
@@ -1266,15 +1327,15 @@ export default function App() {
         <ChangePasswordModal currentUser={currentUser} onClose={() => setShowChangePw(false)} />
       )}
       <div className="main">
-        {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { handleSelectCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
-        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} />}
-        {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} />}
-        {view === "documents" && <DocumentsView currentUser={currentUser} allCases={allCases} />}
-        {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} />}
-        {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} />}
-        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} />}
-        {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} />}
-        {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} allUsers={allUsers} setAllUsers={setAllUsers} />}
+        {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { handleSelectCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "documents" && <DocumentsView currentUser={currentUser} allCases={allCases} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} allUsers={allUsers} setAllUsers={setAllUsers} onMenuToggle={() => setSidebarOpen(true)} />}
       </div>
       <FollowUpPromptModal
         key={followUpPrompt ? `${followUpPrompt.target.id}-${followUpPrompt.completedDate}` : "none"}
@@ -1779,7 +1840,7 @@ function CustomizeDashboardModal({ layout, setLayout, userId, onClose }) {
   const sizeColor = (s) => s === "quarter" ? "#4F7393" : s === "half" ? "#2F7A5F" : "#B67A18";
   return (
     <div className="login-bg" style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
-      <div className="login-box" style={{ width: 480, maxHeight: "80vh", overflow: "auto" }}>
+      <div className="login-box" style={{ width: 480, maxWidth: "calc(100vw - 24px)", maxHeight: "80vh", overflow: "auto" }}>
         <div className="login-title" style={{ fontSize: 20, marginBottom: 4 }}>Customize Dashboard</div>
         <div className="login-sub" style={{ marginBottom: 20 }}>Add, remove, and reorder widgets</div>
         <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--c-text2)", marginBottom: 8 }}>Your Dashboard</div>
@@ -1925,7 +1986,7 @@ function RecentActivityWidget({ currentUser }) {
   );
 }
 
-function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAddRecord, onCompleteTask, onUpdateTask }) {
+function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAddRecord, onCompleteTask, onUpdateTask, onMenuToggle }) {
   const [showModal, setShowModal] = useState(false);
   const [showCustomize, setShowCustomize] = useState(false);
   const [expandedTask, setExpandedTask] = useState(null);
@@ -2207,9 +2268,12 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
       {showModal && <NewCaseModal onSave={onAddRecord} onClose={() => setShowModal(false)} />}
       {showCustomize && <CustomizeDashboardModal layout={layout} setLayout={setLayout} userId={currentUser.id} onClose={() => setShowCustomize(false)} />}
       <div className="topbar">
-        <div>
-          <div className="topbar-title">Good morning, {currentUser.name.split(" ")[0]}</div>
-          <div className="topbar-subtitle">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div>
+            <div className="topbar-title">Good morning, {currentUser.name.split(" ")[0]}</div>
+            <div className="topbar-subtitle">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={() => setShowCustomize(true)} style={{ fontSize: 12 }}>⚙ Customize</button>
@@ -2246,7 +2310,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
 // ─── Cases View ───────────────────────────────────────────────────────────────
 const PAGE_SIZE = 50;
 
-function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, deletedCases, setDeletedCases, onDeleteCase, onRestoreCase, onAddDeadline, onUpdateDeadline }) {
+function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, deletedCases, setDeletedCases, onDeleteCase, onRestoreCase, onAddDeadline, onUpdateDeadline, onMenuToggle }) {
   const [statusFilter, setStatusFilter] = useState("Active");
   const [deletedLoading, setDeletedLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -2390,9 +2454,12 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
         <CasePrintView c={selectedCase} notes={notes} tasks={caseTasks} deadlines={caseDeadlines} links={caseLinks[selectedCase.id] || []} onClose={() => setShowPrint(false)} />
       )}
       <div className="topbar">
-        <div>
-          <div className="topbar-title">Cases</div>
-          <div className="topbar-subtitle">{filtered.length} of {allCases.length} · {allCases.filter(c => c.status === "Active").length} active</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div>
+            <div className="topbar-title">Cases</div>
+            <div className="topbar-subtitle">{filtered.length} of {allCases.length} · {allCases.filter(c => c.status === "Active").length} active</div>
+          </div>
         </div>
         <div className="topbar-actions">
           <select style={{ width: 160 }} value={divisionFilter} onChange={e => setDivisionFilter(e.target.value)}>
@@ -2536,12 +2603,12 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                       <th style={{ width: 32 }}></th>
                       <th>Case Number</th>
                       <th>Style</th>
-                      <th>Case Type</th>
-                      <th>Defendant</th>
+                      <th className="hide-mobile">Case Type</th>
+                      <th className="hide-mobile">Defendant</th>
                       <th>Stage</th>
                       <th>Trial Date</th>
-                      <th>Arrest Date</th>
-                      <th>Lead</th>
+                      <th className="hide-mobile">Arrest Date</th>
+                      <th className="hide-mobile">Lead</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2560,12 +2627,12 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                           </div>
                           {c.prosecutor && <div style={{ fontSize: 12, color: "#1F2428", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>{c.prosecutor}</div>}
                         </td>
-                        <td style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseType || "—"}</td>
-                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.defendantName || "—"}</td>
+                        <td className="hide-mobile" style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseType || "—"}</td>
+                        <td className="hide-mobile" style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.defendantName || "—"}</td>
                         <td><Badge label={c.stage} /></td>
                         <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#8A9096", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
-                        <td style={{ fontSize: 12, color: "#8A9096", whiteSpace: "nowrap" }}>{fmt(c.arrestDate)}</td>
-                        <td><Avatar userId={c.assignedAttorney} size={26} /></td>
+                        <td className="hide-mobile" style={{ fontSize: 12, color: "#8A9096", whiteSpace: "nowrap" }}>{fmt(c.arrestDate)}</td>
+                        <td className="hide-mobile"><Avatar userId={c.assignedAttorney} size={26} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -2627,12 +2694,12 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                       <th style={{ width: 32 }}></th>
                       <SortTh col="caseNum" label="Case Number" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="title" label="Style" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                      <th>Case Type</th>
-                      <SortTh col="defendant" label="Defendant" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <th className="hide-mobile">Case Type</th>
+                      <SortTh col="defendant" label="Defendant" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="hide-mobile" />
                       <SortTh col="stage" label="Stage" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                       <SortTh col="trialDate" label="Trial Date" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                      <SortTh col="arrestDate" label="Arrest Date" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                      <SortTh col="lead" label="Lead" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                      <SortTh col="arrestDate" label="Arrest Date" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="hide-mobile" />
+                      <SortTh col="lead" label="Lead" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="hide-mobile" />
                     </tr>
                   </thead>
                   <tbody>
@@ -2651,12 +2718,12 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
                           </div>
                           {c.prosecutor && <div style={{ fontSize: 12, color: "#1F2428", fontWeight: 500, marginTop: 1, whiteSpace: "nowrap" }}>{c.prosecutor}</div>}
                         </td>
-                        <td style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseType || "—"}</td>
-                        <td style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.defendantName || "—"}</td>
+                        <td className="hide-mobile" style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseType || "—"}</td>
+                        <td className="hide-mobile" style={{ fontSize: 12, color: "var(--c-text2)" }}>{c.defendantName || "—"}</td>
                         <td><Badge label={c.stage} /></td>
                         <td style={{ color: c.trialDate ? urgencyColor(daysUntil(c.trialDate)) : "#8A9096", fontSize: 12, whiteSpace: "nowrap" }}>{fmt(c.trialDate)}</td>
-                        <td style={{ fontSize: 12, color: "#8A9096", whiteSpace: "nowrap" }}>{fmt(c.arrestDate)}</td>
-                        <td><Avatar userId={c.assignedAttorney} size={26} /></td>
+                        <td className="hide-mobile" style={{ fontSize: 12, color: "#8A9096", whiteSpace: "nowrap" }}>{fmt(c.arrestDate)}</td>
+                        <td className="hide-mobile"><Avatar userId={c.assignedAttorney} size={26} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -3416,7 +3483,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               {draft.title || "Untitled"}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 10, flexShrink: 0, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => setShowTeamPopup(true)}>👥 Team</button>
             <button
               className={`btn btn-sm ${editMode ? "" : "btn-outline"}`}
@@ -5698,7 +5765,7 @@ function ICalManager({ externalEvents, setExternalEvents }) {
 }
 
 // ─── Deadlines View ───────────────────────────────────────────────────────────
-function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalcInputs, calcResult, runCalc, currentUser }) {
+function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalcInputs, calcResult, runCalc, currentUser, onMenuToggle }) {
   const [tab, setTab] = useState("calendar");
   const [typeFilter, setTypeFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -5735,7 +5802,10 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
   return (
     <>
       <div className="topbar">
-        <div><div className="topbar-title">Deadline Tracker</div><div className="topbar-subtitle">{deadlines.filter(d => daysUntil(d.date) < 0).length} overdue · {deadlines.filter(d => { const n = daysUntil(d.date); return n >= 0 && n <= 7; }).length} this week · {deadlines.length} total{externalEvents.length ? ` · ${externalEvents.length} external` : ""}</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div><div className="topbar-title">Deadline Tracker</div><div className="topbar-subtitle">{deadlines.filter(d => daysUntil(d.date) < 0).length} overdue · {deadlines.filter(d => { const n = daysUntil(d.date); return n >= 0 && n <= 7; }).length} this week · {deadlines.length} total{externalEvents.length ? ` · ${externalEvents.length} external` : ""}</div></div>
+        </div>
       </div>
       <div className="content">
         <div className="tabs">
@@ -5876,7 +5946,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
 }
 
 // ─── Tasks View ───────────────────────────────────────────────────────────────
-function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask }) {
+function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask, onMenuToggle }) {
   const [filter, setFilter] = useState("Open");
   const [showForm, setShowForm] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
@@ -5915,7 +5985,10 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
   return (
     <>
       <div className="topbar">
-        <div><div className="topbar-title">Tasks</div><div className="topbar-subtitle">{tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed").length} open · {tasks.filter(t => t.assigned === currentUser.id && t.recurring).length} recurring · {tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed" && daysUntil(t.due) < 0).length} overdue</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div><div className="topbar-title">Tasks</div><div className="topbar-subtitle">{tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed").length} open · {tasks.filter(t => t.assigned === currentUser.id && t.recurring).length} recurring · {tasks.filter(t => t.assigned === currentUser.id && t.status !== "Completed" && daysUntil(t.due) < 0).length} overdue</div></div>
+        </div>
         <button className="btn btn-gold" onClick={() => setShowForm(!showForm)}>+ New Task</button>
       </div>
       <div className="content">
@@ -6425,7 +6498,7 @@ function buildReport(id, allCases, tasks, deadlines, params) {
   }
 }
 
-function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, onCompleteTask, onDeleteCase, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, onAddDeadline, onUpdateDeadline }) {
+function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, onCompleteTask, onDeleteCase, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, onAddDeadline, onUpdateDeadline, onMenuToggle }) {
   const [activeReport, setActiveReport] = useState(null);
   const [params, setParams] = useState({});
   const [generated, setGenerated] = useState(null);
@@ -6457,9 +6530,12 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
   return (
     <>
       <div className="topbar">
-        <div>
-          <div className="topbar-title">Reports</div>
-          <div className="topbar-subtitle">Generate and export case reports</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div>
+            <div className="topbar-title">Reports</div>
+            <div className="topbar-subtitle">Generate and export case reports</div>
+          </div>
         </div>
         {generated && (
           <div className="topbar-actions">
@@ -6656,7 +6732,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
 
 // ─── Staff View ───────────────────────────────────────────────────────────────
 // ─── Time Log View ────────────────────────────────────────────────────────────
-function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [] }) {
+function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [], onMenuToggle }) {
   const thisMonth = today.slice(0, 7);
   const [fromDate, setFromDate] = useState(thisMonth + "-01");
   const [toDate,   setToDate]   = useState(today);
@@ -6855,9 +6931,12 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
   return (
     <>
       <div className="topbar">
-        <div>
-          <div className="topbar-title">Time Log</div>
-          <div className="topbar-subtitle">{currentUser.name} · {rows.length} entr{rows.length !== 1 ? "ies" : "y"} · {fmtDateTime(fromDate)} – {fmtDateTime(toDate)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div>
+            <div className="topbar-title">Time Log</div>
+            <div className="topbar-subtitle">{currentUser.name} · {rows.length} entr{rows.length !== 1 ? "ies" : "y"} · {fmtDateTime(fromDate)} – {fmtDateTime(toDate)}</div>
+          </div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary btn-sm" onClick={() => setShowAddForm(true)}>+ Add Entry</button>
@@ -7146,7 +7225,7 @@ function NewContactModal({ onSave, onClose }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 500 }}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 500, maxWidth: "calc(100vw - 24px)" }}>
         <div className="modal-header"><span>New Contact</span><button className="modal-close" onClick={onClose}>✕</button></div>
         <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
@@ -7330,7 +7409,7 @@ function ContactDetailOverlay({ contact, currentUser, notes, allCases, onClose, 
 
   return (
     <div className="case-overlay" onClick={onClose}>
-      <div className="case-overlay-panel" onClick={e => e.stopPropagation()} style={{ width: 640 }}>
+      <div className="case-overlay-panel" onClick={e => e.stopPropagation()} style={{ width: 640, maxWidth: "100vw" }}>
         <div className="case-overlay-header" style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
@@ -7719,7 +7798,7 @@ function ContactMergeModal({ contacts, contactNotes, onMerge, onClose }) {
   );
 }
 
-function ContactsView({ currentUser, allCases, onOpenCase }) {
+function ContactsView({ currentUser, allCases, onOpenCase, onMenuToggle }) {
   const [contacts, setContacts] = useState(null);
   const [deletedContacts, setDeletedContacts] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -7871,9 +7950,12 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
   return (
     <>
       <div className="topbar">
-        <div>
-          <div className="topbar-title">Contacts</div>
-          <div className="topbar-subtitle">{loading ? "Loading…" : `${(contacts || []).length} contacts across ${CONTACT_CATEGORIES.length} categories`}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div>
+            <div className="topbar-title">Contacts</div>
+            <div className="topbar-subtitle">{loading ? "Loading…" : `${(contacts || []).length} contacts across ${CONTACT_CATEGORIES.length} categories`}</div>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <input
@@ -7881,7 +7963,7 @@ function ContactsView({ currentUser, allCases, onOpenCase }) {
             placeholder="Search contacts…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ width: 220, fontSize: 13 }}
+            style={{ width: 220, maxWidth: "100%", fontSize: 13 }}
           />
           {isAppAdmin(currentUser) && !isDeleted && (
             <button
@@ -8798,7 +8880,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, expert
   );
 }
 
-function DocumentsView({ currentUser }) {
+function DocumentsView({ currentUser, allCases, onMenuToggle }) {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [wizard, setWizard] = useState(null);
@@ -8825,7 +8907,8 @@ function DocumentsView({ currentUser }) {
   return (
     <>
       <div className="topbar">
-        <div className="topbar-row">
+        <div className="topbar-row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
           <div><div className="topbar-title">Document Templates</div><div className="topbar-subtitle">{templates.length} template{templates.length !== 1 ? "s" : ""}</div></div>
           <button className="btn btn-primary" onClick={() => document.getElementById("docUploadInput").click()}>+ New Template</button>
           <input id="docUploadInput" type="file" accept=".docx,.doc" style={{ display: "none" }} onChange={async e => {
@@ -9332,7 +9415,7 @@ function DocumentsView({ currentUser }) {
   );
 }
 
-function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUsers }) {
+function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUsers, onMenuToggle }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
@@ -9454,9 +9537,12 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
         />
       )}
       <div className="topbar">
-        <div>
-          <div className="topbar-title">Staff Directory</div>
-          <div className="topbar-subtitle">{filteredStaff.length} of {activeUsers.length} team members</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+          <div>
+            <div className="topbar-title">Staff Directory</div>
+            <div className="topbar-subtitle">{filteredStaff.length} of {activeUsers.length} team members</div>
+          </div>
         </div>
         <div className="topbar-actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13, background: "var(--c-card)", color: "var(--c-text)" }}>
