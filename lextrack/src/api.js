@@ -91,6 +91,7 @@ export const apiAiSearch = (query) => apiFetch("/api/ai-search", { method: "POST
 
 // AI Agents
 export const apiChargeAnalysis   = (data) => apiFetch("/api/ai-agents/charge-analysis",   { method: "POST", body: data });
+export const apiGetChargeClass   = (data) => apiFetch("/api/ai-agents/charge-class",     { method: "POST", body: data });
 export const apiDeadlineGenerator = (data) => apiFetch("/api/ai-agents/deadline-generator", { method: "POST", body: data });
 export const apiCaseStrategy     = (data) => apiFetch("/api/ai-agents/case-strategy",     { method: "POST", body: data });
 export const apiDraftDocument    = (data) => apiFetch("/api/ai-agents/draft-document",    { method: "POST", body: data });

@@ -25,6 +25,23 @@ async function aiCall(systemPrompt, userPrompt, jsonMode = false) {
   return resp.choices[0].message.content;
 }
 
+router.post("/charge-class", requireAuth, async (req, res) => {
+  try {
+    const { statute, description } = req.body;
+    if (!statute && !description) return res.status(400).json({ error: "Statute or description required" });
+    const systemPrompt = `You are an Alabama criminal law classification assistant. Given a criminal statute and/or charge description, determine the charge classification under Alabama law. Return ONLY valid JSON with one field: "chargeClass" — which must be exactly one of: "Class A Felony", "Class B Felony", "Class C Felony", "Misdemeanor A", "Misdemeanor B", "Misdemeanor C", "Violation", "Other". Use your knowledge of the Alabama Criminal Code to classify accurately.`;
+    const userPrompt = `Classify this Alabama criminal charge:\nStatute: ${statute || "Not provided"}\nDescription: ${description || "Not provided"}`;
+    const result = await aiCall(systemPrompt, userPrompt, true);
+    const parsed = JSON.parse(result);
+    const valid = ["Class A Felony", "Class B Felony", "Class C Felony", "Misdemeanor A", "Misdemeanor B", "Misdemeanor C", "Violation", "Other"];
+    const chargeClass = valid.includes(parsed.chargeClass) ? parsed.chargeClass : "Other";
+    res.json({ chargeClass });
+  } catch (err) {
+    console.error("Charge class error:", err);
+    res.status(500).json({ error: "Classification failed" });
+  }
+});
+
 router.post("/charge-analysis", requireAuth, async (req, res) => {
   try {
     let { chargeDescription, chargeStatute, chargeClass, caseType, courtDivision, charges, caseId } = req.body;

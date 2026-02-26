@@ -13,7 +13,7 @@ import {
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
   apiGetContactStaff, apiCreateContactStaff, apiUpdateContactStaff, apiDeleteContactStaff,
   apiAiSearch,
-  apiChargeAnalysis, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary, apiDocSummary, apiTaskSuggestions,
+  apiChargeAnalysis, apiGetChargeClass, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary, apiDocSummary, apiTaskSuggestions,
   apiGetCaseDocuments, apiUploadCaseDocument, apiSummarizeDocument, apiDownloadDocument, apiDeleteCaseDocument, apiUpdateCaseDocument,
   apiGetFilings, apiUploadFiling, apiDeleteFiling, apiSummarizeFiling, apiUpdateFiling, apiClassifyFiling,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
@@ -1672,10 +1672,28 @@ function NewCaseModal({ onSave, onClose }) {
               {["Felony", "Misdemeanor", "Juvenile", "Probation Violation", "Mental Health/Commitment", "Appeal", "Other"].map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
-          <div className="form-group"><label>Charge Description</label><input value={form.chargeDescription} onChange={e => set("chargeDescription", e.target.value)} /></div>
+          <div className="form-group"><label>Charge Description</label><input value={form.chargeDescription} onChange={e => set("chargeDescription", e.target.value)} onBlur={() => {
+            if ((form.chargeDescription || form.chargeStatute) && !form.chargeClass) {
+              set("_classifying", true);
+              apiGetChargeClass({ statute: form.chargeStatute, description: form.chargeDescription }).then(r => { setForm(p => p.chargeClass ? { ...p, _classifying: false } : { ...p, chargeClass: r.chargeClass, _classifying: false }); }).catch(() => set("_classifying", false));
+            }
+          }} /></div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label>Charge Statute</label><input value={form.chargeStatute} onChange={e => set("chargeStatute", e.target.value)} /></div>
+          <div className="form-group"><label>Charge Statute</label><input value={form.chargeStatute} onChange={e => set("chargeStatute", e.target.value)} onBlur={() => {
+            if ((form.chargeDescription || form.chargeStatute) && !form.chargeClass) {
+              set("_classifying", true);
+              apiGetChargeClass({ statute: form.chargeStatute, description: form.chargeDescription }).then(r => { setForm(p => p.chargeClass ? { ...p, _classifying: false } : { ...p, chargeClass: r.chargeClass, _classifying: false }); }).catch(() => set("_classifying", false));
+            }
+          }} /></div>
+          <div className="form-group"><label>Charge Class {form._classifying && <span style={{ fontSize: 10, color: "#b8860b" }}>(classifying...)</span>}</label>
+            <select value={form.chargeClass} onChange={e => set("chargeClass", e.target.value)}>
+              <option value="">— Select —</option>
+              {["Class A Felony", "Class B Felony", "Class C Felony", "Misdemeanor A", "Misdemeanor B", "Misdemeanor C", "Violation", "Other"].map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
           <div className="form-group"><label>Arrest Date</label><input type="date" value={form.arrestDate} onChange={e => set("arrestDate", e.target.value)} /></div>
         </div>
         {(form.chargeDescription || form.chargeStatute) && (
@@ -2947,11 +2965,13 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [showDocGen, setShowDocGen] = useState(false);
   const [activityFilter, setActivityFilter] = useState("all");
   const [aiStrategy, setAiStrategy] = useState({ loading: false, result: null, error: null, show: false });
-  const [aiDraft, setAiDraft] = useState({ loading: false, result: null, error: null, show: false, docType: "Motion to Suppress", instructions: "" });
   const [aiDeadlines, setAiDeadlines] = useState({ loading: false, deadlines: null, error: null, show: false });
   const [aiTasks, setAiTasks] = useState({ loading: false, tasks: null, error: null, show: false, added: {} });
   const [aiClientSummary, setAiClientSummary] = useState({ loading: false, result: null, error: null, show: false });
   const [aiChargeAnalysis, setAiChargeAnalysis] = useState({ loading: false, result: null, error: null, show: false });
+  const [classifyingChargeIdx, setClassifyingChargeIdx] = useState(null);
+  const chargesRef = useRef(c.charges);
+  chargesRef.current = c.charges;
   const [caseDocuments, setCaseDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [docUploadType, setDocUploadType] = useState("Police Report");
@@ -3247,7 +3267,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
         <CasePrintView c={draft} notes={notes} tasks={tasks} deadlines={deadlines} links={links} onClose={() => setShowPrint(false)} />
       )}
       {showDocGen && (
-        <GenerateDocumentModal caseData={draft} currentUser={currentUser} onClose={() => setShowDocGen(false)} parties={parties} experts={experts} />
+        <GenerateDocumentModal caseData={draft} currentUser={currentUser} onClose={() => setShowDocGen(false)} parties={parties} experts={experts} caseId={c.id} onAddNote={onAddNote} onLogActivity={onLogActivity} />
       )}
       {aiStrategy.show && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAiStrategy({ loading: false, result: null, error: null, show: false })}>
@@ -3270,55 +3290,6 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                 }}>Save as Note</button>
               ) : null}
             />
-          </div>
-        </div>
-      )}
-      {aiDraft.show && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAiDraft({ loading: false, result: null, error: null, show: false, docType: "Motion to Suppress", instructions: "" })}>
-          <div className="modal" style={{ maxWidth: 700, maxHeight: "85vh", overflow: "auto" }}>
-            <div className="modal-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>⚡ AI Document Draft</span>
-              <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8A9096" }} onClick={() => setAiDraft({ loading: false, result: null, error: null, show: false, docType: "Motion to Suppress", instructions: "" })}>✕</button>
-            </div>
-            <div className="modal-sub">{draft.title}</div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: "#1E2A3A", marginBottom: 4, display: "block" }}>Document Type</label>
-              <select value={aiDraft.docType} onChange={e => setAiDraft(p => ({ ...p, docType: e.target.value }))} style={{ width: "100%", padding: "8px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13 }}>
-                {["Motion to Suppress", "Motion to Dismiss", "Bond Reduction Motion", "Continuance Request", "Discovery Demand", "Plea Agreement Draft", "Sentencing Memorandum", "Motion for Speedy Trial"].map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: "#1E2A3A", marginBottom: 4, display: "block" }}>Additional Instructions (optional)</label>
-              <textarea value={aiDraft.instructions} onChange={e => setAiDraft(p => ({ ...p, instructions: e.target.value }))} style={{ width: "100%", minHeight: 60, padding: "8px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 12, resize: "vertical", fontFamily: "inherit" }} placeholder="e.g. Focus on Fourth Amendment issues, include specific facts about the traffic stop..." />
-            </div>
-            {!aiDraft.result && !aiDraft.loading && (
-              <button className="btn btn-gold" style={{ width: "100%" }} onClick={() => {
-                setAiDraft(p => ({ ...p, loading: true, result: null, error: null }));
-                apiDraftDocument({ caseId: c.id, documentType: aiDraft.docType, customInstructions: aiDraft.instructions })
-                  .then(r => setAiDraft(p => ({ ...p, loading: false, result: r.result })))
-                  .catch(e => setAiDraft(p => ({ ...p, loading: false, error: e.message })));
-              }}>Generate Draft</button>
-            )}
-            {(aiDraft.loading || aiDraft.result || aiDraft.error) && (
-              <AiPanel title={aiDraft.docType} result={aiDraft.result} loading={aiDraft.loading} error={aiDraft.error}
-                onRun={() => {
-                  setAiDraft(p => ({ ...p, loading: true, result: null, error: null }));
-                  apiDraftDocument({ caseId: c.id, documentType: aiDraft.docType, customInstructions: aiDraft.instructions })
-                    .then(r => setAiDraft(p => ({ ...p, loading: false, result: r.result })))
-                    .catch(e => setAiDraft(p => ({ ...p, loading: false, error: e.message })));
-                }}
-                actions={aiDraft.result ? (
-                  <Fragment>
-                    <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => { navigator.clipboard.writeText(aiDraft.result); }}>Copy</button>
-                    <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => {
-                      onAddNote({ caseId: c.id, body: aiDraft.result, type: "Draft" });
-                      onLogActivity("AI Draft Saved", `${aiDraft.docType} draft saved as note`);
-                      alert("Draft saved as case note.");
-                    }}>Save as Note</button>
-                  </Fragment>
-                ) : null}
-              />
-            )}
           </div>
         </div>
       )}
@@ -3522,7 +3493,6 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
             }}>⚡ Strategy</button>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => setShowPrint(true)}>🖨 Print</button>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => { if (parties.length === 0) apiGetParties(c.id).then(setParties).catch(() => {}); setShowDocGen(true); }}>📄 Generate</button>
-            <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px", color: "#b8860b", borderColor: "#d4c9a8" }} onClick={() => setAiDraft(p => ({ ...p, show: true }))}>⚡ AI Draft</button>
             {canDelete && (
               <button className="btn btn-outline btn-sm" style={{ color: "#e05252", borderColor: "#fca5a5", lineHeight: "20px" }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
             )}
@@ -3992,11 +3962,25 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", marginTop: 8 }}>
                       <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Statute</label>
                         <input style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
-                          value={charge.statute} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, statute: e.target.value }; onUpdate({ charges: updated }); }} /></div>
+                          value={charge.statute} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, statute: e.target.value }; onUpdate({ charges: updated }); }} onBlur={() => {
+                            if ((charge.statute || charge.description) && !charge.chargeClass) {
+                              setClassifyingChargeIdx(idx);
+                              apiGetChargeClass({ statute: charge.statute, description: charge.description }).then(r => {
+                                const cur = chargesRef.current || []; if (cur[idx] && !cur[idx].chargeClass) { const updated = [...cur]; updated[idx] = { ...updated[idx], chargeClass: r.chargeClass }; onUpdate({ charges: updated }); }
+                              }).catch(() => {}).finally(() => setClassifyingChargeIdx(null));
+                            }
+                          }} /></div>
                       <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Description</label>
                         <input style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
-                          value={charge.description} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, description: e.target.value }; onUpdate({ charges: updated }); }} /></div>
-                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Class</label>
+                          value={charge.description} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, description: e.target.value }; onUpdate({ charges: updated }); }} onBlur={() => {
+                            if ((charge.statute || charge.description) && !charge.chargeClass) {
+                              setClassifyingChargeIdx(idx);
+                              apiGetChargeClass({ statute: charge.statute, description: charge.description }).then(r => {
+                                const cur = chargesRef.current || []; if (cur[idx] && !cur[idx].chargeClass) { const updated = [...cur]; updated[idx] = { ...updated[idx], chargeClass: r.chargeClass }; onUpdate({ charges: updated }); }
+                              }).catch(() => {}).finally(() => setClassifyingChargeIdx(null));
+                            }
+                          }} /></div>
+                      <div><label style={{ fontSize: 11, color: "var(--c-text3)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Class {classifyingChargeIdx === idx && <span style={{ fontSize: 10, color: "#b8860b" }}>(classifying...)</span>}</label>
                         <select style={{ width: "100%", fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", boxSizing: "border-box" }}
                           value={charge.chargeClass} onChange={e => { const updated = [...(c.charges || [])]; updated[idx] = { ...charge, chargeClass: e.target.value }; onUpdate({ charges: updated }); }}>
                           <option value="">— Select —</option>
@@ -9245,7 +9229,8 @@ function buildAllCaseFields(caseData, parties, experts) {
   return fields;
 }
 
-function GenerateDocumentModal({ caseData, currentUser, onClose, parties, experts }) {
+function GenerateDocumentModal({ caseData, currentUser, onClose, parties, experts, caseId, onAddNote, onLogActivity }) {
+  const [mode, setMode] = useState("template");
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -9257,6 +9242,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, expert
   const [generating, setGenerating] = useState(false);
   const [includeCoS, setIncludeCoS] = useState(true);
   const [browseOpen, setBrowseOpen] = useState(null);
+  const [aiDraft, setAiDraft] = useState({ loading: false, result: null, error: null, docType: "Motion to Suppress", instructions: "" });
 
   useEffect(() => {
     apiGetTemplates().then(t => { setTemplates(t); setLoading(false); }).catch(() => setLoading(false));
@@ -9338,24 +9324,71 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, expert
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: "var(--c-bg)", borderRadius: 12, width: "90%", maxWidth: 750, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div style={{ padding: "20px 24px 0", borderBottom: "1px solid var(--c-border)", paddingBottom: 16, flexShrink: 0 }}>
+        <div style={{ padding: "20px 24px 0", borderBottom: "1px solid var(--c-border)", paddingBottom: 0, flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, margin: 0, color: "var(--c-text-h)" }}>
-              {selected ? "Fill in Document Fields" : "Generate Document"}
+              {mode === "template" && selected ? "Fill in Document Fields" : "Generate Document"}
             </h2>
             <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--c-text2)" }}>✕</button>
           </div>
-          {selected && (
-            <div style={{ fontSize: 12, color: "#1E2A3A", marginTop: 4, cursor: "pointer" }} onClick={() => { setSelected(null); setValues({}); }}>
+          <div style={{ display: "flex", gap: 0, marginTop: 12 }}>
+            <button onClick={() => setMode("template")} style={{ fontSize: 13, fontWeight: mode === "template" ? 600 : 400, padding: "8px 18px", border: "none", borderBottom: mode === "template" ? "2px solid #1E2A3A" : "2px solid transparent", background: "none", color: mode === "template" ? "var(--c-text-h)" : "var(--c-text2)", cursor: "pointer" }}>From Template</button>
+            <button onClick={() => setMode("ai")} style={{ fontSize: 13, fontWeight: mode === "ai" ? 600 : 400, padding: "8px 18px", border: "none", borderBottom: mode === "ai" ? "2px solid #b8860b" : "2px solid transparent", background: "none", color: mode === "ai" ? "#b8860b" : "var(--c-text2)", cursor: "pointer" }}>AI Draft</button>
+          </div>
+          {mode === "template" && selected && (
+            <div style={{ fontSize: 12, color: "#1E2A3A", padding: "8px 0 4px", cursor: "pointer" }} onClick={() => { setSelected(null); setValues({}); }}>
               ← Back to template list
             </div>
           )}
         </div>
 
         <div style={{ padding: 24, flex: 1, overflowY: "auto", minHeight: 0 }}>
-          {loading && <div style={{ color: "#8A9096", fontSize: 13 }}>Loading templates...</div>}
+          {mode === "ai" && (
+            <div>
+              <div style={{ fontSize: 12, color: "var(--c-text2)", marginBottom: 16 }}>Generate a first draft of a motion, plea, or memorandum using AI — tailored to your case details.</div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-h)", marginBottom: 4, display: "block" }}>Document Type</label>
+                <select value={aiDraft.docType} onChange={e => setAiDraft(p => ({ ...p, docType: e.target.value }))} style={{ width: "100%", padding: "8px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13, background: "var(--c-bg2)", color: "var(--c-text)" }}>
+                  {["Motion to Suppress", "Motion to Dismiss", "Bond Reduction Motion", "Continuance Request", "Discovery Demand", "Plea Agreement Draft", "Sentencing Memorandum", "Motion for Speedy Trial"].map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-h)", marginBottom: 4, display: "block" }}>Additional Instructions (optional)</label>
+                <textarea value={aiDraft.instructions} onChange={e => setAiDraft(p => ({ ...p, instructions: e.target.value }))} style={{ width: "100%", minHeight: 60, padding: "8px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 12, resize: "vertical", fontFamily: "inherit", background: "var(--c-bg2)", color: "var(--c-text)" }} placeholder="e.g. Focus on Fourth Amendment issues, include specific facts about the traffic stop..." />
+              </div>
+              {!aiDraft.result && !aiDraft.loading && (
+                <button className="btn btn-gold" style={{ width: "100%" }} onClick={() => {
+                  setAiDraft(p => ({ ...p, loading: true, result: null, error: null }));
+                  apiDraftDocument({ caseId: caseId || caseData.id, documentType: aiDraft.docType, customInstructions: aiDraft.instructions })
+                    .then(r => setAiDraft(p => ({ ...p, loading: false, result: r.result })))
+                    .catch(e => setAiDraft(p => ({ ...p, loading: false, error: e.message })));
+                }}>Generate Draft</button>
+              )}
+              {(aiDraft.loading || aiDraft.result || aiDraft.error) && (
+                <AiPanel title={aiDraft.docType} result={aiDraft.result} loading={aiDraft.loading} error={aiDraft.error}
+                  onRun={() => {
+                    setAiDraft(p => ({ ...p, loading: true, result: null, error: null }));
+                    apiDraftDocument({ caseId: caseId || caseData.id, documentType: aiDraft.docType, customInstructions: aiDraft.instructions })
+                      .then(r => setAiDraft(p => ({ ...p, loading: false, result: r.result })))
+                      .catch(e => setAiDraft(p => ({ ...p, loading: false, error: e.message })));
+                  }}
+                  actions={aiDraft.result ? (
+                    <Fragment>
+                      <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => { navigator.clipboard.writeText(aiDraft.result); }}>Copy</button>
+                      {onAddNote && <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => {
+                        onAddNote({ caseId: caseId || caseData.id, body: aiDraft.result, type: "Draft" });
+                        if (onLogActivity) onLogActivity("AI Draft Saved", `${aiDraft.docType} draft saved as note`);
+                        alert("Draft saved as case note.");
+                      }}>Save as Note</button>}
+                    </Fragment>
+                  ) : null}
+                />
+              )}
+            </div>
+          )}
+          {mode === "template" && loading && <div style={{ color: "#8A9096", fontSize: 13 }}>Loading templates...</div>}
 
-          {!loading && !selected && (
+          {mode === "template" && !loading && !selected && (
             <>
               <div className="form-group" style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text2)", display: "block", marginBottom: 6 }}>Document Type</label>
@@ -9399,7 +9432,7 @@ function GenerateDocumentModal({ caseData, currentUser, onClose, parties, expert
             </>
           )}
 
-          {!loading && selected && (() => {
+          {mode === "template" && !loading && selected && (() => {
             const isPleading = selected.category === "Pleadings";
             const headerTokens = new Set(PLEADING_HEADER_PLACEHOLDERS.map(p => p.token));
             const sigTokens = new Set(PLEADING_SIGNATURE_PLACEHOLDERS.map(p => p.token));
