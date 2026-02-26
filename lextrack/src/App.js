@@ -3368,7 +3368,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                   <div style={{
                     maxWidth: "85%", padding: "10px 14px", borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
                     background: msg.role === "user" ? "linear-gradient(135deg, #6366f1, #4f46e5)" : "var(--c-card-alt, #1a2332)",
-                    color: msg.role === "user" ? "#fff" : "var(--c-text)",
+                    color: msg.role === "user" ? "#fff" : "#E6EDF3",
                     fontSize: 13, lineHeight: 1.7, position: "relative",
                     border: msg.role === "user" ? "none" : "1px solid var(--c-border)"
                   }}>
