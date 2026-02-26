@@ -6788,7 +6788,7 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
   const canRun = activeAgent && (!needsCase || selectedCaseId);
 
   return (
-    <div className="view-container">
+    <>
       <div className="topbar">
         <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
         <div>
@@ -6796,7 +6796,7 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
           <div className="topbar-subtitle">Centralized AI-powered analysis tools</div>
         </div>
       </div>
-      <div style={{ padding: "20px 24px", maxWidth: 900 }}>
+      <div className="content" style={{ maxWidth: 900 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, marginBottom: 24 }}>
           {agents.map(a => (
             <div key={a.id} onClick={() => selectAgent(a.id)} style={{
@@ -6876,7 +6876,7 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
