@@ -50,7 +50,7 @@ async function createSchema() {
         bond_conditions TEXT    NOT NULL DEFAULT '',
         jail_location   TEXT    NOT NULL DEFAULT '',
         disposition_type TEXT   NOT NULL DEFAULT '',
-        assigned_attorney INTEGER REFERENCES users(id),
+        lead_attorney INTEGER REFERENCES users(id),
         second_attorney   INTEGER REFERENCES users(id),
         trial_coordinator  INTEGER REFERENCES users(id),
         investigator      INTEGER REFERENCES users(id),
