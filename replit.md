@@ -89,7 +89,14 @@ Six AI-powered agents using OpenAI (`gpt-4o-mini`) via existing integration. All
 5. **Case Triage** — Ranks active cases by urgency (death penalty, trial dates, custody, overdue tasks). Dashboard widget (add via Customize) and "Triage" button in Cases view topbar. Each result shows urgency score (1-10), reason, and next action
 6. **Client Communication Summary** — Plain-language case status update for sharing with clients/families. "Client Summary" button in case detail Overview tab with copy functionality
 
-All agents accessible via `/api/ai-agents/*` endpoints, require authentication. Frontend API helpers in `api.js`. Reusable `AiPanel` component for consistent UI rendering.
+All agents accessible via `/api/ai-agents/*` endpoints, require authentication. Frontend API helpers in `api.js`. Reusable `AiPanel` component for consistent UI rendering. Charge Analysis and Deadline Generator endpoints accept `caseId` to auto-load case data server-side.
+
+### AI Center
+- Centralized view in sidebar (under Reports) that provides access to all 6 AI agents from one place
+- Agent cards in a responsive grid; selecting one opens the agent panel with case selector (for agents that need a case)
+- Case Triage runs without case selection; all others require choosing a case first
+- Document Drafting includes document type selector and optional instructions field
+- Results rendered via shared `AiPanel` component with copy functionality
 
 ### Mobile Responsiveness
 - **Breakpoints**: 768px (tablet/mobile) and 480px (small mobile)

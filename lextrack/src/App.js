@@ -1303,6 +1303,7 @@ export default function App() {
             { id: "documents", icon: "📄", label: "Templates" },
             { id: "timelog", icon: "🕐", label: "Time Log" },
             { id: "reports", icon: "📊", label: "Reports" },
+            { id: "aicenter", icon: "⚡", label: "AI Center" },
             { id: "contacts", icon: "📇", label: "Contacts" },
             { id: "staff", icon: "👥", label: "Staff" },
           ].map(item => (
@@ -1333,6 +1334,7 @@ export default function App() {
         {view === "documents" && <DocumentsView currentUser={currentUser} allCases={allCases} onMenuToggle={() => setSidebarOpen(true)} />}
         {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "aicenter" && <AiCenterView allCases={allCases} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} />}
         {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} onMenuToggle={() => setSidebarOpen(true)} />}
         {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} onMenuToggle={() => setSidebarOpen(true)} />}
         {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} allUsers={allUsers} setAllUsers={setAllUsers} onMenuToggle={() => setSidebarOpen(true)} />}
@@ -6727,6 +6729,154 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
         );
       })()}
     </>
+  );
+}
+
+// ─── AI Center View ───────────────────────────────────────────────────────────
+function AiCenterView({ allCases, currentUser, onMenuToggle }) {
+  const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [activeAgent, setActiveAgent] = useState(null);
+  const [aiState, setAiState] = useState({ loading: false, result: null, error: null });
+  const [docType, setDocType] = useState("Motion to Suppress");
+  const [docInstructions, setDocInstructions] = useState("");
+
+  const activeCases = allCases.filter(c => c.status !== "Closed");
+  const selectedCase = allCases.find(c => String(c.id) === String(selectedCaseId));
+
+  const agents = [
+    { id: "triage", icon: "🚨", title: "Case Triage", desc: "Rank active cases by urgency — death penalty, trial dates, custody status, overdue tasks.", needsCase: false },
+    { id: "charge", icon: "⚖️", title: "Charge Analysis", desc: "Analyze charges under Alabama Code — sentencing ranges, mandatory minimums, diversion eligibility.", needsCase: true },
+    { id: "strategy", icon: "🧠", title: "Case Strategy", desc: "Full defense strategy analysis — motions, plea negotiations, sentencing exposure, investigation priorities.", needsCase: true },
+    { id: "deadlines", icon: "📅", title: "Deadline Generator", desc: "Generate procedural deadlines based on Alabama Rules of Criminal Procedure and case stage.", needsCase: true },
+    { id: "draft", icon: "📝", title: "Document Drafting", desc: "Generate first drafts of motions, pleas, and memoranda tailored to your case.", needsCase: true },
+    { id: "summary", icon: "💬", title: "Client Communication", desc: "Plain-language case status update suitable for sharing with clients and families.", needsCase: true },
+  ];
+
+  const runAgent = async (agentId) => {
+    setAiState({ loading: true, result: null, error: null });
+    try {
+      let r;
+      if (agentId === "triage") {
+        r = await apiCaseTriage();
+      } else if (agentId === "charge") {
+        r = await apiChargeAnalysis({ caseId: Number(selectedCaseId) });
+      } else if (agentId === "strategy") {
+        r = await apiCaseStrategy({ caseId: Number(selectedCaseId) });
+      } else if (agentId === "deadlines") {
+        const dlRes = await apiDeadlineGenerator({ caseId: Number(selectedCaseId) });
+        const dls = dlRes.deadlines || [];
+        r = { result: dls.length ? dls.map((d, i) => `**${i + 1}. ${d.title}**\nDate: ${d.date}\nRule: ${d.rule || "—"}\nType: ${d.type || "—"}\n`).join("\n") : "No deadlines generated." };
+      } else if (agentId === "draft") {
+        r = await apiDraftDocument({ caseId: Number(selectedCaseId), documentType: docType, customInstructions: docInstructions });
+      } else if (agentId === "summary") {
+        r = await apiClientSummary({ caseId: Number(selectedCaseId) });
+      }
+      setAiState({ loading: false, result: r.result, error: null });
+    } catch (e) {
+      setAiState({ loading: false, result: null, error: e.message });
+    }
+  };
+
+  const selectAgent = (agentId) => {
+    setActiveAgent(agentId);
+    setAiState({ loading: false, result: null, error: null });
+    setDocType("Motion to Suppress");
+    setDocInstructions("");
+  };
+
+  const needsCase = activeAgent && agents.find(a => a.id === activeAgent)?.needsCase;
+  const canRun = activeAgent && (!needsCase || selectedCaseId);
+
+  return (
+    <div className="view-container">
+      <div className="topbar">
+        <button className="hamburger-btn" onClick={onMenuToggle}>☰</button>
+        <div>
+          <div className="topbar-title">AI Center</div>
+          <div className="topbar-subtitle">Centralized AI-powered analysis tools</div>
+        </div>
+      </div>
+      <div style={{ padding: "20px 24px", maxWidth: 900 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14, marginBottom: 24 }}>
+          {agents.map(a => (
+            <div key={a.id} onClick={() => selectAgent(a.id)} style={{
+              background: activeAgent === a.id ? "linear-gradient(135deg, #f8f6f0, #f3f0e8)" : "var(--c-card)",
+              border: activeAgent === a.id ? "2px solid #b8860b" : "1px solid var(--c-border)",
+              borderRadius: 10, padding: "16px 18px", cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}>
+              <div style={{ fontSize: 22, marginBottom: 8 }}>{a.icon}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--c-text-h)", marginBottom: 4 }}>{a.title}</div>
+              <div style={{ fontSize: 12, color: "var(--c-text2)", lineHeight: 1.5 }}>{a.desc}</div>
+              {a.needsCase && <div style={{ fontSize: 10, color: "#b8860b", marginTop: 6, fontWeight: 500 }}>Requires case selection</div>}
+            </div>
+          ))}
+        </div>
+
+        {activeAgent && (
+          <div style={{ background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: 10, padding: "20px 24px" }}>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: "var(--c-text-h)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>{agents.find(a => a.id === activeAgent)?.icon}</span>
+              {agents.find(a => a.id === activeAgent)?.title}
+            </div>
+
+            {needsCase && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text)", marginBottom: 4, display: "block" }}>Select Case</label>
+                <select value={selectedCaseId} onChange={e => { setSelectedCaseId(e.target.value); setAiState({ loading: false, result: null, error: null }); }} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13, background: "var(--c-bg)", color: "var(--c-text)" }}>
+                  <option value="">— Choose a case —</option>
+                  {activeCases.map(c => (
+                    <option key={c.id} value={c.id}>{c.caseNumber || "No #"} — {c.defendantName || c.title}</option>
+                  ))}
+                </select>
+                {selectedCase && (
+                  <div style={{ fontSize: 11, color: "var(--c-text2)", marginTop: 6, lineHeight: 1.5 }}>
+                    <strong>{selectedCase.title}</strong> · {selectedCase.stage} · {selectedCase.caseType}
+                    {selectedCase.deathPenalty && <span style={{ color: "#dc2626", fontWeight: 700, marginLeft: 6 }}>DP</span>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeAgent === "draft" && (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text)", marginBottom: 4, display: "block" }}>Document Type</label>
+                  <select value={docType} onChange={e => setDocType(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 13, background: "var(--c-bg)", color: "var(--c-text)" }}>
+                    {["Motion to Suppress", "Motion to Dismiss", "Bond Reduction Motion", "Continuance Request", "Discovery Demand", "Plea Agreement Draft", "Sentencing Memorandum", "Motion for Speedy Trial"].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text)", marginBottom: 4, display: "block" }}>Additional Instructions (optional)</label>
+                  <textarea value={docInstructions} onChange={e => setDocInstructions(e.target.value)} style={{ width: "100%", minHeight: 60, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--c-border)", fontSize: 12, resize: "vertical", fontFamily: "inherit", background: "var(--c-bg)", color: "var(--c-text)" }} placeholder="e.g. Focus on Fourth Amendment issues, include specific facts about the traffic stop..." />
+                </div>
+              </>
+            )}
+
+            {!aiState.result && !aiState.loading && (
+              <button className="btn btn-gold" style={{ width: "100%", opacity: canRun ? 1 : 0.5 }} disabled={!canRun} onClick={() => runAgent(activeAgent)}>
+                Run {agents.find(a => a.id === activeAgent)?.title}
+              </button>
+            )}
+
+            {(aiState.loading || aiState.result || aiState.error) && (
+              <AiPanel title={agents.find(a => a.id === activeAgent)?.title} result={aiState.result} loading={aiState.loading} error={aiState.error}
+                onRun={() => runAgent(activeAgent)}
+                actions={aiState.result ? (
+                  <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => { navigator.clipboard.writeText(aiState.result); }}>Copy</button>
+                ) : null}
+              />
+            )}
+          </div>
+        )}
+
+        {!activeAgent && (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--c-text2)", fontSize: 13 }}>
+            Select an AI agent above to get started
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

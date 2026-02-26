@@ -27,7 +27,19 @@ async function aiCall(systemPrompt, userPrompt, jsonMode = false) {
 
 router.post("/charge-analysis", requireAuth, async (req, res) => {
   try {
-    const { chargeDescription, chargeStatute, chargeClass, caseType, courtDivision, charges } = req.body;
+    let { chargeDescription, chargeStatute, chargeClass, caseType, courtDivision, charges, caseId } = req.body;
+    if (caseId && !chargeDescription) {
+      const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1", [caseId]);
+      if (rows.length) {
+        const c = rows[0];
+        chargeDescription = chargeDescription || c.charge_description || "";
+        chargeStatute = chargeStatute || c.charge_statute || "";
+        chargeClass = chargeClass || c.charge_class || "";
+        caseType = caseType || c.case_type || "";
+        courtDivision = courtDivision || c.court_division || "";
+        charges = charges || c.charges || [];
+      }
+    }
     const chargesText = (charges || []).map((c, i) =>
       `Charge ${i + 1}: ${c.description || ""} | Statute: ${c.statute || ""} | Class: ${c.class || ""} | ${c.amended ? "Amended" : "Original"}`
     ).join("\n");
@@ -57,7 +69,25 @@ Provide:
 
 router.post("/deadline-generator", requireAuth, async (req, res) => {
   try {
-    const { caseId, stage, chargeClass, caseType, courtDivision, arrestDate, arraignmentDate, trialDate, nextCourtDate, existingDeadlines } = req.body;
+    let { caseId, stage, chargeClass, caseType, courtDivision, arrestDate, arraignmentDate, trialDate, nextCourtDate, existingDeadlines } = req.body;
+    if (caseId) {
+      const [caseRes, dlRes] = await Promise.all([
+        pool.query("SELECT * FROM cases WHERE id = $1", [caseId]),
+        pool.query("SELECT title, date FROM deadlines WHERE case_id = $1", [caseId]),
+      ]);
+      if (caseRes.rows.length) {
+        const c = caseRes.rows[0];
+        stage = stage || c.stage || "";
+        chargeClass = chargeClass || c.charge_class || "";
+        caseType = caseType || c.case_type || "";
+        courtDivision = courtDivision || c.court_division || "";
+        arrestDate = arrestDate || (c.arrest_date ? c.arrest_date.toISOString().split("T")[0] : "");
+        arraignmentDate = arraignmentDate || (c.arraignment_date ? c.arraignment_date.toISOString().split("T")[0] : "");
+        trialDate = trialDate || (c.trial_date ? c.trial_date.toISOString().split("T")[0] : "");
+        nextCourtDate = nextCourtDate || (c.next_court_date ? c.next_court_date.toISOString().split("T")[0] : "");
+        existingDeadlines = existingDeadlines || dlRes.rows.map(d => ({ title: d.title, date: d.date ? d.date.toISOString().split("T")[0] : "" }));
+      }
+    }
     const deadlinesList = (existingDeadlines || []).map(d => `- ${d.title} (${d.date})`).join("\n") || "None";
     const systemPrompt = `You are an Alabama criminal procedure expert. Generate upcoming procedural deadlines based on the Alabama Rules of Criminal Procedure and case details. Return ONLY valid JSON with a "deadlines" array. Each deadline object must have: "title" (string), "date" (YYYY-MM-DD string), "rule" (the Alabama rule reference), "type" (one of: Filing, Hearing, Court Date, Deadline). Base dates relative to today: ${new Date().toISOString().split("T")[0]}. If exact dates cannot be determined, estimate based on typical timelines.`;
     const userPrompt = `Case details:
