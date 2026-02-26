@@ -2766,6 +2766,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
           onAddLink={async (link) => { try { const saved = await apiCreateLink(link); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: [...(prev[selectedCase.id] || []), saved] })); } catch (err) { alert("Failed to save link: " + err.message); } }}
           onDeleteLink={async (linkId) => { try { await apiDeleteLink(linkId); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(l => l.id !== linkId) })); } catch (err) { alert("Failed to delete link: " + err.message); } }}
           onLogActivity={async (entry) => { try { const saved = await apiCreateActivity(entry); setCaseActivity(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { console.error("Failed to log activity:", err); } }}
+          onRefreshActivity={(caseId, fresh) => setCaseActivity(prev => ({ ...prev, [caseId]: fresh }))}
           onAddDeadline={onAddDeadline}
           onUpdateDeadline={onUpdateDeadline}
         />
@@ -2888,7 +2889,7 @@ const CONTACT_LINKABLE_KEYS = new Set(["defendantName", "prosecutor", "judge"]);
 const KEY_DATE_FIELDS = ["arrestDate", "arraignmentDate", "nextCourtDate", "trialDate", "sentencingDate", "dispositionDate"];
 const KEY_DATE_TYPES = { arrestDate: "Other", arraignmentDate: "Hearing", nextCourtDate: "Hearing", trialDate: "Hearing", sentencingDate: "Hearing", dispositionDate: "Other" };
 
-function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, onAddDeadline, onUpdateDeadline }) {
+function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, onRefreshActivity, onAddDeadline, onUpdateDeadline }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
   const DEFAULT_HIDDEN_DATES = [];
@@ -2969,6 +2970,9 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
     if (activeTab === "files") {
       setDocsLoading(true);
       apiGetCaseDocuments(c.id).then(setCaseDocuments).catch(() => {}).finally(() => setDocsLoading(false));
+    }
+    if (activeTab === "activity") {
+      apiGetActivity(c.id).then(fresh => onRefreshActivity(c.id, fresh)).catch(() => {});
     }
     if (activeTab === "details") {
       setPartiesLoading(true);
@@ -6873,6 +6877,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
             onAddLink={async (link) => { try { const saved = await apiCreateLink(link); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: [...(prev[selectedCase.id] || []), saved] })); } catch (err) { alert("Failed to save link: " + err.message); } }}
             onDeleteLink={async (linkId) => { try { await apiDeleteLink(linkId); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(l => l.id !== linkId) })); } catch (err) { alert("Failed to delete link: " + err.message); } }}
             onLogActivity={async (entry) => { try { const saved = await apiCreateActivity(entry); setCaseActivity(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { console.error("Failed to log activity:", err); } }}
+            onRefreshActivity={(caseId, fresh) => setCaseActivity(prev => ({ ...prev, [caseId]: fresh }))}
             onAddDeadline={onAddDeadline}
             onUpdateDeadline={onUpdateDeadline}
           />
