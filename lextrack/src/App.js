@@ -8517,24 +8517,27 @@ function DocumentsView({ currentUser }) {
   });
 
   return (
-    <div className="view-content" style={{ padding: 32 }}>
-      <div className="topbar-row">
-        <div><div className="topbar-title">Document Templates</div><div className="topbar-subtitle">{templates.length} template{templates.length !== 1 ? "s" : ""}</div></div>
-        <button className="btn btn-primary" onClick={() => document.getElementById("docUploadInput").click()}>+ New Template</button>
-        <input id="docUploadInput" type="file" accept=".docx,.doc" style={{ display: "none" }} onChange={async e => {
-          const file = e.target.files[0]; if (!file) return; e.target.value = "";
-          try {
-            const parsed = await apiUploadTemplateFile(file);
-            const detected = (parsed.detectedPlaceholders || []).map(ph => ({
-              ...ph, id: Date.now() + Math.random(), autoDetected: true,
-              start: parsed.text.indexOf(`<<${ph.token}>>`),
-              end: parsed.text.indexOf(`<<${ph.token}>>`) + `<<${ph.token}>>`.length,
-              original: "",
-            }));
-            setWizard({ step: 1, file, text: parsed.text, paragraphs: parsed.paragraphs, placeholders: detected, name: file.name.replace(/\.(docx?|doc)$/i, ""), tags: [], newTag: "", isDoc: parsed.isDoc, category: "General", subType: "" });
-          } catch (err) { alert("Failed to parse document: " + err.message); }
-        }} />
+    <>
+      <div className="topbar">
+        <div className="topbar-row">
+          <div><div className="topbar-title">Document Templates</div><div className="topbar-subtitle">{templates.length} template{templates.length !== 1 ? "s" : ""}</div></div>
+          <button className="btn btn-primary" onClick={() => document.getElementById("docUploadInput").click()}>+ New Template</button>
+          <input id="docUploadInput" type="file" accept=".docx,.doc" style={{ display: "none" }} onChange={async e => {
+            const file = e.target.files[0]; if (!file) return; e.target.value = "";
+            try {
+              const parsed = await apiUploadTemplateFile(file);
+              const detected = (parsed.detectedPlaceholders || []).map(ph => ({
+                ...ph, id: Date.now() + Math.random(), autoDetected: true,
+                start: parsed.text.indexOf(`<<${ph.token}>>`),
+                end: parsed.text.indexOf(`<<${ph.token}>>`) + `<<${ph.token}>>`.length,
+                original: "",
+              }));
+              setWizard({ step: 1, file, text: parsed.text, paragraphs: parsed.paragraphs, placeholders: detected, name: file.name.replace(/\.(docx?|doc)$/i, ""), tags: [], newTag: "", isDoc: parsed.isDoc, category: "General", subType: "" });
+            } catch (err) { alert("Failed to parse document: " + err.message); }
+          }} />
+        </div>
       </div>
+      <div className="content">
 
       {!wizard && (
         <>
@@ -9018,7 +9021,8 @@ function DocumentsView({ currentUser }) {
         </div>
       )}
 
-    </div>
+      </div>
+    </>
   );
 }
 
