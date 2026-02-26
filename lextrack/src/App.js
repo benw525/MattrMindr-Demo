@@ -13,7 +13,7 @@ import {
   apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
   apiGetContactStaff, apiCreateContactStaff, apiUpdateContactStaff, apiDeleteContactStaff,
   apiAiSearch,
-  apiChargeAnalysis, apiGetChargeClass, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary, apiDocSummary, apiTaskSuggestions,
+  apiChargeAnalysis, apiGetChargeClass, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary, apiDocSummary, apiTaskSuggestions, apiAdvocateChat,
   apiGetCaseDocuments, apiUploadCaseDocument, apiSummarizeDocument, apiDownloadDocument, apiDeleteCaseDocument, apiUpdateCaseDocument,
   apiGetFilings, apiUploadFiling, apiDeleteFiling, apiSummarizeFiling, apiUpdateFiling, apiClassifyFiling,
   apiGetCorrespondence, apiDeleteCorrespondence, apiGetAllCorrespondence,
@@ -2972,6 +2972,13 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const [classifyingChargeIdx, setClassifyingChargeIdx] = useState(null);
   const chargesRef = useRef(c.charges);
   chargesRef.current = c.charges;
+  const [showAdvocate, setShowAdvocate] = useState(false);
+  const [advocateMessages, setAdvocateMessages] = useState([]);
+  const [advocateLoading, setAdvocateLoading] = useState(false);
+  const [advocateInput, setAdvocateInput] = useState("");
+  const [advocateStats, setAdvocateStats] = useState(null);
+  const advocateEndRef = useRef(null);
+  useEffect(() => { if (advocateEndRef.current) advocateEndRef.current.scrollIntoView({ behavior: "smooth" }); }, [advocateMessages, advocateLoading]);
   const [caseDocuments, setCaseDocuments] = useState([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [docUploadType, setDocUploadType] = useState("Police Report");
@@ -3293,6 +3300,156 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
           </div>
         </div>
       )}
+      {showAdvocate && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && { }}>
+          <div className="modal" style={{ maxWidth: 600, height: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", borderBottom: "1px solid var(--c-border)", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 18 }}>🤖</span>
+                <div>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 600, color: "var(--c-text-h)" }}>Advocate AI</div>
+                  <div style={{ fontSize: 11, color: "#8A9096" }}>{draft.title} — {draft.defendantName || "Defendant"}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {advocateMessages.length > 0 && (
+                  <button className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "2px 8px" }} onClick={() => {
+                    const thread = advocateMessages.map(m => m.role === "user" ? `**You:** ${m.content}` : `**Advocate AI:** ${m.content}`).join("\n\n---\n\n");
+                    onAddNote({ caseId: c.id, body: thread, type: "AI Consultation" });
+                    onLogActivity("AI Consultation Saved", "Advocate AI conversation saved as note");
+                    alert("Conversation saved as case note.");
+                  }}>Save as Note</button>
+                )}
+                <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8A9096" }} onClick={() => { setShowAdvocate(false); setAdvocateMessages([]); setAdvocateInput(""); setAdvocateStats(null); setAdvocateLoading(false); }}>✕</button>
+              </div>
+            </div>
+            {advocateStats && (
+              <div style={{ padding: "6px 18px", fontSize: 11, color: "#8A9096", borderBottom: "1px solid var(--c-border)", flexShrink: 0, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {advocateStats.notes > 0 && <span>📋 {advocateStats.notes} notes</span>}
+                {advocateStats.tasks > 0 && <span>✓ {advocateStats.tasks} tasks</span>}
+                {advocateStats.deadlines > 0 && <span>📅 {advocateStats.deadlines} deadlines</span>}
+                {advocateStats.documents > 0 && <span>📄 {advocateStats.documents} docs</span>}
+                {advocateStats.filings > 0 && <span>⚖ {advocateStats.filings} filings</span>}
+                {advocateStats.emails > 0 && <span>✉ {advocateStats.emails} emails</span>}
+                {advocateStats.parties > 0 && <span>👥 {advocateStats.parties} parties</span>}
+              </div>
+            )}
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {advocateMessages.length === 0 && !advocateLoading && (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+                  <div style={{ fontSize: 40, opacity: 0.3 }}>🤖</div>
+                  <div style={{ fontSize: 14, color: "#8A9096", textAlign: "center", maxWidth: 360, lineHeight: 1.6 }}>
+                    Ask me anything about this case. I have access to all notes, documents, filings, emails, and case details.
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 420 }}>
+                    {["Analyze defense strategies", "Summarize key evidence", "Identify weaknesses in the State's case", "What motions should I consider?"].map(prompt => (
+                      <button key={prompt} style={{ padding: "6px 12px", fontSize: 12, borderRadius: 16, border: "1px solid #a5b4fc", background: "rgba(99,102,241,0.08)", color: "#818cf8", cursor: "pointer", transition: "all 0.15s" }}
+                        onMouseEnter={e => { e.target.style.background = "rgba(99,102,241,0.18)"; }}
+                        onMouseLeave={e => { e.target.style.background = "rgba(99,102,241,0.08)"; }}
+                        onClick={() => {
+                          const msgs = [{ role: "user", content: prompt }];
+                          setAdvocateMessages(msgs);
+                          setAdvocateLoading(true);
+                          setAdvocateInput("");
+                          apiAdvocateChat({ caseId: c.id, messages: msgs }).then(r => {
+                            setAdvocateMessages(p => [...p, { role: "assistant", content: r.reply }]);
+                            if (r.contextStats) setAdvocateStats(r.contextStats);
+                          }).catch(e => {
+                            setAdvocateMessages(p => [...p, { role: "assistant", content: "I encountered an error. Please try again." }]);
+                          }).finally(() => setAdvocateLoading(false));
+                        }}>{prompt}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {advocateMessages.map((msg, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                  <div style={{
+                    maxWidth: "85%", padding: "10px 14px", borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                    background: msg.role === "user" ? "linear-gradient(135deg, #6366f1, #4f46e5)" : "var(--c-card-alt, #1a2332)",
+                    color: msg.role === "user" ? "#fff" : "var(--c-text)",
+                    fontSize: 13, lineHeight: 1.7, position: "relative",
+                    border: msg.role === "user" ? "none" : "1px solid var(--c-border)"
+                  }}>
+                    {msg.role === "assistant" && (
+                      <button style={{ position: "absolute", top: 4, right: 4, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#8A9096", opacity: 0.6, padding: "2px 4px" }}
+                        title="Copy response"
+                        onClick={() => { navigator.clipboard.writeText(msg.content); }}>📋</button>
+                    )}
+                    {msg.role === "user" ? (
+                      <span style={{ whiteSpace: "pre-wrap" }}>{msg.content}</span>
+                    ) : (
+                      <div>
+                        {msg.content.split("\n").map((line, li) => {
+                          if (line.startsWith("## ")) return <div key={li} style={{ fontWeight: 700, fontSize: 14, marginTop: 10, marginBottom: 4 }}>{line.replace(/^## /, "")}</div>;
+                          if (line.startsWith("### ")) return <div key={li} style={{ fontWeight: 600, fontSize: 13, marginTop: 8, marginBottom: 2 }}>{line.replace(/^### /, "")}</div>;
+                          if (line.startsWith("**") && line.endsWith("**")) return <div key={li} style={{ fontWeight: 700, marginTop: 6, marginBottom: 2 }}>{line.replace(/\*\*/g, "")}</div>;
+                          if (line.startsWith("- ") || line.startsWith("* ")) return <div key={li} style={{ paddingLeft: 12, position: "relative" }}><span style={{ position: "absolute", left: 0 }}>•</span>{line.replace(/^[-*] /, "").replace(/\*\*(.+?)\*\*/g, "$1")}</div>;
+                          if (line.match(/^\d+\.\s/)) return <div key={li} style={{ paddingLeft: 4 }}>{line.replace(/\*\*(.+?)\*\*/g, "$1")}</div>;
+                          if (line.trim() === "") return <div key={li} style={{ height: 4 }} />;
+                          return <div key={li}>{line.replace(/\*\*(.+?)\*\*/g, "$1")}</div>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {advocateLoading && (
+                <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                  <div style={{ padding: "12px 18px", borderRadius: "14px 14px 14px 4px", background: "var(--c-card-alt, #1a2332)", border: "1px solid var(--c-border)", display: "flex", gap: 4, alignItems: "center" }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#818cf8", animation: "pulse 1s ease-in-out infinite" }} />
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#818cf8", animation: "pulse 1s ease-in-out 0.2s infinite" }} />
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#818cf8", animation: "pulse 1s ease-in-out 0.4s infinite" }} />
+                  </div>
+                </div>
+              )}
+              <div ref={advocateEndRef} />
+            </div>
+            <div style={{ padding: "12px 18px", borderTop: "1px solid var(--c-border)", flexShrink: 0, display: "flex", gap: 8 }}>
+              <input
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--c-border)", background: "var(--c-bg)", color: "var(--c-text)", fontSize: 13, outline: "none" }}
+                placeholder="Ask about this case..."
+                value={advocateInput}
+                onChange={e => setAdvocateInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey && advocateInput.trim() && !advocateLoading) {
+                    e.preventDefault();
+                    const newMsgs = [...advocateMessages, { role: "user", content: advocateInput.trim() }];
+                    setAdvocateMessages(newMsgs);
+                    setAdvocateLoading(true);
+                    setAdvocateInput("");
+                    apiAdvocateChat({ caseId: c.id, messages: newMsgs }).then(r => {
+                      setAdvocateMessages(p => [...p, { role: "assistant", content: r.reply }]);
+                      if (r.contextStats && !advocateStats) setAdvocateStats(r.contextStats);
+                    }).catch(() => {
+                      setAdvocateMessages(p => [...p, { role: "assistant", content: "I encountered an error. Please try again." }]);
+                    }).finally(() => setAdvocateLoading(false));
+                  }
+                }}
+                disabled={advocateLoading}
+              />
+              <button
+                className="btn btn-sm"
+                style={{ background: advocateInput.trim() && !advocateLoading ? "#6366f1" : "#4b5563", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 8, cursor: advocateInput.trim() && !advocateLoading ? "pointer" : "not-allowed" }}
+                disabled={!advocateInput.trim() || advocateLoading}
+                onClick={() => {
+                  if (!advocateInput.trim() || advocateLoading) return;
+                  const newMsgs = [...advocateMessages, { role: "user", content: advocateInput.trim() }];
+                  setAdvocateMessages(newMsgs);
+                  setAdvocateLoading(true);
+                  setAdvocateInput("");
+                  apiAdvocateChat({ caseId: c.id, messages: newMsgs }).then(r => {
+                    setAdvocateMessages(p => [...p, { role: "assistant", content: r.reply }]);
+                    if (r.contextStats && !advocateStats) setAdvocateStats(r.contextStats);
+                  }).catch(() => {
+                    setAdvocateMessages(p => [...p, { role: "assistant", content: "I encountered an error. Please try again." }]);
+                  }).finally(() => setAdvocateLoading(false));
+                }}
+              >Send</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDeleteConfirm && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
           <div className="modal-box" style={{ maxWidth: 440 }}>
@@ -3491,6 +3648,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               setAiStrategy(p => ({ ...p, show: true, loading: true, result: null, error: null }));
               apiCaseStrategy({ caseId: c.id }).then(r => setAiStrategy(p => ({ ...p, loading: false, result: r.result }))).catch(e => setAiStrategy(p => ({ ...p, loading: false, error: e.message })));
             }}>⚡ Strategy</button>
+            <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px", color: "#6366f1", borderColor: "#a5b4fc" }} onClick={() => setShowAdvocate(true)}>🤖 Advocate AI</button>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => setShowPrint(true)}>🖨 Print</button>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => { if (parties.length === 0) apiGetParties(c.id).then(setParties).catch(() => {}); setShowDocGen(true); }}>📄 Generate</button>
             {canDelete && (

@@ -94,11 +94,12 @@ Nine AI-powered agents using OpenAI (`gpt-4o-mini`) via existing integration. Al
 9. **Filing Classifier** — Classifies court filings by analyzing extracted PDF text. Returns suggested name, filing party (State, Defendant, Co-Defendant, Court, Other), document type, filing date, and summary. Auto-updates the filing record. Auto-triggered on upload and email-received filings. Available per-filing in Filings tab ("Classify" button) and AI Center (select case → select filing → classify)
 
 10. **Charge Class Lookup** — Given a statute and/or charge description, returns the Alabama charge classification (Class A/B/C Felony, Misdemeanor A/B/C, Violation, Other). Auto-triggers on blur of statute/description fields in both New Case form and case detail Charges accordion. Only fills empty class fields — never overwrites user selections.
+11. **Advocate AI** — Multi-turn conversational AI assistant for case-specific advice. Loads the entire case file as context (case details, all notes, tasks, deadlines, co-defendants/parties, document summaries, filing summaries, email correspondence). Accessible via "🤖 Advocate AI" button in case detail overlay header. Features: starter prompt chips for quick onboarding, chat-style message bubbles with markdown rendering, copy individual AI responses, save full conversation as case note (type "AI Consultation"), context indicator showing loaded data counts, auto-scroll, typing indicator. Death penalty cases get capital-defense-specific instructions. Token management: progressive truncation for large cases (emails first, then notes, then document summaries). Conversation resets on modal close (no persistence). Endpoint: `/api/ai-agents/advocate`.
 
 All agents accessible via `/api/ai-agents/*` endpoints, require authentication. Frontend API helpers in `api.js`. Reusable `AiPanel` component for consistent UI rendering. Charge Analysis and Deadline Generator endpoints accept `caseId` to auto-load case data server-side.
 
 ### AI Center
-- Centralized view in sidebar (under Reports) that provides access to all 9 AI agents from one place
+- Centralized view in sidebar (under Reports) that provides access to all 11 AI agents from one place
 - Agent cards in a responsive grid; selecting one opens the agent panel with case selector (for agents that need a case)
 - Case Triage runs without case selection; all others require choosing a case first
 - Document Drafting includes document type selector and optional instructions field

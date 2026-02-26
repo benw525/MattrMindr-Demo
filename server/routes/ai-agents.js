@@ -524,4 +524,156 @@ Be concise but thorough. Flag anything that could help the defense.`;
   }
 });
 
+router.post("/advocate", requireAuth, async (req, res) => {
+  try {
+    const { caseId, messages } = req.body;
+    if (!caseId) return res.status(400).json({ error: "caseId required" });
+    if (!messages || !Array.isArray(messages) || messages.length === 0) return res.status(400).json({ error: "messages required" });
+
+    const [caseRes, notesRes, tasksRes, deadlinesRes, partiesRes, docsRes, filingsRes, corrRes] = await Promise.all([
+      pool.query("SELECT * FROM cases WHERE id = $1", [caseId]),
+      pool.query("SELECT body, type, created_at FROM case_notes WHERE case_id = $1 ORDER BY created_at DESC", [caseId]),
+      pool.query("SELECT title, status, priority, notes, due FROM tasks WHERE case_id = $1 ORDER BY due ASC NULLS LAST", [caseId]),
+      pool.query("SELECT title, date, type, status FROM deadlines WHERE case_id = $1 ORDER BY date ASC", [caseId]),
+      pool.query("SELECT name, party_type, data FROM case_parties WHERE case_id = $1", [caseId]),
+      pool.query("SELECT filename, doc_type, summary, extracted_text FROM case_documents WHERE case_id = $1 ORDER BY created_at DESC", [caseId]),
+      pool.query("SELECT filename, doc_type, filed_by, filing_date, summary FROM case_filings WHERE case_id = $1 ORDER BY filing_date DESC NULLS LAST", [caseId]),
+      pool.query("SELECT subject, from_name, body_text, received_at FROM case_correspondence WHERE case_id = $1 ORDER BY received_at DESC", [caseId]),
+    ]);
+
+    const c = caseRes.rows[0];
+    if (!c) return res.status(404).json({ error: "Case not found" });
+
+    const contextStats = {
+      notes: notesRes.rows.length,
+      tasks: tasksRes.rows.length,
+      deadlines: deadlinesRes.rows.length,
+      documents: docsRes.rows.length,
+      filings: filingsRes.rows.length,
+      emails: corrRes.rows.length,
+      parties: partiesRes.rows.length,
+    };
+
+    const charges = c.charges || [];
+    const chargesText = charges.map((ch, i) =>
+      `${i + 1}. ${ch.description || ""} (${ch.statute || ""}) — ${ch.chargeClass || ch.class || ""}, Disposition: ${ch.disposition || "None"}`
+    ).join("\n") || "No charges entered";
+
+    const notesText = notesRes.rows.map(n => `[${n.type || "Note"}] ${(n.body || "").substring(0, 800)}`).join("\n\n") || "No notes";
+
+    const tasksText = tasksRes.rows.map(t =>
+      `- ${t.title} (${t.status}, ${t.priority}${t.due ? ", due " + t.due : ""}${t.notes ? ": " + t.notes.substring(0, 200) : ""})`
+    ).join("\n") || "No tasks";
+
+    const deadlinesText = deadlinesRes.rows.map(d =>
+      `- ${d.title} — ${d.date || "No date"} (${d.type || ""}, ${d.status || ""})`
+    ).join("\n") || "No deadlines";
+
+    const partiesText = partiesRes.rows.map(p => {
+      const d = p.data || {};
+      let info = `${p.name || "Unknown"} (${p.party_type || "Party"})`;
+      if (d.charges) info += ` — Charges: ${d.charges}`;
+      if (d.status) info += ` — Status: ${d.status}`;
+      if (d.attorney) info += ` — Attorney: ${d.attorney}`;
+      return `- ${info}`;
+    }).join("\n") || "No parties";
+
+    const docsText = docsRes.rows.map(d => {
+      const summary = d.summary || (d.extracted_text ? d.extracted_text.substring(0, 400) + "..." : "No summary available");
+      return `- [${d.doc_type || "Other"}] ${d.filename}: ${summary}`;
+    }).join("\n\n") || "No documents";
+
+    const filingsText = filingsRes.rows.map(f =>
+      `- [${f.doc_type || "Filing"}] ${f.filename} — Filed by: ${f.filed_by || "Unknown"}, Date: ${f.filing_date || "Unknown"}${f.summary ? "\n  Summary: " + f.summary : ""}`
+    ).join("\n\n") || "No filings";
+
+    const emailsText = corrRes.rows.map(e =>
+      `- From: ${e.from_name || "Unknown"} — Subject: ${e.subject || "(no subject)"}\n  ${(e.body_text || "").substring(0, 500)}`
+    ).join("\n\n") || "No correspondence";
+
+    let contextBlock = `
+=== CASE INFORMATION ===
+Title: ${c.title || ""}
+Case Number: ${c.case_num || ""}
+Defendant: ${c.defendant_name || "Unknown"}
+Case Type: ${c.case_type || "Unknown"} | Division: ${c.court_division || "Unknown"}
+Court: ${c.court || "Mobile County"} | Judge: ${c.judge || "Unknown"}
+Prosecutor: ${c.prosecutor || "Unknown"}
+Stage: ${c.stage || "Unknown"} | Status: ${c.status || "Unknown"}
+Custody: ${c.custody_status || "Unknown"} | Bond: ${c.bond_amount ? "$" + c.bond_amount : "Unknown"}
+Arrest Date: ${c.arrest_date || "Unknown"} | Trial Date: ${c.trial_date || "Unknown"}
+${c.death_penalty ? "⚠️ DEATH PENALTY / CAPITAL CASE" : ""}
+
+=== CHARGES ===
+${chargesText}
+
+=== CASE NOTES (${contextStats.notes} total) ===
+${notesText}
+
+=== TASKS (${contextStats.tasks} total) ===
+${tasksText}
+
+=== DEADLINES (${contextStats.deadlines} total) ===
+${deadlinesText}
+
+=== CO-DEFENDANTS & PARTIES (${contextStats.parties} total) ===
+${partiesText}
+
+=== DOCUMENTS (${contextStats.documents} total) ===
+${docsText}
+
+=== COURT FILINGS (${contextStats.filings} total) ===
+${filingsText}
+
+=== EMAIL CORRESPONDENCE (${contextStats.emails} total) ===
+${emailsText}`;
+
+    const MAX_CONTEXT_CHARS = 60000;
+    if (contextBlock.length > MAX_CONTEXT_CHARS) {
+      const emailsTrunc = corrRes.rows.slice(0, 10).map(e =>
+        `- From: ${e.from_name || "Unknown"} — Subject: ${e.subject || "(no subject)"}\n  ${(e.body_text || "").substring(0, 200)}`
+      ).join("\n") || "No correspondence";
+      contextBlock = contextBlock.replace(/=== EMAIL CORRESPONDENCE[\s\S]*$/, `=== EMAIL CORRESPONDENCE (${contextStats.emails} total, showing recent 10) ===\n${emailsTrunc}`);
+    }
+    if (contextBlock.length > MAX_CONTEXT_CHARS) {
+      const notesTrunc = notesRes.rows.slice(0, 20).map(n => `[${n.type || "Note"}] ${(n.body || "").substring(0, 400)}`).join("\n\n");
+      contextBlock = contextBlock.replace(/=== CASE NOTES[\s\S]*?=== TASKS/, `=== CASE NOTES (${contextStats.notes} total, showing recent 20) ===\n${notesTrunc}\n\n=== TASKS`);
+    }
+    if (contextBlock.length > MAX_CONTEXT_CHARS) {
+      const docsTrunc = docsRes.rows.map(d => `- [${d.doc_type || "Other"}] ${d.filename}: ${(d.summary || "No summary").substring(0, 200)}`).join("\n");
+      contextBlock = contextBlock.replace(/=== DOCUMENTS[\s\S]*?=== COURT FILINGS/, `=== DOCUMENTS (${contextStats.documents} total, truncated) ===\n${docsTrunc}\n\n=== COURT FILINGS`);
+    }
+    if (contextBlock.length > MAX_CONTEXT_CHARS) {
+      const filTrunc = filingsRes.rows.slice(0, 15).map(f => `- [${f.doc_type || "Filing"}] ${f.filename} — Filed by: ${f.filed_by || "Unknown"}`).join("\n");
+      contextBlock = contextBlock.replace(/=== COURT FILINGS[\s\S]*?=== EMAIL/, `=== COURT FILINGS (${contextStats.filings} total, truncated) ===\n${filTrunc}\n\n=== EMAIL`);
+    }
+    if (contextBlock.length > MAX_CONTEXT_CHARS) {
+      contextBlock = contextBlock.substring(0, MAX_CONTEXT_CHARS) + "\n[Context truncated due to case size]";
+    }
+
+    const systemPrompt = `You are Advocate AI, a senior criminal defense advisor assisting a public defender at the Mobile County Public Defender's Office in Alabama. You have access to the complete case file below. Answer questions thoughtfully using specific details from the case. Be practical, strategic, and action-oriented. Reference specific evidence, documents, filings, and notes when relevant. Format responses with markdown for readability.${c.death_penalty ? "\n\nCRITICAL: This is a DEATH PENALTY / CAPITAL case. Always consider capital defense strategies, mitigation investigation, Eighth Amendment issues, and the heightened standards required in capital proceedings." : ""}
+
+${contextBlock}`;
+
+    const apiMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages.slice(-20).map(m => ({ role: m.role, content: m.content })),
+    ];
+
+    const resp = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: apiMessages,
+      temperature: 0.4,
+      max_tokens: 2000,
+      store: false,
+    });
+
+    const reply = resp.choices[0].message.content;
+    res.json({ reply, contextStats });
+  } catch (err) {
+    console.error("Advocate AI error:", err);
+    res.status(500).json({ error: "Advocate AI failed" });
+  }
+});
+
 module.exports = router;

@@ -99,6 +99,7 @@ export const apiCaseTriage       = ()     => apiFetch("/api/ai-agents/case-triag
 export const apiClientSummary    = (data) => apiFetch("/api/ai-agents/client-summary",    { method: "POST", body: data });
 export const apiDocSummary       = (data) => apiFetch("/api/ai-agents/doc-summary",       { method: "POST", body: data });
 export const apiTaskSuggestions  = (data) => apiFetch("/api/ai-agents/task-suggestions",  { method: "POST", body: data });
+export const apiAdvocateChat    = (data) => apiFetch("/api/ai-agents/advocate",          { method: "POST", body: data });
 
 // Case Documents
 export const apiGetCaseDocuments = (caseId) => apiFetch(`/api/case-documents/${caseId}`);
