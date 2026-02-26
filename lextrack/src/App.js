@@ -4841,8 +4841,10 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                             <div style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text2)", marginBottom: 6 }}>Attachments</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                               {email.attachments.map((att, idx) => {
-                                const isPreviewable = /^(image\/|application\/pdf)/.test(att.contentType);
-                                const icon = att.contentType?.startsWith("image/") ? "🖼" : att.contentType === "application/pdf" ? "📄" : "📎";
+                                const isImage = att.contentType?.startsWith("image/");
+                                const isPdf = att.contentType === "application/pdf";
+                                const isPreviewable = isImage || isPdf;
+                                const icon = isImage ? "🖼" : isPdf ? "📄" : "📎";
                                 return (
                                   <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                                     <button
@@ -4853,7 +4855,9 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
                                           const blob = await res.blob();
                                           const typedBlob = new Blob([blob], { type: att.contentType || "application/octet-stream" });
                                           const blobUrl = URL.createObjectURL(typedBlob);
-                                          if (isPreviewable) {
+                                          if (isPdf) {
+                                            window.open(blobUrl, "_blank");
+                                          } else if (isImage) {
                                             setAttachmentPreview({ url: blobUrl, filename: att.filename, contentType: att.contentType, blobUrl });
                                           } else {
                                             const a = document.createElement("a"); a.href = blobUrl; a.download = att.filename; a.click(); URL.revokeObjectURL(blobUrl);

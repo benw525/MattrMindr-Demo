@@ -120,63 +120,159 @@ router.post("/", upload.any(), async (req, res) => {
           const parsed = await pdfParse(fileBuffer);
           extractedText = parsed.text || "";
         } catch (pErr) {
-          console.error("PDF text extraction error for filing:", pErr.message);
+          console.error("PDF text extraction error:", pErr.message);
         }
 
-        const { rows: filingRows } = await pool.query(
-          `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, source, source_email_from)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', $8)
-           RETURNING id`,
-          [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, pdfAtt.size, fromEmail]
-        );
-
-        if (filingRows.length > 0 && extractedText) {
-          const filingId = filingRows[0].id;
+        let isFiling = true;
+        if (extractedText) {
           try {
             const OpenAI = require("openai");
             const openai = new OpenAI({
               apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
               baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
             });
-            const classifyPrompt = `You are a court filing classification assistant for a criminal defense public defender's office. Analyze the court filing text and classify it. Return ONLY valid JSON with these fields:
+            const triagePrompt = `You are a document triage assistant for a criminal defense public defender's office. Determine if this PDF is a COURT FILING or a regular DOCUMENT.
+
+A COURT FILING is a document formally filed with the court. Key indicators:
+- Contains a "Notice of Electronic Filing" (NEF) cover page
+- Is a formal motion, order, plea, indictment, or other pleading filed with the clerk of court
+- Has a court case number header, judge assignment, and filing stamp/date
+- Examples: motions, orders, complaints, indictments, arraignment notices, plea agreements filed with the court
+
+A regular DOCUMENT is anything else that is NOT formally filed with the court. Examples:
+- Police reports, incident reports, arrest reports
+- Lab/forensic reports, toxicology results
+- Witness statements, victim statements
+- Medical records, mental health evaluations
+- Discovery materials, evidence logs
+- Body cam/dash cam transcripts
+- Prior record/PSI reports
+- Attorney correspondence or memos
+
+Return ONLY valid JSON: {"isFiling": true/false, "reason": "brief explanation"}`;
+            const textSnippet = extractedText.substring(0, 6000);
+            const triageResp = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [
+                { role: "system", content: triagePrompt },
+                { role: "user", content: `Is this a court filing or a regular document?\n\n${textSnippet}` },
+              ],
+              temperature: 0.1,
+              max_tokens: 200,
+              store: false,
+              response_format: { type: "json_object" },
+            });
+            const triage = JSON.parse(triageResp.choices[0].message.content);
+            isFiling = triage.isFiling === true;
+            console.log(`PDF triage: "${pdfAtt.filename}" → ${isFiling ? "FILING" : "DOCUMENT"} (${triage.reason || ""})`);
+          } catch (triageErr) {
+            console.error("PDF triage error, defaulting to filing:", triageErr.message);
+          }
+        }
+
+        if (isFiling) {
+          const { rows: filingRows } = await pool.query(
+            `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, source, source_email_from)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', $8)
+             RETURNING id`,
+            [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, pdfAtt.size, fromEmail]
+          );
+
+          if (filingRows.length > 0 && extractedText) {
+            const filingId = filingRows[0].id;
+            try {
+              const OpenAI = require("openai");
+              const openai = new OpenAI({
+                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+                baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+              });
+              const classifyPrompt = `You are a court filing classification assistant for a criminal defense public defender's office. Analyze the court filing text and classify it. Return ONLY valid JSON with these fields:
 - "suggestedName" (string — proper legal filing name)
 - "filedBy" (one of: "State", "Defendant", "Co-Defendant", "Court", "Other")
 - "docType" (string — filing type)
 - "filingDate" (string — YYYY-MM-DD format, or null if not found)
 - "summary" (string — 2-3 sentence summary)`;
-            const textSnippet = extractedText.substring(0, 12000);
-            const resp = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
-              messages: [
-                { role: "system", content: classifyPrompt },
-                { role: "user", content: `Classify this court filing:\n\n${textSnippet}` },
-              ],
-              temperature: 0.3,
-              max_tokens: 2000,
-              store: false,
-              response_format: { type: "json_object" },
-            });
-            const classification = JSON.parse(resp.choices[0].message.content);
-            const sets = [];
-            const setVals = [];
-            let si = 1;
-            if (classification.suggestedName) { sets.push(`filename = $${si++}`); setVals.push(classification.suggestedName); }
-            if (classification.filedBy) { sets.push(`filed_by = $${si++}`); setVals.push(classification.filedBy); }
-            if (classification.docType) { sets.push(`doc_type = $${si++}`); setVals.push(classification.docType); }
-            if (classification.filingDate) { sets.push(`filing_date = $${si++}`); setVals.push(classification.filingDate); }
-            if (classification.summary) { sets.push(`summary = $${si++}`); setVals.push(classification.summary); }
-            if (sets.length > 0) {
-              setVals.push(filingId);
-              await pool.query(`UPDATE case_filings SET ${sets.join(", ")} WHERE id = $${si}`, setVals);
+              const textSnippet = extractedText.substring(0, 12000);
+              const resp = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                  { role: "system", content: classifyPrompt },
+                  { role: "user", content: `Classify this court filing:\n\n${textSnippet}` },
+                ],
+                temperature: 0.3,
+                max_tokens: 2000,
+                store: false,
+                response_format: { type: "json_object" },
+              });
+              const classification = JSON.parse(resp.choices[0].message.content);
+              const sets = [];
+              const setVals = [];
+              let si = 1;
+              if (classification.suggestedName) { sets.push(`filename = $${si++}`); setVals.push(classification.suggestedName); }
+              if (classification.filedBy) { sets.push(`filed_by = $${si++}`); setVals.push(classification.filedBy); }
+              if (classification.docType) { sets.push(`doc_type = $${si++}`); setVals.push(classification.docType); }
+              if (classification.filingDate) { sets.push(`filing_date = $${si++}`); setVals.push(classification.filingDate); }
+              if (classification.summary) { sets.push(`summary = $${si++}`); setVals.push(classification.summary); }
+              if (sets.length > 0) {
+                setVals.push(filingId);
+                await pool.query(`UPDATE case_filings SET ${sets.join(", ")} WHERE id = $${si}`, setVals);
+              }
+              console.log(`Filing auto-classified: ${classification.suggestedName || pdfAtt.filename} (${classification.filedBy || "unknown"})`);
+            } catch (classifyErr) {
+              console.error("Auto-classify filing error:", classifyErr.message);
             }
-            console.log(`Filing auto-classified: ${classification.suggestedName || pdfAtt.filename} (${classification.filedBy || "unknown"})`);
-          } catch (classifyErr) {
-            console.error("Auto-classify filing error:", classifyErr.message);
           }
+          console.log(`PDF filing created from email: ${pdfAtt.filename} for case ${caseId}`);
+        } else {
+          const { rows: docRows } = await pool.query(
+            `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by_name, file_size)
+             VALUES ($1, $2, $3, $4, $5, 'Other', $6, $7)
+             RETURNING id`,
+            [caseId, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, `Email: ${fromEmail}`, pdfAtt.size]
+          );
+
+          if (docRows.length > 0 && extractedText) {
+            const docId = docRows[0].id;
+            try {
+              const OpenAI = require("openai");
+              const openai = new OpenAI({
+                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+                baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+              });
+              const docClassifyPrompt = `You are a document classification assistant for a criminal defense public defender's office. Analyze the document text and classify it. Return ONLY valid JSON with these fields:
+- "suggestedName" (string — descriptive document name based on content)
+- "docType" (one of: "Police Report", "Witness Statement", "Lab/Forensic Report", "Mental Health Evaluation", "Prior Record/PSI", "Discovery Material", "Medical Records", "Body Cam/Dash Cam Transcript", "Court Order", "Plea Agreement", "Expert Report", "Other")`;
+              const textSnippet = extractedText.substring(0, 12000);
+              const resp = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                  { role: "system", content: docClassifyPrompt },
+                  { role: "user", content: `Classify this document:\n\n${textSnippet}` },
+                ],
+                temperature: 0.3,
+                max_tokens: 1000,
+                store: false,
+                response_format: { type: "json_object" },
+              });
+              const classification = JSON.parse(resp.choices[0].message.content);
+              const sets = [];
+              const setVals = [];
+              let si = 1;
+              if (classification.suggestedName) { sets.push(`filename = $${si++}`); setVals.push(classification.suggestedName); }
+              if (classification.docType) { sets.push(`doc_type = $${si++}`); setVals.push(classification.docType); }
+              if (sets.length > 0) {
+                setVals.push(docId);
+                await pool.query(`UPDATE case_documents SET ${sets.join(", ")} WHERE id = $${si}`, setVals);
+              }
+              console.log(`PDF document auto-classified: ${classification.suggestedName || pdfAtt.filename} (${classification.docType || "Other"})`);
+            } catch (classifyErr) {
+              console.error("Auto-classify PDF document error:", classifyErr.message);
+            }
+          }
+          console.log(`PDF document created from email: ${pdfAtt.filename} for case ${caseId}`);
         }
-        console.log(`PDF filing created from email: ${pdfAtt.filename} for case ${caseId}`);
-      } catch (filingErr) {
-        console.error("Create filing from email error:", filingErr.message);
+      } catch (pdfErr) {
+        console.error("Process PDF from email error:", pdfErr.message);
       }
     }
 
