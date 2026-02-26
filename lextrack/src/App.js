@@ -9043,7 +9043,30 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
   const filteredStaff = roleFilter === "All" ? activeUsers : activeUsers.filter(u => (u.roles && u.roles.length ? u.roles : [u.role]).includes(roleFilter));
   const pinnedStaff = filteredStaff.filter(u => pinnedIds.includes(u.id));
   const [showDeletedStaff, setShowDeletedStaff] = useState(false);
-  const [expandedStaffId, setExpandedStaffId] = useState(null);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [colCount, setColCount] = useState(3);
+  const allGridRef = useRef(null);
+  const pinnedGridRef = useRef(null);
+
+  useEffect(() => {
+    const measure = () => {
+      const el = allGridRef.current || pinnedGridRef.current;
+      if (!el) return;
+      const cols = getComputedStyle(el).gridTemplateColumns.split(" ").length;
+      setColCount(cols);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (allGridRef.current) ro.observe(allGridRef.current);
+    if (pinnedGridRef.current) ro.observe(pinnedGridRef.current);
+    return () => ro.disconnect();
+  });
+
+  const isRowExpanded = (section, index) => expandedRow && expandedRow.section === section && expandedRow.row === Math.floor(index / colCount);
+  const toggleRow = (section, index) => {
+    const row = Math.floor(index / colCount);
+    setExpandedRow(prev => prev && prev.section === section && prev.row === row ? null : { section, row });
+  };
 
   const handleAddStaff = async (formData) => {
     const saved = await apiCreateUser(formData);
@@ -9063,7 +9086,7 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
       await apiDeleteUser(userId);
       setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, deletedAt: new Date().toISOString() } : u));
       setConfirmDeleteId(null);
-      setExpandedStaffId(null);
+      setExpandedRow(null);
     } catch (err) {
       alert("Failed to remove staff: " + err.message);
     }
@@ -9145,12 +9168,12 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
               {pinnedExpanded ? "▾" : "▸"} Pinned ({pinnedStaff.length})
             </button>
             {pinnedExpanded && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
-                {pinnedStaff.map(u => {
+              <div ref={pinnedGridRef} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
+                {pinnedStaff.map((u, idx) => {
                   const mine = allCases.filter(c => c.assignedAttorney === u.id || c.secondAttorney === u.id || c.trialCoordinator === u.id || c.investigator === u.id || c.socialWorker === u.id);
-                  const isExpanded = expandedStaffId === u.id;
+                  const isExpanded = isRowExpanded("pinned", idx);
                   return (
-                    <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative", cursor: "pointer", borderLeft: "3px solid #C9A84C" }} onClick={() => setExpandedStaffId(isExpanded ? null : u.id)}>
+                    <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative", cursor: "pointer", borderLeft: "3px solid #C9A84C" }} onClick={() => toggleRow("pinned", idx)}>
                       <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
                         <button onClick={() => togglePin(u.id)} title="Unpin" style={{ background: "transparent", border: "none", color: "#C9A84C", cursor: "pointer", fontSize: 13, lineHeight: 1, padding: "2px 4px" }}>📌</button>
                       </div>
@@ -9192,13 +9215,13 @@ function StaffView({ allCases, currentUser, setCurrentUser, allUsers, setAllUser
             {allStaffExpanded ? "▾" : "▸"} All Staff ({filteredStaff.length})
           </button>
         </div>
-        {allStaffExpanded && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
-          {filteredStaff.map(u => {
+        {allStaffExpanded && <div ref={allGridRef} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 16 }}>
+          {filteredStaff.map((u, idx) => {
             const mine = allCases.filter(c => c.assignedAttorney === u.id || c.secondAttorney === u.id || c.trialCoordinator === u.id || c.investigator === u.id || c.socialWorker === u.id);
             const isConfirming = confirmDeleteId === u.id;
-            const isExpanded = expandedStaffId === u.id;
+            const isExpanded = isRowExpanded("all", idx);
             return (
-              <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative", cursor: "pointer" }} onClick={() => setExpandedStaffId(isExpanded ? null : u.id)}>
+              <div key={u.id} className="card" style={{ padding: "20px 22px", position: "relative", cursor: "pointer" }} onClick={() => toggleRow("all", idx)}>
                 {isExpanded && (
                   <div style={{ position: "absolute", top: 10, right: 12, display: "flex", gap: 4, alignItems: "center" }} onClick={e => e.stopPropagation()}>
                     {isConfirming ? (
