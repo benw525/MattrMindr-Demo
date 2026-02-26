@@ -568,7 +568,7 @@ router.post("/advocate", requireAuth, async (req, res) => {
       pool.query("SELECT body, type, created_at FROM case_notes WHERE case_id = $1 ORDER BY created_at DESC", [caseId]),
       pool.query("SELECT title, status, priority, notes, due FROM tasks WHERE case_id = $1 ORDER BY due ASC NULLS LAST", [caseId]),
       pool.query("SELECT title, date, type, rule FROM deadlines WHERE case_id = $1 ORDER BY date ASC", [caseId]),
-      pool.query("SELECT name, party_type, data FROM case_parties WHERE case_id = $1", [caseId]),
+      pool.query("SELECT party_type, data FROM case_parties WHERE case_id = $1", [caseId]),
       pool.query("SELECT filename, doc_type, summary, extracted_text FROM case_documents WHERE case_id = $1 ORDER BY created_at DESC", [caseId]),
       pool.query("SELECT filename, doc_type, filed_by, filing_date, summary FROM case_filings WHERE case_id = $1 ORDER BY filing_date DESC NULLS LAST", [caseId]),
       pool.query("SELECT subject, from_name, body_text, received_at FROM case_correspondence WHERE case_id = $1 ORDER BY received_at DESC", [caseId]),
@@ -599,15 +599,17 @@ router.post("/advocate", requireAuth, async (req, res) => {
     ).join("\n") || "No tasks";
 
     const deadlinesText = deadlinesRes.rows.map(d =>
-      `- ${d.title} — ${d.date || "No date"} (${d.type || ""}, ${d.status || ""})`
+      `- ${d.title} — ${d.date || "No date"} (${d.type || ""}${d.rule ? ", Rule: " + d.rule : ""})`
     ).join("\n") || "No deadlines";
 
     const partiesText = partiesRes.rows.map(p => {
       const d = p.data || {};
-      let info = `${p.name || "Unknown"} (${p.party_type || "Party"})`;
+      const name = [d.firstName, d.middleName, d.lastName].filter(Boolean).join(" ") || "Unknown";
+      let info = `${name} (${p.party_type || "Party"})`;
       if (d.charges) info += ` — Charges: ${d.charges}`;
       if (d.status) info += ` — Status: ${d.status}`;
       if (d.attorney) info += ` — Attorney: ${d.attorney}`;
+      if (d.jointSevered) info += ` — ${d.jointSevered}`;
       return `- ${info}`;
     }).join("\n") || "No parties";
 
