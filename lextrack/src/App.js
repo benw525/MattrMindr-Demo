@@ -2788,6 +2788,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
           onAddTask={onAddTask}
           onAddNote={async (note) => { try { const saved = await apiCreateNote(note); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { alert("Failed to save note: " + err.message); } }}
           onDeleteNote={async (noteId) => { try { await apiDeleteNote(noteId); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(n => n.id !== noteId) })); } catch (err) { alert("Failed to delete note: " + err.message); } }}
+          onUpdateNote={async (noteId, data) => { try { const updated = await apiUpdateNote(noteId, data); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).map(n => n.id === noteId ? updated : n) })); } catch (err) { alert("Failed to update note: " + err.message); throw err; } }}
           onAddLink={async (link) => { try { const saved = await apiCreateLink(link); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: [...(prev[selectedCase.id] || []), saved] })); } catch (err) { alert("Failed to save link: " + err.message); } }}
           onDeleteLink={async (linkId) => { try { await apiDeleteLink(linkId); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(l => l.id !== linkId) })); } catch (err) { alert("Failed to delete link: " + err.message); } }}
           onLogActivity={async (entry) => { try { const saved = await apiCreateActivity(entry); setCaseActivity(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { console.error("Failed to log activity:", err); } }}
@@ -2914,7 +2915,7 @@ const CONTACT_LINKABLE_KEYS = new Set(["defendantName", "prosecutor", "judge"]);
 const KEY_DATE_FIELDS = ["arrestDate", "arraignmentDate", "nextCourtDate", "trialDate", "sentencingDate", "dispositionDate"];
 const KEY_DATE_TYPES = { arrestDate: "Other", arraignmentDate: "Hearing", nextCourtDate: "Hearing", trialDate: "Hearing", sentencingDate: "Hearing", dispositionDate: "Other" };
 
-function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddTask, onAddNote, onDeleteNote, onAddLink, onDeleteLink, onLogActivity, onRefreshActivity, onAddDeadline, onUpdateDeadline }) {
+function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, activity, onClose, onUpdate, onDeleteCase, onCompleteTask, onAddTask, onAddNote, onDeleteNote, onUpdateNote, onAddLink, onDeleteLink, onLogActivity, onRefreshActivity, onAddDeadline, onUpdateDeadline }) {
   const [draft, setDraft] = useState({ ...c });
   const [customFields, setCustomFields] = useState(c._customFields || []);
   const DEFAULT_HIDDEN_DATES = [];
@@ -3239,6 +3240,11 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
       const preview = (note.body || "").substring(0, 60);
       log("Note Removed", `Note deleted: "${preview}${note.body && note.body.length > 60 ? "..." : ""}"`);
     }
+  };
+
+  const handleUpdateNote = async (noteId, data) => {
+    await onUpdateNote(noteId, data);
+    log("Note Edited", `Note updated`);
   };
 
   const handleAddDeadline = (dl) => {
@@ -4127,7 +4133,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               </div>
 
               <div className="case-overlay-section">
-                <CaseNotes caseId={c.id} notes={notes} currentUser={currentUser} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} caseRecord={c} />
+                <CaseNotes caseId={c.id} notes={notes} currentUser={currentUser} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} onUpdateNote={handleUpdateNote} caseRecord={c} />
               </div>
             </div>
 
@@ -5530,12 +5536,15 @@ const NOTE_TYPES = [
 const noteTypeStyle = (label) => NOTE_TYPES.find(t => t.label === label) || NOTE_TYPES[0];
 
 // ─── CaseNotes Component ──────────────────────────────────────────────────────
-function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote, caseRecord }) {
+function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote, onUpdateNote, caseRecord }) {
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [form, setForm] = useState({ type: "General", body: "", time: "" });
   const [assignId, setAssignId] = useState(0);
   const [showAllAssign, setShowAllAssign] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editBody, setEditBody] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const speechRecRef = useRef(null);
   const speechSupported = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
@@ -5752,10 +5761,56 @@ function CaseNotes({ caseId, notes, currentUser, onAddNote, onDeleteNote, caseRe
                       <span>👤 {note.authorName} ({note.authorRole})</span>
                       <span>🕐 {dateStr} at {timeStr}</span>
                     </div>
-                    <div style={{ fontSize: 13, color: "var(--c-text)", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "var(--c-hover)", padding: "10px 12px", borderRadius: 5, border: "1px solid var(--c-border)" }}>
-                      {note.body}
-                    </div>
-                    <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                    {editingNoteId === note.id ? (
+                      <div onClick={e => e.stopPropagation()}>
+                        <textarea
+                          rows={6}
+                          value={editBody}
+                          onChange={e => setEditBody(e.target.value)}
+                          style={{ width: "100%", fontSize: 13, lineHeight: 1.7, padding: "10px 12px", borderRadius: 5, border: "1px solid var(--c-accent)", background: "var(--c-bg)", color: "var(--c-text)", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                          autoFocus
+                        />
+                        <div style={{ marginTop: 8, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <button
+                            className="btn btn-outline btn-sm"
+                            style={{ fontSize: 11 }}
+                            onClick={() => { setEditingNoteId(null); setEditBody(""); }}
+                            disabled={editSaving}
+                          >Cancel</button>
+                          <button
+                            className="btn btn-gold btn-sm"
+                            style={{ fontSize: 11 }}
+                            disabled={editSaving || !editBody.trim() || editBody.trim() === note.body}
+                            onClick={async () => {
+                              setEditSaving(true);
+                              try {
+                                await onUpdateNote(note.id, { body: editBody.trim() });
+                                setEditingNoteId(null);
+                                setEditBody("");
+                              } catch (err) {
+                                alert("Failed to update note: " + err.message);
+                              } finally {
+                                setEditSaving(false);
+                              }
+                            }}
+                          >{editSaving ? "Saving…" : "Save"}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 13, color: "var(--c-text)", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "var(--c-hover)", padding: "10px 12px", borderRadius: 5, border: "1px solid var(--c-border)" }}>
+                        {note.body}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                      {editingNoteId !== note.id && (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          style={{ fontSize: 11 }}
+                          onClick={e => { e.stopPropagation(); setEditingNoteId(note.id); setEditBody(note.body); }}
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
                       <button
                         className="btn btn-outline btn-sm"
                         style={{ fontSize: 11, color: "#e05252", borderColor: "#fca5a5" }}
@@ -7273,6 +7328,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
             onAddTask={onAddTask}
             onAddNote={async (note) => { try { const saved = await apiCreateNote(note); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { alert("Failed to save note: " + err.message); } }}
             onDeleteNote={async (noteId) => { try { await apiDeleteNote(noteId); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(n => n.id !== noteId) })); } catch (err) { alert("Failed to delete note: " + err.message); } }}
+            onUpdateNote={async (noteId, data) => { try { const updated = await apiUpdateNote(noteId, data); setCaseNotes(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).map(n => n.id === noteId ? updated : n) })); } catch (err) { alert("Failed to update note: " + err.message); throw err; } }}
             onAddLink={async (link) => { try { const saved = await apiCreateLink(link); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: [...(prev[selectedCase.id] || []), saved] })); } catch (err) { alert("Failed to save link: " + err.message); } }}
             onDeleteLink={async (linkId) => { try { await apiDeleteLink(linkId); setCaseLinks(prev => ({ ...prev, [selectedCase.id]: (prev[selectedCase.id] || []).filter(l => l.id !== linkId) })); } catch (err) { alert("Failed to delete link: " + err.message); } }}
             onLogActivity={async (entry) => { try { const saved = await apiCreateActivity(entry); setCaseActivity(prev => ({ ...prev, [selectedCase.id]: [saved, ...(prev[selectedCase.id] || [])] })); } catch (err) { console.error("Failed to log activity:", err); } }}
