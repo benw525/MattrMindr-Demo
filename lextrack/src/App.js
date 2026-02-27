@@ -574,6 +574,9 @@ body.dark-body { background: #0E1116; }
   .print-doc { width: 100% !important; padding: 24px 16px; }
   .case-overlay { left: 0 !important; }
   .case-overlay-header { padding: 14px 12px; flex-wrap: wrap; gap: 10px; }
+  .case-overlay-actions { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; flex-shrink: 1 !important; }
+  .case-overlay-actions::-webkit-scrollbar { display: none; }
+  .case-overlay-actions .btn { white-space: nowrap; }
   .case-overlay-tabs { padding: 0 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; position: relative; }
   .case-overlay-tabs::-webkit-scrollbar { display: none; }
   .case-overlay-tab { padding: 10px 14px; white-space: nowrap; font-size: 12px; min-height: 44px; display: flex; align-items: center; }
@@ -4089,7 +4092,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
               {draft.title || "Untitled"}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
+          <div className="case-overlay-actions" style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
             <button className="btn btn-outline btn-sm" style={{ lineHeight: "20px" }} onClick={() => setShowTeamPopup(true)}>👥 Team</button>
             <button
               className={`btn btn-sm ${editMode ? "" : "btn-outline"}`}
