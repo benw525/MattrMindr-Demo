@@ -296,27 +296,87 @@ router.post("/case-triage", requireAuth, async (req, res) => {
     });
 
     const today = new Date().toISOString().split("T")[0];
+    const nowMs = Date.now();
+    const daysUntil = (dateStr) => {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      return Math.ceil((d - nowMs) / (1000 * 60 * 60 * 24));
+    };
+    const daysSince = (dateStr) => {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      return Math.floor((nowMs - d) / (1000 * 60 * 60 * 24));
+    };
+
     const caseSummaries = casesRes.rows.map(c => {
       const tasks = tasksByCase[c.id] || [];
       const deadlines = deadlinesByCase[c.id] || [];
-      const overdue = tasks.filter(t => t.due && t.due < today && t.status !== "Completed").length;
-      const upcomingDeadlines = deadlines.filter(d => {
-        const diff = (new Date(d.date) - new Date()) / (1000 * 60 * 60 * 24);
-        return diff <= 14;
-      }).length;
+      const overdueTasks = tasks.filter(t => t.due && t.due < today && t.status !== "Completed");
+      const upcoming = deadlines.filter(d => {
+        const diff = (new Date(d.date) - nowMs) / (1000 * 60 * 60 * 24);
+        return diff >= 0 && diff <= 30;
+      });
 
-      return `ID:${c.id} | "${c.title}" | Case#:${c.case_num || "N/A"} | Defendant:${c.defendant_name || "N/A"} | Type:${c.case_type} | Stage:${c.stage} | Division:${c.court_division || "N/A"} | ChargeClass:${c.charge_class || "N/A"} | Custody:${c.custody_status || "N/A"} | DeathPenalty:${c.death_penalty ? "YES" : "no"} | Trial:${c.trial_date || "Not set"} | NextCourt:${c.next_court_date || "Not set"} | Attorney:${userMap[c.lead_attorney] || "Unassigned"} | OverdueTasks:${overdue} | DeadlinesIn14d:${upcomingDeadlines} | OpenTasks:${tasks.length}`;
-    }).join("\n");
+      const charges = (c.charges || []).map((ch, i) =>
+        `  Count ${i + 1}: ${ch.description || "Unknown"} (${ch.statute || "no statute"}, ${ch.class || ch.degree || "unclassified"})`
+      ).join("\n") || "  No charges entered";
 
-    const systemPrompt = `You are a case management triage assistant for a public defender's office. Analyze the active caseload and return a JSON object with a "cases" array. Each entry must have: "id" (number — the case ID), "title" (string), "urgency" (1-10 scale, 10 = most urgent), "reason" (one sentence explaining why this case is urgent), "action" (one specific next step the attorney should take). Rank by urgency descending. Return top 8 most urgent cases. Today is ${today}.
+      const overdueSummary = overdueTasks.length > 0
+        ? overdueTasks.slice(0, 3).map(t => `"${t.title}" (due ${t.due})`).join(", ")
+        : "None";
+
+      const deadlineSummary = upcoming.length > 0
+        ? upcoming.slice(0, 4).map(d => `"${d.title}" on ${d.date} (${daysUntil(d.date)} days)`).join(", ")
+        : "None in next 30 days";
+
+      const trialDays = daysUntil(c.trial_date);
+      const courtDays = daysUntil(c.next_court_date);
+      const arrestAge = daysSince(c.arrest_date);
+
+      return [
+        `--- CASE ID:${c.id} ---`,
+        `Title: "${c.title}" | Case#: ${c.case_num || "N/A"} | Defendant: ${c.defendant_name || "N/A"}`,
+        `Type: ${c.case_type} | Stage: ${c.stage} | Division: ${c.court_division || "N/A"}`,
+        `ChargeClass: ${c.charge_class || "N/A"} | Custody: ${c.custody_status || "N/A"} | DeathPenalty: ${c.death_penalty ? "YES" : "no"}`,
+        `Charges:\n${charges}`,
+        `Trial: ${c.trial_date || "Not set"}${trialDays !== null ? ` (${trialDays} days away)` : ""} | NextCourt: ${c.next_court_date || "Not set"}${courtDays !== null ? ` (${courtDays} days away)` : ""}`,
+        `Arraignment: ${c.arraignment_date || "N/A"} | Sentencing: ${c.sentencing_date || "N/A"}`,
+        `Arrest: ${c.arrest_date || "N/A"}${arrestAge !== null ? ` (${arrestAge} days ago)` : ""} | Attorney: ${userMap[c.lead_attorney] || "Unassigned"}`,
+        `Overdue Tasks (${overdueTasks.length}): ${overdueSummary}`,
+        `Upcoming Deadlines (${upcoming.length}): ${deadlineSummary}`,
+        `Open Tasks: ${tasks.length}`,
+      ].join("\n");
+    }).join("\n\n");
+
+    const systemPrompt = `You are a criminal defense case triage assistant for the Mobile County Public Defender's Office (Alabama). Analyze the active caseload and return a JSON object with a "cases" array. Each entry must have:
+- "id" (number — the case ID)
+- "title" (string — the case title)
+- "urgency" (1-10 scale, 10 = most urgent)
+- "reason" (string — 2-3 detailed sentences explaining WHY this case is urgent, citing SPECIFIC facts from the case data)
+- "action" (string — one specific, actionable next step the attorney should take)
+
+Rank by urgency descending. Return top 8 most urgent cases. Today is ${today}.
+
+CRITICAL INSTRUCTIONS FOR "reason" FIELD:
+- ALWAYS cite the specific charge names, statutes, and charge classes (e.g., "Defendant faces Murder 1st Degree under Ala. Code §13A-6-2, a Class A Felony carrying 10-99 years or life")
+- ALWAYS state exact day counts (e.g., "Trial is 12 days away" not "upcoming trial")
+- If client is in custody, state how long (e.g., "In custody 147 days since arrest on 2025-10-03")
+- Reference specific overdue tasks and deadlines by name
+- Never give vague reasons like "has upcoming deadlines" — say which deadlines and when
 
 Priority factors (highest to lowest):
-- Death penalty cases always rank highest
-- Upcoming trial dates within 30 days
-- Clients in custody
-- Overdue tasks or imminent deadlines
-- Cases with no recent activity
-- Higher charge classes`;
+1. Death penalty cases — always highest urgency (10)
+2. Trial date within 14 days with in-custody client
+3. Trial date within 30 days
+4. Class A or B Felony charges with client in custody
+5. Multiple serious charges (stacked counts increase sentencing exposure)
+6. Overdue tasks — especially motions, witness interviews, or discovery deadlines
+7. Imminent court dates or deadlines within 7 days
+8. Clients in custody with no upcoming court date set (languishing)
+9. Cases with mandatory minimum or habitual offender exposure
+10. Case age since arrest exceeding 180 days without resolution
+11. Higher charge classes (A > B > C > Misdemeanor)
+12. Cases at pre-trial or arraignment stage with no attorney activity`;
 
     const raw = await aiCall(systemPrompt, `Active caseload:\n${caseSummaries}`, true, req.session.userId);
     const parsed = JSON.parse(raw);
