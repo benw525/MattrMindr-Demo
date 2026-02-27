@@ -2736,7 +2736,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const [deletedLoading, setDeletedLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [attyFilter, setAttyFilter] = useState("All");
+  const [attyFilter, setAttyFilter] = useState(String(currentUser.id));
   const [divisionFilter, setDivisionFilter] = useState("All");
   const [stageFilter, setStageFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
