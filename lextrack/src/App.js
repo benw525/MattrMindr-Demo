@@ -592,6 +592,8 @@ body.dark-body { background: #0E1116; }
   table.mobile-cards td.mobile-hide { display: none; }
   table.mobile-cards .selected-row { border-color: var(--c-accent); border-width: 2px; }
   table.mobile-cards .selected-row td:first-child { border-left: none; }
+  .pinned-card-mobile { border: none; box-shadow: none; background: transparent; margin-bottom: 8px; }
+  .pinned-card-mobile table.mobile-cards tr { border-left: 3px solid #B67A18; }
   th { padding: 8px 8px; font-size: 10px; }
   td { padding: 8px 8px; font-size: 12px; }
   .hide-mobile { display: none !important; }
@@ -2056,11 +2058,32 @@ function RecentActivityWidget({ currentUser }) {
   );
 }
 
-function CaseSearchField({ allCases, value, onChange, placeholder }) {
+const getPinnedCaseIds = (userId) => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${userId}`) || "[]"); } catch { return []; } };
+
+const PinnedSectionHeader = () => (
+  <div style={{ padding: "5px 10px", fontSize: 10, fontWeight: 700, color: "#B67A18", textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--c-bg)", borderBottom: "1px solid var(--c-border2)", position: "sticky", top: 0, zIndex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+    <span style={{ fontSize: 11 }}>📌</span> Pinned Cases
+  </div>
+);
+
+const CaseDropdownItem = ({ c, onClick, showDetails }) => (
+  <div
+    onClick={onClick}
+    style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid var(--c-border2)", fontSize: 12 }}
+    onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"}
+    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+  >
+    <div style={{ fontWeight: 600, color: "var(--c-text)" }}>{c.defendantName || c.title}</div>
+    <div style={{ fontSize: 11, color: "#8A9096" }}>{c.caseNum || "—"}{showDetails && c.trialDate ? ` · Trial: ${new Date(c.trialDate).toLocaleDateString()}` : ""}</div>
+  </div>
+);
+
+function CaseSearchField({ allCases, value, onChange, placeholder, userId }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selectedCase = value ? allCases.find(c => c.id === parseInt(value)) : null;
+  const pinnedIds = useMemo(() => userId ? getPinnedCaseIds(userId) : [], [userId]);
 
   useEffect(() => {
     const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -2068,7 +2091,7 @@ function CaseSearchField({ allCases, value, onChange, placeholder }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const filtered = useMemo(() => {
+  const { pinned, others } = useMemo(() => {
     const active = allCases.filter(c => c.status === "Active");
     const q = search.toLowerCase().trim();
     const matched = q ? active.filter(c =>
@@ -2076,15 +2099,21 @@ function CaseSearchField({ allCases, value, onChange, placeholder }) {
       (c.caseNum || "").toLowerCase().includes(q) ||
       (c.defendantName || "").toLowerCase().includes(q)
     ) : active;
-    return matched.sort((a, b) => {
+    const sortFn = (a, b) => {
       const aDate = a.trialDate ? new Date(a.trialDate) : null;
       const bDate = b.trialDate ? new Date(b.trialDate) : null;
       if (aDate && bDate) return aDate - bDate;
       if (aDate) return -1;
       if (bDate) return 1;
       return (a.title || "").localeCompare(b.title || "");
-    }).slice(0, 20);
-  }, [allCases, search]);
+    };
+    const pinnedSet = new Set(pinnedIds);
+    const p = matched.filter(c => pinnedSet.has(c.id)).sort(sortFn);
+    const o = matched.filter(c => !pinnedSet.has(c.id)).sort(sortFn).slice(0, 20);
+    return { pinned: p, others: o };
+  }, [allCases, search, pinnedIds]);
+
+  const handleSelect = (c) => { onChange(String(c.id)); setSearch(""); setOpen(false); };
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -2104,20 +2133,14 @@ function CaseSearchField({ allCases, value, onChange, placeholder }) {
         />
       )}
       {open && !selectedCase && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, maxHeight: 200, overflowY: "auto", background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: 6, marginTop: 2, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-          {filtered.length === 0 && <div style={{ padding: "8px 10px", fontSize: 12, color: "#8A9096" }}>No cases found</div>}
-          {filtered.map(c => (
-            <div
-              key={c.id}
-              onClick={() => { onChange(String(c.id)); setSearch(""); setOpen(false); }}
-              style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid var(--c-border2)", fontSize: 12 }}
-              onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              <div style={{ fontWeight: 600, color: "var(--c-text)" }}>{c.title}</div>
-              <div style={{ fontSize: 11, color: "#8A9096" }}>{c.caseNum || "—"}{c.defendantName ? ` · ${c.defendantName}` : ""}{c.trialDate ? ` · Trial: ${new Date(c.trialDate).toLocaleDateString()}` : ""}</div>
-            </div>
-          ))}
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, maxHeight: 260, overflowY: "auto", background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: 6, marginTop: 2, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+          {pinned.length === 0 && others.length === 0 && <div style={{ padding: "8px 10px", fontSize: 12, color: "#8A9096" }}>No cases found</div>}
+          {pinned.length > 0 && <PinnedSectionHeader />}
+          {pinned.map(c => <CaseDropdownItem key={c.id} c={c} onClick={() => handleSelect(c)} showDetails />)}
+          {pinned.length > 0 && others.length > 0 && (
+            <div style={{ padding: "5px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--c-bg)", borderBottom: "1px solid var(--c-border2)", position: "sticky", top: pinned.length > 0 ? 24 : 0, zIndex: 1 }}>All Cases</div>
+          )}
+          {others.map(c => <CaseDropdownItem key={c.id} c={c} onClick={() => handleSelect(c)} showDetails />)}
         </div>
       )}
     </div>
@@ -2261,7 +2284,7 @@ function QuickNotesWidget({ currentUser, allCases, onSelectCase }) {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
       <div>
         <label style={{ fontSize: 11, color: "#8A9096", display: "block", marginBottom: 2 }}>Assign to Case (optional)</label>
-        <CaseSearchField allCases={allCases} value={caseIdVal} onChange={setCaseIdVal} placeholder="Search cases…" />
+        <CaseSearchField allCases={allCases} value={caseIdVal} onChange={setCaseIdVal} placeholder="Search cases…" userId={currentUser.id} />
       </div>
       <div>
         <label style={{ fontSize: 11, color: "#8A9096", display: "block", marginBottom: 2 }}>Time Spent (hours)</label>
@@ -2963,7 +2986,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
           </div>
         )}
         {pinnedCases.length > 0 && (
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card pinned-card-mobile" style={{ marginBottom: 16 }}>
             <div
               onClick={() => setPinnedExpanded(!pinnedExpanded)}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", cursor: "pointer", borderBottom: pinnedExpanded ? "1px solid var(--c-border)" : "none" }}
@@ -6824,10 +6847,21 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
                       {dlCaseDropOpen && (() => {
                         const q = dlCaseSearch.toLowerCase().trim();
                         const dlFiltered = [...allCases].filter(c => c.status === "Active").filter(c => !q || (c.defendantName || "").toLowerCase().includes(q) || (c.title || "").toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q)).sort((a, b) => (a.defendantName || a.title || "").localeCompare(b.defendantName || b.title || ""));
+                        const pIds = new Set(getPinnedCaseIds(currentUser.id));
+                        const dlPinned = dlFiltered.filter(c => pIds.has(c.id));
+                        const dlOthers = dlFiltered.filter(c => !pIds.has(c.id));
                         return (
-                          <div style={{ position: "absolute", zIndex: 200, left: 0, right: 0, maxHeight: 220, overflowY: "auto", border: "1px solid #cbd5e1", borderRadius: 6, background: "var(--c-card)", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", marginTop: 2 }}>
+                          <div style={{ position: "absolute", zIndex: 200, left: 0, right: 0, maxHeight: 260, overflowY: "auto", border: "1px solid #cbd5e1", borderRadius: 6, background: "var(--c-card)", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", marginTop: 2 }}>
                             {dlFiltered.length === 0 && <div style={{ padding: "10px 12px", fontSize: 12, color: "#8A9096" }}>No matches</div>}
-                            {dlFiltered.slice(0, 20).map(c => (
+                            {dlPinned.length > 0 && <PinnedSectionHeader />}
+                            {dlPinned.map(c => (
+                              <div key={c.id} onMouseDown={e => { e.preventDefault(); setNewDl(p => ({ ...p, caseId: c.id })); setDlCaseSearch(""); setDlCaseDropOpen(false); }} style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--c-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                <span style={{ color: "var(--c-text)", fontWeight: 500 }}>{c.defendantName || c.title}</span>
+                                {c.caseNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace", flexShrink: 0, marginLeft: 8 }}>{c.caseNum}</span>}
+                              </div>
+                            ))}
+                            {dlPinned.length > 0 && dlOthers.length > 0 && <div style={{ padding: "5px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--c-bg)", borderBottom: "1px solid var(--c-border2)" }}>All Cases</div>}
+                            {dlOthers.slice(0, 20).map(c => (
                               <div key={c.id} onMouseDown={e => { e.preventDefault(); setNewDl(p => ({ ...p, caseId: c.id })); setDlCaseSearch(""); setDlCaseDropOpen(false); }} style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--c-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                                 <span style={{ color: "var(--c-text)", fontWeight: 500 }}>{c.defendantName || c.title}</span>
                                 {c.caseNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace", flexShrink: 0, marginLeft: 8 }}>{c.caseNum}</span>}
@@ -6981,25 +7015,30 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
                         onFocus={() => setCaseDropOpen(true)}
                         autoComplete="off"
                       />
-                      {caseDropOpen && (
-                        <div style={{ position: "absolute", zIndex: 200, left: 0, right: 0, maxHeight: 220, overflowY: "auto", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", marginTop: 2 }}>
+                      {caseDropOpen && (() => {
+                        const tPIds = new Set(getPinnedCaseIds(currentUser.id));
+                        const tPinned = filteredCases.filter(c => tPIds.has(c.id));
+                        const tOthers = filteredCases.filter(c => !tPIds.has(c.id));
+                        return (
+                        <div style={{ position: "absolute", zIndex: 200, left: 0, right: 0, maxHeight: 260, overflowY: "auto", border: "1px solid #cbd5e1", borderRadius: 6, background: "var(--c-card)", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", marginTop: 2 }}>
                           {filteredCases.length === 0 && <div style={{ padding: "10px 12px", fontSize: 12, color: "#8A9096" }}>No matches</div>}
-                          {filteredCases.map(c => (
-                            <div
-                              key={c.id}
-                              tabIndex={0}
-                              onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setNewTask(p => ({ ...p, caseId: c.id })); setCaseSearch(""); setCaseDropOpen(false); }}
-                              onClick={e => { e.preventDefault(); e.stopPropagation(); setNewTask(p => ({ ...p, caseId: c.id })); setCaseSearch(""); setCaseDropOpen(false); }}
-                              style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff" }}
-                              onMouseEnter={e => e.currentTarget.style.background = "#F7F8FA"}
-                              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
-                            >
-                              <span style={{ color: "#1F2428", fontWeight: 500 }}>{c.defendantName || c.title}</span>
+                          {tPinned.length > 0 && <PinnedSectionHeader />}
+                          {tPinned.map(c => (
+                            <div key={c.id} tabIndex={0} onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setNewTask(p => ({ ...p, caseId: c.id })); setCaseSearch(""); setCaseDropOpen(false); }} onClick={e => { e.preventDefault(); e.stopPropagation(); setNewTask(p => ({ ...p, caseId: c.id })); setCaseSearch(""); setCaseDropOpen(false); }} style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--c-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <span style={{ color: "var(--c-text)", fontWeight: 500 }}>{c.defendantName || c.title}</span>
+                              {c.caseNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace", flexShrink: 0, marginLeft: 8 }}>{c.caseNum}</span>}
+                            </div>
+                          ))}
+                          {tPinned.length > 0 && tOthers.length > 0 && <div style={{ padding: "5px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--c-bg)", borderBottom: "1px solid var(--c-border2)" }}>All Cases</div>}
+                          {tOthers.map(c => (
+                            <div key={c.id} tabIndex={0} onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setNewTask(p => ({ ...p, caseId: c.id })); setCaseSearch(""); setCaseDropOpen(false); }} onClick={e => { e.preventDefault(); e.stopPropagation(); setNewTask(p => ({ ...p, caseId: c.id })); setCaseSearch(""); setCaseDropOpen(false); }} style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--c-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <span style={{ color: "var(--c-text)", fontWeight: 500 }}>{c.defendantName || c.title}</span>
                               {c.caseNum && <span style={{ fontSize: 10, color: "#8A9096", fontFamily: "monospace", flexShrink: 0, marginLeft: 8 }}>{c.caseNum}</span>}
                             </div>
                           ))}
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -7930,14 +7969,22 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
                     {caseDropOpen && (() => {
                       const q = caseSearch.toLowerCase().trim();
                       const filtered = (q ? activeCases.filter(c => (c.defendantName || "").toLowerCase().includes(q) || (c.title || "").toLowerCase().includes(q) || (c.caseNumber || "").toLowerCase().includes(q)) : activeCases).sort((a, b) => (a.defendantName || a.title || "").localeCompare(b.defendantName || b.title || ""));
-                      return filtered.length > 0 ? (
-                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: "0 0 6px 6px", maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-                          {filtered.slice(0, 20).map(c => (
-                            <div key={c.id} onClick={() => { setSelectedCaseId(String(c.id)); setCaseSearch(""); setCaseDropOpen(false); setAiState({ loading: false, result: null, error: null }); }} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "var(--c-text)", borderBottom: "1px solid var(--c-border)" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                              <div style={{ fontWeight: 500 }}>{c.defendantName || c.title}</div>
-                              <div style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseNumber || "—"} · {c.stage} · {c.caseType}{c.deathPenalty ? " · " : ""}{c.deathPenalty && <span style={{ color: "#dc2626", fontWeight: 700 }}>DP</span>}</div>
-                            </div>
-                          ))}
+                      const aiPIds = new Set(getPinnedCaseIds(currentUser.id));
+                      const aiPinned = filtered.filter(c => aiPIds.has(c.id));
+                      const aiOthers = filtered.filter(c => !aiPIds.has(c.id));
+                      const selectCase = (c) => { setSelectedCaseId(String(c.id)); setCaseSearch(""); setCaseDropOpen(false); setAiState({ loading: false, result: null, error: null }); };
+                      const aiItem = (c) => (
+                        <div key={c.id} onClick={() => selectCase(c)} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "var(--c-text)", borderBottom: "1px solid var(--c-border)" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                          <div style={{ fontWeight: 500 }}>{c.defendantName || c.title}</div>
+                          <div style={{ fontSize: 11, color: "var(--c-text2)" }}>{c.caseNumber || "—"} · {c.stage} · {c.caseType}{c.deathPenalty ? " · " : ""}{c.deathPenalty && <span style={{ color: "#dc2626", fontWeight: 700 }}>DP</span>}</div>
+                        </div>
+                      );
+                      return (aiPinned.length > 0 || aiOthers.length > 0) ? (
+                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: "0 0 6px 6px", maxHeight: 260, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                          {aiPinned.length > 0 && <PinnedSectionHeader />}
+                          {aiPinned.map(aiItem)}
+                          {aiPinned.length > 0 && aiOthers.length > 0 && <div style={{ padding: "5px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--c-bg)", borderBottom: "1px solid var(--c-border2)" }}>All Cases</div>}
+                          {aiOthers.slice(0, 20).map(aiItem)}
                         </div>
                       ) : q ? (
                         <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, background: "var(--c-card)", border: "1px solid var(--c-border)", borderRadius: "0 0 6px 6px", padding: "12px", fontSize: 12, color: "var(--c-text2)", textAlign: "center" }}>No matching cases</div>
@@ -8645,39 +8692,48 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
                 onChange={e => setCaseSearch(e.target.value)}
                 style={{ width: "100%", marginBottom: 8 }}
               />
+              {(() => {
+                const tlPIds = new Set(getPinnedCaseIds(currentUser.id));
+                const allTlCases = [...filteredCases.todayGroup, ...filteredCases.otherGroup];
+                const tlPinned = allTlCases.filter(c => tlPIds.has(c.id));
+                const tlToday = filteredCases.todayGroup.filter(c => !tlPIds.has(c.id));
+                const tlOther = filteredCases.otherGroup.filter(c => !tlPIds.has(c.id));
+                const tlItem = (c) => (
+                  <div key={c.id} onClick={() => setCaseId(c.id)}
+                    style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #D6D8DB", fontSize: 13 }}
+                    onMouseOver={e => e.currentTarget.style.background = "#F7F8FA"} onMouseOut={e => e.currentTarget.style.background = ""}>
+                    <div style={{ fontWeight: 500, color: "#1F2428" }}>{c.title}</div>
+                    {c.defendantName && <span style={{ fontSize: 10, color: "#8A9096" }}>{c.defendantName}</span>}
+                  </div>
+                );
+                return (
               <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #D6D8DB", borderRadius: 6 }}>
-                {filteredCases.todayGroup.length > 0 && (
+                {tlPinned.length > 0 && (
+                  <>
+                    <PinnedSectionHeader />
+                    {tlPinned.map(tlItem)}
+                  </>
+                )}
+                {tlToday.length > 0 && (
                   <>
                     <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: 0.5, background: "#F7F8FA", borderBottom: "1px solid #D6D8DB", position: "sticky", top: 0, zIndex: 1 }}>Touched Today</div>
-                    {filteredCases.todayGroup.map(c => (
-                      <div key={c.id} onClick={() => setCaseId(c.id)}
-                        style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #D6D8DB", fontSize: 13 }}
-                        onMouseOver={e => e.currentTarget.style.background = "#F7F8FA"} onMouseOut={e => e.currentTarget.style.background = ""}>
-                        <div style={{ fontWeight: 500, color: "#1F2428" }}>{c.title}</div>
-                        {c.defendantName && <span style={{ fontSize: 10, color: "#8A9096" }}>{c.defendantName}</span>}
-                      </div>
-                    ))}
+                    {tlToday.map(tlItem)}
                   </>
                 )}
-                {filteredCases.otherGroup.length > 0 && (
+                {tlOther.length > 0 && (
                   <>
-                    {filteredCases.todayGroup.length > 0 && (
+                    {(tlPinned.length > 0 || tlToday.length > 0) && (
                       <div style={{ padding: "6px 10px", fontSize: 10, fontWeight: 700, color: "#5D6268", textTransform: "uppercase", letterSpacing: 0.5, background: "#F7F8FA", borderBottom: "1px solid #D6D8DB", position: "sticky", top: 0, zIndex: 1 }}>All Cases</div>
                     )}
-                    {filteredCases.otherGroup.map(c => (
-                      <div key={c.id} onClick={() => setCaseId(c.id)}
-                        style={{ padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #D6D8DB", fontSize: 13 }}
-                        onMouseOver={e => e.currentTarget.style.background = "#F7F8FA"} onMouseOut={e => e.currentTarget.style.background = ""}>
-                        <div style={{ fontWeight: 500, color: "#1F2428" }}>{c.title}</div>
-                        {c.defendantName && <span style={{ fontSize: 10, color: "#8A9096" }}>{c.defendantName}</span>}
-                      </div>
-                    ))}
+                    {tlOther.map(tlItem)}
                   </>
                 )}
-                {filteredCases.todayGroup.length === 0 && filteredCases.otherGroup.length === 0 && (
+                {allTlCases.length === 0 && (
                   <div style={{ padding: 16, fontSize: 12, color: "#8A9096", textAlign: "center" }}>No cases match your filters.</div>
                 )}
               </div>
+                );
+              })()}
             </>
           )}
         </div>
