@@ -1,0 +1,7 @@
+{
+  "name": "jsonpath",
+  "version": "1.2.1-shim",
+  "description": "Safe shim replacing jsonpath to eliminate CVE vulnerabilities",
+  "main": "index.js",
+  "license": "MIT"
+}

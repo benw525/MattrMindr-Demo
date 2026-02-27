@@ -39,6 +39,7 @@
   },
   "overrides": {
     "minimatch": "10.2.3",
-    "nth-check": "2.0.1"
+    "nth-check": "2.0.1",
+    "jsonpath": "file:./jsonpath-shim"
   }
 }
