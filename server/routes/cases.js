@@ -117,6 +117,29 @@ router.get("/conflict-check", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/pinned", requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT pinned_cases FROM users WHERE id = $1", [req.session.userId]);
+    return res.json(rows[0]?.pinned_cases || []);
+  } catch (err) {
+    console.error("Get pinned cases error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.put("/pinned", requireAuth, async (req, res) => {
+  try {
+    const { pinnedIds } = req.body;
+    if (!Array.isArray(pinnedIds)) return res.status(400).json({ error: "pinnedIds must be an array" });
+    const cleaned = pinnedIds.filter(id => typeof id === "number" && Number.isFinite(id));
+    await pool.query("UPDATE users SET pinned_cases = $1 WHERE id = $2", [JSON.stringify(cleaned), req.session.userId]);
+    return res.json(cleaned);
+  } catch (err) {
+    console.error("Update pinned cases error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.get("/:id", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1", [req.params.id]);
@@ -232,29 +255,6 @@ router.post("/:id/restore", requireAuth, requirePD, async (req, res) => {
     return res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Case restore error:", err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
-
-router.get("/pinned", requireAuth, async (req, res) => {
-  try {
-    const { rows } = await pool.query("SELECT pinned_cases FROM users WHERE id = $1", [req.session.userId]);
-    return res.json(rows[0]?.pinned_cases || []);
-  } catch (err) {
-    console.error("Get pinned cases error:", err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
-
-router.put("/pinned", requireAuth, async (req, res) => {
-  try {
-    const { pinnedIds } = req.body;
-    if (!Array.isArray(pinnedIds)) return res.status(400).json({ error: "pinnedIds must be an array" });
-    const cleaned = pinnedIds.filter(id => typeof id === "number" && Number.isFinite(id));
-    await pool.query("UPDATE users SET pinned_cases = $1 WHERE id = $2", [JSON.stringify(cleaned), req.session.userId]);
-    return res.json(cleaned);
-  } catch (err) {
-    console.error("Update pinned cases error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 });
