@@ -24,7 +24,8 @@ async function createSchema() {
         temp_password TEXT  NOT NULL DEFAULT '',
         password_reset_token TEXT NOT NULL DEFAULT '',
         password_reset_expires TIMESTAMPTZ,
-        deleted_at  TIMESTAMPTZ
+        deleted_at  TIMESTAMPTZ,
+        pinned_cases JSONB NOT NULL DEFAULT '[]'
       );
     `);
 

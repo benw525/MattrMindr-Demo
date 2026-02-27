@@ -238,3 +238,7 @@ export const apiGetTimeEntries    = (userId, from, to) => apiFetch(`/api/time-en
 export const apiCreateTimeEntry   = (data)   => apiFetch("/api/time-entries",       { method: "POST",   body: data });
 export const apiUpdateTimeEntry   = (id, data) => apiFetch(`/api/time-entries/${id}`, { method: "PUT",    body: data });
 export const apiDeleteTimeEntry   = (id)     => apiFetch(`/api/time-entries/${id}`, { method: "DELETE" });
+
+// Pinned Cases
+export const apiGetPinnedCases    = ()        => apiFetch("/api/cases/pinned");
+export const apiSetPinnedCases    = (pinnedIds) => apiFetch("/api/cases/pinned", { method: "PUT", body: { pinnedIds } });

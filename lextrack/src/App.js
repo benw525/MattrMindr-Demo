@@ -24,6 +24,7 @@ import {
   apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument, apiDetectPleadingSections,
   apiGetTimeEntries, apiCreateTimeEntry, apiUpdateTimeEntry, apiDeleteTimeEntry,
   apiGetTraining, apiCreateTraining, apiUploadTrainingDoc, apiUpdateTraining, apiDeleteTraining,
+  apiGetPinnedCases, apiSetPinnedCases,
 } from "./api.js";
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+3:wght@300;400;500;600&display=swap');`;
@@ -868,6 +869,7 @@ export default function App() {
   const [allCorrespondence, setAllCorrespondence] = useState([]);
   const [deletedCases, setDeletedCases] = useState(null); // null = not yet loaded
   const [allUsers,     setAllUsers]     = useState(USERS);
+  const [pinnedCaseIds, setPinnedCaseIds] = useState([]);
 
   const [calcInputs, setCalcInputs] = useState({ ruleId: 1, fromDate: today });
   const [calcResult, setCalcResult] = useState(null);
@@ -899,14 +901,28 @@ export default function App() {
       apiGetDeadlines(),
       apiGetUsers(),
       apiGetAllCorrespondence(),
+      apiGetPinnedCases(),
     ];
     if (isAdmin) fetches.push(apiGetDeletedUsers());
     Promise.all(fetches)
-      .then(([cases, fetchedTasks, deadlines, users, corr, deletedUsersResult]) => {
+      .then(([cases, fetchedTasks, deadlines, users, corr, pinned, deletedUsersResult]) => {
         setAllCases(cases);
         setTasks(fetchedTasks);
         setAllDeadlines(deadlines);
         setAllCorrespondence(corr || []);
+        const serverPins = pinned || [];
+        if (serverPins.length === 0) {
+          try {
+            const localPins = JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]");
+            if (localPins.length > 0) {
+              apiSetPinnedCases(localPins).then(() => localStorage.removeItem(`pinned_cases_${currentUser.id}`)).catch(() => {});
+              setPinnedCaseIds(localPins);
+            } else { setPinnedCaseIds([]); }
+          } catch { setPinnedCaseIds([]); }
+        } else {
+          setPinnedCaseIds(serverPins);
+          localStorage.removeItem(`pinned_cases_${currentUser.id}`);
+        }
         const allU = [...users, ...(deletedUsersResult || []).map(u => ({ ...u, deletedAt: u.deletedAt || u.deleted_at }))];
         USERS.splice(0, USERS.length, ...users);
         setAllUsers(allU);
@@ -920,6 +936,14 @@ export default function App() {
     style.textContent = CSS;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
+  }, []);
+
+  const handleTogglePinnedCase = useCallback(async (caseId) => {
+    setPinnedCaseIds(prev => {
+      const next = prev.includes(caseId) ? prev.filter(id => id !== caseId) : [...prev, caseId];
+      apiSetPinnedCases(next).catch(err => console.error("Failed to save pinned cases:", err));
+      return next;
+    });
   }, []);
 
   const handleSelectCase = useCallback(async (c) => {
@@ -1379,14 +1403,14 @@ export default function App() {
         <ChangePasswordModal currentUser={currentUser} onClose={() => setShowChangePw(false)} />
       )}
       <div className="main">
-        {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { handleSelectCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} />}
-        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onAddTask={(saved) => setTasks(p => [...p, saved])} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} />}
-        {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "dashboard" && <Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={c => { handleSelectCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />}
+        {view === "cases" && <CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onAddTask={(saved) => setTasks(p => [...p, saved])} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onTogglePinnedCase={handleTogglePinnedCase} />}
+        {view === "deadlines" && <DeadlinesView deadlines={allDeadlines} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { alert("Failed to add deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />}
         {view === "documents" && <DocumentsView currentUser={currentUser} allCases={allCases} onMenuToggle={() => setSidebarOpen(true)} />}
-        {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "tasks" && <TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />}
         {view === "reports" && <ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onAddTask={(saved) => setTasks(p => [...p, saved])} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} />}
-        {view === "aicenter" && <AiCenterView allCases={allCases} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} />}
-        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} onMenuToggle={() => setSidebarOpen(true)} />}
+        {view === "aicenter" && <AiCenterView allCases={allCases} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />}
+        {view === "timelog" && <TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />}
         {view === "contacts" && <ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} onMenuToggle={() => setSidebarOpen(true)} />}
         {view === "staff" && <StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} allUsers={allUsers} setAllUsers={setAllUsers} onMenuToggle={() => setSidebarOpen(true)} />}
       </div>
@@ -2058,8 +2082,6 @@ function RecentActivityWidget({ currentUser }) {
   );
 }
 
-const getPinnedCaseIds = (userId) => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${userId}`) || "[]"); } catch { return []; } };
-
 const PinnedSectionHeader = () => (
   <div style={{ padding: "5px 10px", fontSize: 10, fontWeight: 700, color: "#B67A18", textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--c-bg)", borderBottom: "1px solid var(--c-border2)", position: "sticky", top: 0, zIndex: 1, display: "flex", alignItems: "center", gap: 4 }}>
     <span style={{ fontSize: 11 }}>📌</span> Pinned Cases
@@ -2078,12 +2100,13 @@ const CaseDropdownItem = ({ c, onClick, showDetails }) => (
   </div>
 );
 
-function CaseSearchField({ allCases, value, onChange, placeholder, userId }) {
+const EMPTY_PINS = [];
+function CaseSearchField({ allCases, value, onChange, placeholder, userId, pinnedCaseIds: pinnedIdsProp }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selectedCase = value ? allCases.find(c => c.id === parseInt(value)) : null;
-  const pinnedIds = useMemo(() => userId ? getPinnedCaseIds(userId) : [], [userId]);
+  const pinnedIds = useMemo(() => pinnedIdsProp || EMPTY_PINS, [pinnedIdsProp]);
 
   useEffect(() => {
     const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -2147,7 +2170,7 @@ function CaseSearchField({ allCases, value, onChange, placeholder, userId }) {
   );
 }
 
-function QuickNotesWidget({ currentUser, allCases, onSelectCase }) {
+function QuickNotesWidget({ currentUser, allCases, onSelectCase, pinnedCaseIds }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -2284,7 +2307,7 @@ function QuickNotesWidget({ currentUser, allCases, onSelectCase }) {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
       <div>
         <label style={{ fontSize: 11, color: "#8A9096", display: "block", marginBottom: 2 }}>Assign to Case (optional)</label>
-        <CaseSearchField allCases={allCases} value={caseIdVal} onChange={setCaseIdVal} placeholder="Search cases…" userId={currentUser.id} />
+        <CaseSearchField allCases={allCases} value={caseIdVal} onChange={setCaseIdVal} placeholder="Search cases…" pinnedCaseIds={pinnedCaseIds} />
       </div>
       <div>
         <label style={{ fontSize: 11, color: "#8A9096", display: "block", marginBottom: 2 }}>Time Spent (hours)</label>
@@ -2387,7 +2410,7 @@ function QuickNotesWidget({ currentUser, allCases, onSelectCase }) {
   );
 }
 
-function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAddRecord, onCompleteTask, onUpdateTask, onMenuToggle }) {
+function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAddRecord, onCompleteTask, onUpdateTask, onMenuToggle, pinnedCaseIds }) {
   const [showModal, setShowModal] = useState(false);
   const [showCustomize, setShowCustomize] = useState(false);
   const [expandedTask, setExpandedTask] = useState(null);
@@ -2396,13 +2419,8 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
   const [triageLoading, setTriageLoading] = useState(false);
   const [triageError, setTriageError] = useState(null);
   const [layout, setLayout] = useState(() => getDashboardLayout(currentUser.id));
-  const [pinnedIds, setPinnedIds] = useState(() => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]"); } catch { return []; } });
-  useEffect(() => { setLayout(getDashboardLayout(currentUser.id)); try { setPinnedIds(JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]")); } catch { setPinnedIds([]); } }, [currentUser.id]);
-  useEffect(() => {
-    const onStorage = (e) => { if (e.key === `pinned_cases_${currentUser.id}`) { try { setPinnedIds(JSON.parse(e.newValue || "[]")); } catch { setPinnedIds([]); } } };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [currentUser.id]);
+  const pinnedIds = pinnedCaseIds;
+  useEffect(() => { setLayout(getDashboardLayout(currentUser.id)); }, [currentUser.id]);
   const activeCases = allCases.filter(c => c.status === "Active");
   const upcomingDl = deadlines.filter(d => { const n = daysUntil(d.date); return n !== null && n >= 0 && n <= 30; }).sort((a, b) => new Date(a.date) - new Date(b.date));
   const trialSoon = allCases.filter(c => c.trialDate && daysUntil(c.trialDate) >= 0 && daysUntil(c.trialDate) <= 90).sort((a, b) => new Date(a.trialDate) - new Date(b.trialDate));
@@ -2646,7 +2664,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
           </div>
         );
       case "quick-notes":
-        return <QuickNotesWidget key={widgetId} currentUser={currentUser} allCases={allCases} onSelectCase={onSelectCase} />;
+        return <QuickNotesWidget key={widgetId} currentUser={currentUser} allCases={allCases} onSelectCase={onSelectCase} pinnedCaseIds={pinnedCaseIds} />;
       default:
         return null;
     }
@@ -2713,7 +2731,7 @@ function Dashboard({ currentUser, allCases, deadlines, tasks, onSelectCase, onAd
 // ─── Cases View ───────────────────────────────────────────────────────────────
 const PAGE_SIZE = 50;
 
-function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, onAddTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, deletedCases, setDeletedCases, onDeleteCase, onRestoreCase, onAddDeadline, onUpdateDeadline, onMenuToggle }) {
+function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase, onAddRecord, onUpdateCase, onCompleteTask, onAddTask, deadlines, caseNotes, setCaseNotes, caseLinks, setCaseLinks, caseActivity, setCaseActivity, deletedCases, setDeletedCases, onDeleteCase, onRestoreCase, onAddDeadline, onUpdateDeadline, onMenuToggle, pinnedCaseIds: pinnedIds, onTogglePinnedCase: togglePin }) {
   const [statusFilter, setStatusFilter] = useState("Active");
   const [deletedLoading, setDeletedLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -2731,16 +2749,7 @@ function CasesView({ currentUser, allCases, tasks, selectedCase, setSelectedCase
   const [triageLoading, setTriageLoading] = useState(false);
   const [triageShow, setTriageShow] = useState(false);
   const [aiError, setAiError] = useState("");
-  const [pinnedIds, setPinnedIds] = useState(() => { try { return JSON.parse(localStorage.getItem(`pinned_cases_${currentUser.id}`) || "[]"); } catch { return []; } });
   const [pinnedExpanded, setPinnedExpanded] = useState(true);
-
-  const togglePin = (caseId) => {
-    setPinnedIds(prev => {
-      const next = prev.includes(caseId) ? prev.filter(id => id !== caseId) : [...prev, caseId];
-      localStorage.setItem(`pinned_cases_${currentUser.id}`, JSON.stringify(next));
-      return next;
-    });
-  };
 
   const pinnedCases = useMemo(() => pinnedIds.map(id => allCases.find(c => c.id === id)).filter(Boolean), [pinnedIds, allCases]);
 
@@ -6714,7 +6723,7 @@ function ICalManager({ externalEvents, setExternalEvents }) {
 }
 
 // ─── Deadlines View ───────────────────────────────────────────────────────────
-function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalcInputs, calcResult, runCalc, currentUser, onMenuToggle }) {
+function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalcInputs, calcResult, runCalc, currentUser, onMenuToggle, pinnedCaseIds }) {
   const [tab, setTab] = useState("calendar");
   const [typeFilter, setTypeFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -6847,7 +6856,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
                       {dlCaseDropOpen && (() => {
                         const q = dlCaseSearch.toLowerCase().trim();
                         const dlFiltered = [...allCases].filter(c => c.status === "Active").filter(c => !q || (c.defendantName || "").toLowerCase().includes(q) || (c.title || "").toLowerCase().includes(q) || (c.caseNum || "").toLowerCase().includes(q)).sort((a, b) => (a.defendantName || a.title || "").localeCompare(b.defendantName || b.title || ""));
-                        const pIds = new Set(getPinnedCaseIds(currentUser.id));
+                        const pIds = new Set(pinnedCaseIds);
                         const dlPinned = dlFiltered.filter(c => pIds.has(c.id));
                         const dlOthers = dlFiltered.filter(c => !pIds.has(c.id));
                         return (
@@ -6942,7 +6951,7 @@ function DeadlinesView({ deadlines, onAddDeadline, allCases, calcInputs, setCalc
 }
 
 // ─── Tasks View ───────────────────────────────────────────────────────────────
-function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask, onMenuToggle }) {
+function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask, onMenuToggle, pinnedCaseIds }) {
   const [filter, setFilter] = useState("Open");
   const [showForm, setShowForm] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
@@ -7016,7 +7025,7 @@ function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, on
                         autoComplete="off"
                       />
                       {caseDropOpen && (() => {
-                        const tPIds = new Set(getPinnedCaseIds(currentUser.id));
+                        const tPIds = new Set(pinnedCaseIds);
                         const tPinned = filteredCases.filter(c => tPIds.has(c.id));
                         const tOthers = filteredCases.filter(c => !tPIds.has(c.id));
                         return (
@@ -7738,7 +7747,7 @@ function ReportsView({ allCases, tasks, deadlines, currentUser, onUpdateCase, on
 const TRAINING_CATEGORIES = ["General", "Local Rules", "Office Policy", "Defense Strategy", "Court Preferences", "Sentencing", "Procedures"];
 const OFFICE_ROLES = ["Public Defender","Chief Deputy Public Defender","Deputy Public Defender","Senior Trial Attorney","App Admin"];
 
-function AiCenterView({ allCases, currentUser, onMenuToggle }) {
+function AiCenterView({ allCases, currentUser, onMenuToggle, pinnedCaseIds }) {
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [activeAgent, setActiveAgent] = useState(null);
   const [aiState, setAiState] = useState({ loading: false, result: null, error: null });
@@ -7969,7 +7978,7 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
                     {caseDropOpen && (() => {
                       const q = caseSearch.toLowerCase().trim();
                       const filtered = (q ? activeCases.filter(c => (c.defendantName || "").toLowerCase().includes(q) || (c.title || "").toLowerCase().includes(q) || (c.caseNumber || "").toLowerCase().includes(q)) : activeCases).sort((a, b) => (a.defendantName || a.title || "").localeCompare(b.defendantName || b.title || ""));
-                      const aiPIds = new Set(getPinnedCaseIds(currentUser.id));
+                      const aiPIds = new Set(pinnedCaseIds);
                       const aiPinned = filtered.filter(c => aiPIds.has(c.id));
                       const aiOthers = filtered.filter(c => !aiPIds.has(c.id));
                       const selectCase = (c) => { setSelectedCaseId(String(c.id)); setCaseSearch(""); setCaseDropOpen(false); setAiState({ loading: false, result: null, error: null }); };
@@ -8290,7 +8299,7 @@ function AiCenterView({ allCases, currentUser, onMenuToggle }) {
 
 // ─── Staff View ───────────────────────────────────────────────────────────────
 // ─── Time Log View ────────────────────────────────────────────────────────────
-function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [], onMenuToggle }) {
+function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [], onMenuToggle, pinnedCaseIds }) {
   const thisMonth = today.slice(0, 7);
   const [fromDate, setFromDate] = useState(thisMonth + "-01");
   const [toDate,   setToDate]   = useState(today);
@@ -8598,13 +8607,14 @@ function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence =
           allUsers={allUsers}
           onSave={handleAddEntry}
           onClose={() => setShowAddForm(false)}
+          pinnedCaseIds={pinnedCaseIds}
         />
       )}
     </>
   );
 }
 
-function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspondence, allUsers, onSave, onClose }) {
+function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspondence, allUsers, onSave, onClose, pinnedCaseIds }) {
   const [caseId, setCaseId] = useState(null);
   const [date, setDate] = useState(today);
   const [detail, setDetail] = useState("");
@@ -8693,7 +8703,7 @@ function AddTimeEntryModal({ allCases, currentUser, tasks, caseNotes, correspond
                 style={{ width: "100%", marginBottom: 8 }}
               />
               {(() => {
-                const tlPIds = new Set(getPinnedCaseIds(currentUser.id));
+                const tlPIds = new Set(pinnedCaseIds);
                 const allTlCases = [...filteredCases.todayGroup, ...filteredCases.otherGroup];
                 const tlPinned = allTlCases.filter(c => tlPIds.has(c.id));
                 const tlToday = filteredCases.todayGroup.filter(c => !tlPIds.has(c.id));
