@@ -65,10 +65,12 @@ const PORT = process.env.API_PORT || 3001;
 
 const isProd = process.env.NODE_ENV === "production";
 
-if (isProd) app.set("trust proxy", 1);
+if (isProd || process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
 
 app.use(cors({
-  origin: isProd ? [] : ["http://localhost:5000", "http://0.0.0.0:5000"],
+  origin: process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",").map(s => s.trim())
+    : (isProd ? [] : ["http://localhost:5000", "http://0.0.0.0:5000"]),
   credentials: true,
 }));
 
@@ -450,7 +452,7 @@ async function ensureColumns() {
   console.log("Runtime schema migrations applied.");
 }
 
-const listenPort = isProd ? 5000 : PORT;
+const listenPort = process.env.PORT || (isProd ? 5000 : PORT);
 
 (async () => {
   try {

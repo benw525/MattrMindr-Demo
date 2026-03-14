@@ -1,0 +1,18 @@
+[Unit]
+Description=MattrMindr Case Management System
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=mattrmindr
+Group=mattrmindr
+WorkingDirectory=/opt/mattrmindr
+EnvironmentFile=/opt/mattrmindr/.env
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/mattrmindr/out.log
+StandardError=append:/var/log/mattrmindr/error.log
+
+[Install]
+WantedBy=multi-user.target

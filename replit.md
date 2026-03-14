@@ -24,10 +24,14 @@ Workflow: `npm start` (root) — runs both Express API and React app via `concur
 Login: email + password (existing users default: `1234`, new users get temp password via email)
 
 ## Deployment
-- **Target**: autoscale
+- **Replit Target**: autoscale
 - **Build**: `npm install && cd server && npm install && cd ../lextrack && npm install && CI=false npm run build`
 - **Run**: `NODE_ENV=production node server/index.js` (serves API + React build on port 5000)
 - **Note**: `CI=false` is required because Replit's deployment sets `CI=true`, which causes `react-scripts build` to treat ESLint warnings as errors
+- **EC2/Self-hosted**: See `deploy/EC2_SETUP_GUIDE.md` — Nginx config, PM2 ecosystem file, systemd unit, and `.env.example` are in the `deploy/` directory
+- **Email**: Supports both Replit SendGrid integration (auto-detected) and direct `SENDGRID_API_KEY` + `SENDGRID_FROM_EMAIL` env vars
+- **App URL**: Set `APP_URL` env var for password reset links on self-hosted; falls back to `REPLIT_DEV_DOMAIN` on Replit
+- **Session/CORS**: `CORS_ORIGIN` env var for custom domain CORS; `TRUST_PROXY` for reverse proxy depth; `DB_SSL` for database SSL mode
 
 ## Project Structure
 ```

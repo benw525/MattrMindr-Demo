@@ -1,8 +1,15 @@
 const sgMail = require("@sendgrid/mail");
 
-let connectionSettings;
+let cachedCredentials = null;
 
 async function getCredentials() {
+  if (cachedCredentials) return cachedCredentials;
+
+  if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
+    cachedCredentials = { apiKey: process.env.SENDGRID_API_KEY, email: process.env.SENDGRID_FROM_EMAIL };
+    return cachedCredentials;
+  }
+
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? "repl " + process.env.REPL_IDENTITY
@@ -10,11 +17,11 @@ async function getCredentials() {
     ? "depl " + process.env.WEB_REPL_RENEWAL
     : null;
 
-  if (!xReplitToken) {
-    throw new Error("X-Replit-Token not found");
+  if (!hostname || !xReplitToken) {
+    throw new Error("SendGrid not configured. Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL, or connect via Replit integrations.");
   }
 
-  connectionSettings = await fetch(
+  const connectionSettings = await fetch(
     "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=sendgrid",
     {
       headers: {
@@ -27,7 +34,8 @@ async function getCredentials() {
   if (!connectionSettings || !connectionSettings.settings.api_key || !connectionSettings.settings.from_email) {
     throw new Error("SendGrid not connected");
   }
-  return { apiKey: connectionSettings.settings.api_key, email: connectionSettings.settings.from_email };
+  cachedCredentials = { apiKey: connectionSettings.settings.api_key, email: connectionSettings.settings.from_email };
+  return cachedCredentials;
 }
 
 async function sendEmail({ to, subject, text, html }) {
