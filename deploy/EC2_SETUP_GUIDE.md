@@ -96,7 +96,7 @@ Fill in all values. At minimum you need:
 The app auto-creates tables on first startup via `server/schema.js`. Just start the app and it will set up the schema:
 
 ```bash
-sudo -u mattrmindr bash -c 'cd /opt/mattrmindr && source .env && node server/schema.js'
+sudo -u mattrmindr bash -c 'cd /opt/mattrmindr && set -a && source .env && set +a && node server/schema.js'
 ```
 
 ## 10. Configure Nginx
@@ -161,6 +161,22 @@ Open `https://YOUR_DOMAIN.com` in a browser. You should see the MattrMindr login
 Default admin login:
 - Email: `admin@mattrmindr.com`
 - Password: whatever you set as `ADMIN_DEFAULT_PASSWORD`
+
+### Post-Deploy Smoke Tests
+
+```bash
+# API is responding
+curl -s https://YOUR_DOMAIN.com/api/auth/me | head
+
+# Login works
+curl -s -X POST https://YOUR_DOMAIN.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@mattrmindr.com","password":"YOUR_ADMIN_PASSWORD"}' \
+  -c /tmp/cookies.txt | head
+
+# Authenticated API call
+curl -s -b /tmp/cookies.txt https://YOUR_DOMAIN.com/api/cases | head
+```
 
 ---
 
