@@ -17,7 +17,10 @@ router.post("/auth/login", async (req, res) => {
     const user = rows[0];
     let authenticated = false;
     if (user.password_hash) authenticated = await bcrypt.compare(password, user.password_hash);
-    if (!authenticated && user.temp_password && user.temp_password === password) authenticated = true;
+    if (!authenticated && user.temp_password) {
+      const tempMatch = await bcrypt.compare(password, user.temp_password);
+      if (tempMatch) authenticated = true;
+    }
     if (!authenticated) return res.status(401).json({ error: "Invalid email or password" });
     const token = generateToken(user.id);
     return res.json({
@@ -42,7 +45,10 @@ router.post("/auth", async (req, res) => {
     const user = rows[0];
     let authenticated = false;
     if (user.password_hash) authenticated = await bcrypt.compare(password, user.password_hash);
-    if (!authenticated && user.temp_password && user.temp_password === password) authenticated = true;
+    if (!authenticated && user.temp_password) {
+      const tempMatch = await bcrypt.compare(password, user.temp_password);
+      if (tempMatch) authenticated = true;
+    }
     if (!authenticated) return res.status(401).json({ error: "Invalid email or password" });
     const token = generateToken(user.id);
     return res.json({

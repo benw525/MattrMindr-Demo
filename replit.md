@@ -7,7 +7,7 @@ A case management system for personal injury law firms. Tracks PI cases, manages
 - **Frontend**: React 19 (Create React App), port 5000
 - **Backend**: Node.js + Express 4, port 3001
 - **Database**: PostgreSQL (Replit-provisioned), accessed via `DATABASE_URL`
-- **Auth**: express-session with bcrypt password hashing; session restore on page refresh via `/api/auth/me`; temporary password emails via SendGrid
+- **Auth**: express-session with bcrypt password hashing; session restore on page refresh via `/api/auth/me`; temporary passwords hashed with bcrypt before storage; SESSION_SECRET required in production; login form wrapped in `<form>` for proper browser autofill/submit
 - **Email**: SendGrid (Replit integration) for auth emails; SendGrid Inbound Parse for case correspondence
 - **Styling**: Tailwind CSS v3 + CSS-in-JS template literal; Inter font, slate/amber color palette, lucide-react icons
 - **Icons**: All AI Center agent cards and Reports page cards use lucide-react Icon components with colored rounded-lg background containers

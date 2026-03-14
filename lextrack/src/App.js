@@ -2995,14 +2995,14 @@ function LoginScreen({ onLogin }) {
           <div className="text-[10px] text-slate-400 uppercase tracking-widest text-center">Case Management System</div>
         </div>
 
-        {view === "login" && !mfaRequired && (<>
+        {view === "login" && !mfaRequired && (<form onSubmit={e => { e.preventDefault(); doLogin(); }}>
           <div className="mb-5">
             <label className={labelClass}>Email</label>
-            <input type="email" placeholder="your.email@firm.com" value={email} onChange={e => { setEmail(e.target.value); setErr(""); setMsg(""); }} onKeyDown={e => e.key === "Enter" && doLogin()} className={inputClass} />
+            <input type="email" placeholder="your.email@firm.com" value={email} onChange={e => { setEmail(e.target.value); setErr(""); setMsg(""); }} className={inputClass} />
           </div>
           <div className="mb-4">
             <label className={labelClass}>Password</label>
-            <input type="password" placeholder="Enter your password" value={password} onChange={e => { setPassword(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && doLogin()} className={inputClass} />
+            <input type="password" placeholder="Enter your password" value={password} onChange={e => { setPassword(e.target.value); setErr(""); }} className={inputClass} />
           </div>
           <div className="flex items-center gap-2 mb-6">
             <input type="checkbox" id="rememberMe" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500" />
@@ -3010,14 +3010,14 @@ function LoginScreen({ onLogin }) {
           </div>
           {err && <div className="text-red-500 text-sm mb-3">{err}</div>}
           {msg && <div className="text-slate-700 dark:text-slate-300 text-sm mb-3">{msg}</div>}
-          <button className={btnClass + " mb-4"} onClick={doLogin} disabled={busy}>
+          <button type="submit" className={btnClass + " mb-4"} disabled={busy}>
             {busy ? "Signing in…" : "Sign In"}
           </button>
           <button type="button" className={linkClass + " block w-full text-center"} onClick={() => { setErr(""); setMsg(""); setView("forgot"); }}>Forgot password?</button>
           <div className="mt-6 pt-4 border-t border-slate-200">
             <a href="/portal" className="block w-full text-center text-sm text-slate-500 hover:text-slate-700 transition-colors">Click here if you are a client</a>
           </div>
-        </>)}
+        </form>)}
 
         {view === "login" && mfaRequired && (<>
           <div className="text-center mb-6">

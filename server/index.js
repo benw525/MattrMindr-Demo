@@ -82,7 +82,13 @@ app.use(session({
     createTableIfMissing: true,
   }),
   name: "lextrack.sid",
-  secret: process.env.SESSION_SECRET || "lextrack-dev-secret-change-in-prod",
+  secret: (() => {
+    if (isProd && !process.env.SESSION_SECRET) {
+      console.error("FATAL: SESSION_SECRET env var is required in production.");
+      process.exit(1);
+    }
+    return process.env.SESSION_SECRET || "lextrack-dev-secret-change-in-prod";
+  })(),
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -167,9 +173,9 @@ app.post("/api/support", async (req, res) => {
       <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; padding: 30px;">
         <h2 style="color: #1e3a5f; font-family: 'Playfair Display', Georgia, serif;">MattrMindr Support Request</h2>
         <table style="margin: 16px 0; font-size: 14px;">
-          <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-weight: 600;">From:</td><td>${user.name}</td></tr>
-          <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-weight: 600;">Email:</td><td>${user.email}</td></tr>
-          <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-weight: 600;">Role:</td><td>${user.role}</td></tr>
+          <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-weight: 600;">From:</td><td>${user.name.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td></tr>
+          <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-weight: 600;">Email:</td><td>${user.email.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td></tr>
+          <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-weight: 600;">Role:</td><td>${user.role.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td></tr>
         </table>
         <div style="background: #f0f4f8; border: 1px solid #d0d7de; border-radius: 8px; padding: 20px; margin: 20px 0; white-space: pre-wrap; font-size: 14px; line-height: 1.6;">${message.trim().replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
         <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">Sent from MattrMindr Case Management System</p>
@@ -402,19 +408,43 @@ async function ensureColumns() {
 
   try {
     const bcrypt = require("bcryptjs");
+    const crypto = require("crypto");
     const adminEmail = "admin@mattrmindr.com";
     const { rows: existing } = await pool.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [adminEmail]);
     if (existing.length === 0) {
-      const hash = await bcrypt.hash("100%Warrior92", 10);
+      const defaultPw = process.env.ADMIN_DEFAULT_PASSWORD || crypto.randomBytes(16).toString("hex");
+      const hash = await bcrypt.hash(defaultPw, 10);
       await pool.query(
-        `INSERT INTO users (id, name, role, roles, email, initials, password_hash)
-         SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4, $5, $6 FROM users`,
+        `INSERT INTO users (id, name, role, roles, email, initials, password_hash, must_change_password)
+         SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4, $5, $6, TRUE FROM users`,
         ["Admin", "App Admin", ["App Admin"], adminEmail, "AD", hash]
       );
       console.log("Seeded admin user: " + adminEmail);
+      if (!process.env.ADMIN_DEFAULT_PASSWORD) {
+        console.log("Generated random admin password. Set ADMIN_DEFAULT_PASSWORD env var or use forgot-password to reset.");
+      }
     }
   } catch (seedErr) {
     console.error("Admin seed error (non-fatal):", seedErr.message);
+  }
+
+  try {
+    const bcryptMig = require("bcryptjs");
+    const { rows: legacyTempUsers } = await pool.query(
+      "SELECT id, temp_password FROM users WHERE temp_password != '' AND temp_password IS NOT NULL"
+    );
+    for (const u of legacyTempUsers) {
+      if (!u.temp_password.startsWith("$2a$") && !u.temp_password.startsWith("$2b$")) {
+        const hashed = await bcryptMig.hash(u.temp_password, 10);
+        await pool.query("UPDATE users SET temp_password = $1 WHERE id = $2", [hashed, u.id]);
+      }
+    }
+    if (legacyTempUsers.length > 0) {
+      const rehashed = legacyTempUsers.filter(u => !u.temp_password.startsWith("$2a$") && !u.temp_password.startsWith("$2b$")).length;
+      if (rehashed > 0) console.log(`Rehashed ${rehashed} legacy plaintext temp password(s).`);
+    }
+  } catch (tpErr) {
+    console.error("Temp password migration (non-fatal):", tpErr.message);
   }
 
   console.log("Runtime schema migrations applied.");

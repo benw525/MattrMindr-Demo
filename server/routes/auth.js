@@ -82,14 +82,17 @@ router.post("/login", async (req, res) => {
       authenticated = await bcrypt.compare(password, user.password_hash);
     }
 
-    if (!authenticated && user.temp_password && user.temp_password === password) {
-      authenticated = true;
-      const hash = await bcrypt.hash(password, 10);
-      await pool.query(
-        "UPDATE users SET password_hash = $1, temp_password = '', must_change_password = TRUE WHERE id = $2",
-        [hash, user.id]
-      );
-      user.must_change_password = true;
+    if (!authenticated && user.temp_password) {
+      const tempMatch = await bcrypt.compare(password, user.temp_password);
+      if (tempMatch) {
+        authenticated = true;
+        const hash = await bcrypt.hash(password, 10);
+        await pool.query(
+          "UPDATE users SET password_hash = $1, temp_password = '', must_change_password = TRUE WHERE id = $2",
+          [hash, user.id]
+        );
+        user.must_change_password = true;
+      }
     }
 
     if (!authenticated) {
@@ -159,9 +162,10 @@ router.post("/send-temp-password", requireAuth, async (req, res) => {
     if (!user.email) return res.status(400).json({ error: "User has no email address" });
 
     const tempPw = generateTempPassword();
+    const tempHash = await bcrypt.hash(tempPw, 10);
     await pool.query(
       "UPDATE users SET temp_password = $1, must_change_password = TRUE WHERE id = $2",
-      [tempPw, user.id]
+      [tempHash, user.id]
     );
     await sendTempPasswordEmail(user.email, user.name, tempPw);
     return res.json({ ok: true, message: `Temporary password sent to ${user.email}` });

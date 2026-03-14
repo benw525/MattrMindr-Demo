@@ -12,6 +12,7 @@ async function requireAuth(req, res, next) {
     }
   } catch (err) {
     console.error("Auth middleware error:", err);
+    return res.status(503).json({ error: "Service temporarily unavailable" });
   }
   next();
 }
