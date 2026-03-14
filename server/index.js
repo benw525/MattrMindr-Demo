@@ -65,7 +65,7 @@ const PORT = process.env.API_PORT || 3001;
 
 const isProd = process.env.NODE_ENV === "production";
 
-if (isProd || process.env.REPLIT_DEV_DOMAIN) app.set("trust proxy", 1);
+if (isProd) app.set("trust proxy", 1);
 
 app.use(cors({
   origin: isProd ? [] : ["http://localhost:5000", "http://0.0.0.0:5000"],
@@ -91,11 +91,10 @@ app.use(session({
   })(),
   resave: false,
   saveUninitialized: false,
-  proxy: !isProd && !!process.env.REPLIT_DEV_DOMAIN,
   cookie: {
     httpOnly: true,
-    secure: isProd || !!process.env.REPLIT_DEV_DOMAIN,
-    sameSite: isProd ? "lax" : (process.env.REPLIT_DEV_DOMAIN ? "none" : undefined),
+    secure: isProd,
+    sameSite: isProd ? "lax" : undefined,
     maxAge: 8 * 60 * 60 * 1000,
   },
 }));
