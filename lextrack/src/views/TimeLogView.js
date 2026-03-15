@@ -1,14 +1,11 @@
-/* eslint-disable no-unused-vars */
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Clock, Plus, Search, Download, X, ChevronDown, ChevronUp, Pencil, Trash2, Check, Calendar, Menu, Filter } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Plus, Download, Menu } from "lucide-react";
 import {
   apiGetTimeEntries, apiCreateTimeEntry, apiUpdateTimeEntry, apiDeleteTimeEntry,
   apiGetCasesAll, apiUpdateTask, apiUpdateNote,
 } from "../api.js";
 import {
-  fmt, getUserById, Avatar, isDarkMode,
-  hasRole, isAppAdmin, today,
-  SortTh, CaseSearchField, StaffSearchField, USERS,
+  today,
   PinnedSectionHeader,
 } from "../shared.js";
 function TimeLogView({ currentUser, allCases, tasks, caseNotes, correspondence = [], allUsers = [], onMenuToggle, pinnedCaseIds }) {

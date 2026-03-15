@@ -1,13 +1,9 @@
-/* eslint-disable no-unused-vars */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Inbox, Search, X, ChevronDown, ChevronRight, Check, AlertTriangle, Mail, MessageCircle, Menu, RefreshCw, Loader2, Briefcase, FileText } from "lucide-react";
+import { Inbox, Search, ChevronDown, ChevronRight, Mail, MessageCircle, Menu, Loader2, Briefcase, FileText } from "lucide-react";
 import {
   apiGetUnmatchedSms, apiAssignSms, apiGetUnmatchedEmails, apiAssignUnmatchedEmail, apiReprocessUnmatchedEmails, apiReprocessStatus,
 } from "../api.js";
-import {
-  fmt, Badge, isDarkMode,
-  CaseSearchField, SortTh,
-} from "../shared.js";
+
 function UnmatchedView({ allCases, onMenuToggle }) {
   const [tab, setTab] = useState("emails");
   const [emails, setEmails] = useState([]);

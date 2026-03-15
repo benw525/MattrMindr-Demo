@@ -101,8 +101,10 @@ server/
 
 lextrack/
   src/
-    App.js          — App shell, FirmApp, login/settings/modals, React Router setup (~3,500 lines)
+    App.js          — App shell, FirmApp, React Router setup, TimePromptModal, FollowUpPromptModal (~2,075 lines)
     shared.js       — Shared constants, utility functions, reusable components (~1,000 lines)
+    modals.js       — LoginScreen, ChangePasswordModal, SettingsModal, HelpCenterModal (~1,000 lines)
+    styles.js       — CSS template literal + fonts (~513 lines)
     navigation.js   — VIEWS constants for view name mappings
     api.js          — Thin fetch wrapper for all API calls
     firmData.js     — Static reference data: PI firm staff (avatars, names, roles)

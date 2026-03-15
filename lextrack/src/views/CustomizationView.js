@@ -1,16 +1,37 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
-import { Plus, Trash2, X, Search, ChevronDown, ChevronUp, Pencil, Check, Eye, Loader2, Upload, Download, RefreshCw, Settings, Filter, Copy, AlertTriangle, Sparkles, Zap, Brain, ToggleLeft, ToggleRight, Lock, SlidersHorizontal, Menu, GitBranch, BarChart2, ListChecks, BarChart3, Bot, Shield, Scale, User, CalendarDays, CheckSquare, ClipboardList, AlertCircle, CalendarClock, FileText } from "lucide-react";
+import { Plus, Trash2, X, Search, Pencil, Check, Eye, Loader2, Upload, Filter, Sparkles, Zap, ToggleLeft, ToggleRight, SlidersHorizontal, Menu, GitBranch, BarChart2, ListChecks, BarChart3, Bot, Shield, User, FileText } from "lucide-react";
 import {
-  apiGetPermissionKeys, apiGetPermissions, apiCreatePermissionsBulk, apiDeletePermissionsBulk, apiCheckPermissions,
-  apiGetCustomReports, apiCreateCustomReport, apiUpdateCustomReport, apiDeleteCustomReport, apiRunCustomReport, apiCustomReportAiAssist,
-  apiGetCustomAgents, apiCreateCustomAgent, apiUpdateCustomAgent, apiDeleteCustomAgent, apiRunCustomAgent, apiChatCustomAgent, apiUploadAgentInstructions, apiClearAgentInstructions,
-  apiGetTaskFlows, apiGetTaskFlow, apiCreateTaskFlow, apiUpdateTaskFlow, apiDeleteTaskFlow,
-  apiGetCustomWidgets, apiCreateCustomWidget, apiUpdateCustomWidget, apiDeleteCustomWidget, apiRunCustomWidget,
+  apiGetPermissionKeys,
+  apiGetPermissions,
+  apiCreatePermissionsBulk,
+  apiDeletePermissionsBulk,
+  apiGetCustomReports,
+  apiCreateCustomReport,
+  apiUpdateCustomReport,
+  apiDeleteCustomReport,
+  apiRunCustomReport,
+  apiCustomReportAiAssist,
+  apiGetCustomAgents,
+  apiCreateCustomAgent,
+  apiUpdateCustomAgent,
+  apiDeleteCustomAgent,
+  apiRunCustomAgent,
+  apiChatCustomAgent,
+  apiUploadAgentInstructions,
+  apiClearAgentInstructions,
+  apiGetTaskFlows,
+  apiGetTaskFlow,
+  apiCreateTaskFlow,
+  apiUpdateTaskFlow,
+  apiDeleteTaskFlow,
+  apiGetCustomWidgets,
+  apiCreateCustomWidget,
+  apiUpdateCustomWidget,
+  apiDeleteCustomWidget,
+  apiRunCustomWidget,
 } from "../api.js";
 import {
-  hasRole, isAppAdmin, getUserById, Avatar, Badge, isDarkMode,
-  Toggle, CaseSearchField, StaffSearchField, SortTh, USERS, fmt,
-  STAFF_ROLES, PinnedSectionHeader,
+  STAFF_ROLES,
 } from "../shared.js";
 
 const CASE_TRIGGER_FIELDS = [

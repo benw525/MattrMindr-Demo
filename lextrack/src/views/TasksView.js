@@ -1,12 +1,21 @@
-/* eslint-disable no-unused-vars */
-import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
-import { CheckSquare, Plus, Search, ChevronDown, ChevronUp, Menu, Filter, X, Calendar, Clock, AlertTriangle } from "lucide-react";
-import { apiCreateTask, apiUpdateTask, apiCompleteTask } from "../api.js";
+import { useState, useMemo, Fragment } from "react";
+import { Plus, Menu } from "lucide-react";
+
 import {
-  fmt, daysUntil, urgencyColor, Badge, getUserById, Avatar, isDarkMode,
-  hasRole, isAppAdmin, today, addDays,
-  PRIORITY_RANK, RANK_PRIORITY, getEffectivePriority,
-  SortTh, Toggle, CaseSearchField, EscalateBox, StaffSearchField, USERS,
+  fmt,
+  daysUntil,
+  urgencyColor,
+  Badge,
+  getUserById,
+  Avatar,
+  today,
+  addDays,
+  PRIORITY_RANK,
+  getEffectivePriority,
+  SortTh,
+  Toggle,
+  EscalateBox,
+  StaffSearchField,
   PinnedSectionHeader,
 } from "../shared.js";
 function TasksView({ tasks, onAddTask, allCases, currentUser, onCompleteTask, onUpdateTask, onMenuToggle, pinnedCaseIds }) {

@@ -1,16 +1,22 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
-import { FileText, Plus, Search, X, ChevronDown, ChevronUp, Pencil, Trash2, Check, Download, Upload, Eye, Loader2, Copy, Filter, FolderPlus, Menu, RefreshCw, Sparkles, AlertTriangle } from "lucide-react";
+import { Plus, Search, Download, Upload, Copy, Menu } from "lucide-react";
 import {
-  apiGetTemplates, apiDeleteTemplate, apiUpdateTemplate, apiGetTemplateSource, apiUploadTemplateFile, apiSaveTemplate, apiGenerateDocument, apiDetectPleadingSections,
-  apiGetParties, apiGetExperts,
-  apiCreateNote, apiCreateActivity,
-  apiGetCaseDocuments,
+  apiGetTemplates,
+  apiDeleteTemplate,
+  apiUpdateTemplate,
+  apiGetTemplateSource,
+  apiUploadTemplateFile,
+  apiSaveTemplate,
+  apiGenerateDocument,
+  apiDetectPleadingSections,
   apiDraftDocument,
 } from "../api.js";
 import {
-  fmt, fmtFileSize, getUserById, Avatar, isDarkMode, Badge,
-  hasRole, isAppAdmin, today,
-  SortTh, CaseSearchField, DragDropZone, Toggle, USERS, US_STATES, AiPanel,
+  fmt,
+  hasRole,
+  today,
+  USERS,
+  AiPanel,
 } from "../shared.js";
 function buildPartyFieldMap(parties) { // eslint-disable-line no-unused-vars
   const map = [];

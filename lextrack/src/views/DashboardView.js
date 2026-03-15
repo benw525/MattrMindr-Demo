@@ -1,14 +1,27 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { LayoutDashboard, Briefcase, Calendar, CheckSquare, FileText, Clock, BarChart3, Brain, MessageSquare, Users, UserCog, Settings, HelpCircle, Menu, X, Bot, Search, Plus, Download, Scale, Pin, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles, AlertTriangle, CalendarClock, PenLine, FileSearch, ListChecks, FolderOpen, Layers, User, CalendarDays, ClipboardList, AlertCircle, BarChart2, Lock, Mic, Upload, FileAudio, Pencil, Trash2, Loader2, Merge, Check, RotateCcw, FolderPlus, Camera, Shield, Eye, Video, SlidersHorizontal, GitBranch, Zap, ToggleLeft, ToggleRight, Filter, RefreshCw, Inbox, Mail, MessageCircle } from "lucide-react";
+import { Briefcase, Calendar, CheckSquare, Settings, Menu, Search, Plus, Scale, Pin, Sparkles } from "lucide-react";
 import {
-  apiSavePreferences, apiGetQuickNotes, apiCreateNote, apiDeleteNote, apiGetRecentActivity, apiGetUnreadClientComm, apiRunCustomWidget,
-  apiGetCustomWidgets, apiGetTimeEntries, apiUpdateNote, apiCaseTriage,
+  apiGetQuickNotes,
+  apiCreateNote,
+  apiDeleteNote,
+  apiGetRecentActivity,
+  apiGetUnreadClientComm,
+  apiRunCustomWidget,
+  apiGetCustomWidgets,
+  apiGetTimeEntries,
+  apiUpdateNote,
+  apiCaseTriage,
 } from "../api.js";
 import {
-  fmt, daysUntil, urgencyColor, Badge, getUserById, Avatar, isDarkMode, statusBadgeStyle,
-  hasRole, isAppAdmin, today, PRIORITY_RANK, getEffectivePriority,
-  CaseSearchField, Toggle, PinnedSectionHeader, StaffSearchField,
-  DEFAULT_LAYOUT, getDashboardLayout, saveDashboardLayout, USERS,
+  fmt,
+  daysUntil,
+  urgencyColor,
+  Badge,
+  getEffectivePriority,
+  CaseSearchField,
+  DEFAULT_LAYOUT,
+  getDashboardLayout,
+  saveDashboardLayout,
   NewCaseModal,
 } from "../shared.js";
 

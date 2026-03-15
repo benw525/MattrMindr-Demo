@@ -1,19 +1,36 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Users, Plus, Search, X, ChevronDown, ChevronUp, Pencil, Trash2, Check, Download, Upload, Eye, Loader2, Merge, Filter, Mail, Phone, Briefcase, Calendar, Menu, RefreshCw, MessageCircle, AlertTriangle, Pin } from "lucide-react";
+import { Search, Merge, Phone, Menu, Pin } from "lucide-react";
 import {
-  apiGetContacts, apiGetDeletedContacts, apiCreateContact, apiUpdateContact, apiDeleteContact, apiRestoreContact, apiMergeContacts, apiGetContactCases, apiGetContactCaseCounts,
-  apiGetContactNotes, apiCreateContactNote, apiDeleteContactNote,
-  apiGetContactStaff, apiCreateContactStaff, apiUpdateContactStaff, apiDeleteContactStaff,
-  apiGetContactPhones, apiAddContactPhone, apiUpdateContactPhone, apiDeleteContactPhone,
-  apiGetContactCaseLinks, apiAddContactCaseLink, apiDeleteContactCaseLink,
-  apiGetOutlookContacts, apiImportOutlookContacts, apiExportContactsToOutlook,
-  apiGetSmsMessages, apiSendSms, apiDraftSmsMessage,
+  apiGetContacts,
+  apiGetDeletedContacts,
+  apiCreateContact,
+  apiUpdateContact,
+  apiDeleteContact,
+  apiRestoreContact,
+  apiMergeContacts,
+  apiGetContactCases,
+  apiGetContactCaseCounts,
+  apiGetContactNotes,
+  apiCreateContactNote,
+  apiDeleteContactNote,
+  apiGetContactStaff,
+  apiCreateContactStaff,
+  apiUpdateContactStaff,
+  apiDeleteContactStaff,
+  apiGetContactPhones,
+  apiAddContactPhone,
+  apiUpdateContactPhone,
+  apiDeleteContactPhone,
+  apiGetContactCaseLinks,
+  apiAddContactCaseLink,
+  apiDeleteContactCaseLink,
+  apiGetOutlookContacts,
+  apiImportOutlookContacts,
+  apiExportContactsToOutlook,
   apiSavePreferences,
 } from "../api.js";
 import {
-  fmt, getUserById, Avatar, isDarkMode, Badge, statusBadgeStyle,
-  hasRole, isAppAdmin, today,
-  SortTh, CaseSearchField, StaffSearchField, Toggle, USERS, US_STATES,
+  isAppAdmin,
 } from "../shared.js";
 
 const CONTACT_CATEGORIES = ["Client", "Prosecutor", "Judge", "Court", "Witness", "Expert", "Family Member", "Social Worker", "Treatment Provider"];

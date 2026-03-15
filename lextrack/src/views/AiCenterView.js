@@ -1,17 +1,34 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Brain, Search, Plus, X, ChevronDown, ChevronUp, Sparkles, AlertTriangle, Loader2, Download, Eye, Trash2, Pencil, Check, RefreshCw, Copy, Briefcase, Calendar, Clock, CheckSquare, Upload, Filter, Menu, Scale, CalendarClock, PenLine, MessageSquare, FileSearch, ListChecks, FolderOpen, Mic, Layers, Bot } from "lucide-react";
+import { Brain, Search, Sparkles, AlertTriangle, Loader2, Copy, Upload, Filter, Menu, Scale, CalendarClock, PenLine, MessageSquare, FileSearch, ListChecks, FolderOpen, Mic, Layers, Bot } from "lucide-react";
 import {
-  apiGetUsers, apiGetFilings, apiGetTraining, apiCreateTraining, apiUploadTrainingDoc, apiUpdateTraining, apiDeleteTraining,
-  apiUploadTranscriptChunked, apiUploadTranscript, apiCreateTask, apiClassifyFiling,
-  apiChargeAnalysis, apiDeadlineGenerator, apiCaseStrategy, apiDraftDocument, apiCaseTriage, apiClientSummary, apiDocSummary, apiTaskSuggestions,
-  apiGetCustomAgents, apiRunCustomAgent, apiChatCustomAgent,
-  apiBatchPreview, apiBatchApply,
+  apiGetUsers,
+  apiGetFilings,
+  apiGetTraining,
+  apiCreateTraining,
+  apiUploadTrainingDoc,
+  apiUpdateTraining,
+  apiDeleteTraining,
+  apiUploadTranscriptChunked,
+  apiUploadTranscript,
+  apiCreateTask,
+  apiClassifyFiling,
+  apiChargeAnalysis,
+  apiDeadlineGenerator,
+  apiCaseStrategy,
+  apiDraftDocument,
+  apiCaseTriage,
+  apiClientSummary,
+  apiDocSummary,
+  apiTaskSuggestions,
+  apiBatchPreview,
+  apiBatchApply,
 } from "../api.js";
 import {
-  fmt, daysUntil, urgencyColor, Badge, getUserById, Avatar, isDarkMode,
-  hasRole, isAppAdmin, today,
-  AiPanel, CaseSearchField, Toggle, BatchStaffPicker, StaffSearchField, SortTh, USERS,
-  PinnedSectionHeader, DragDropZone,
+  isDarkMode,
+  AiPanel,
+  BatchStaffPicker,
+  PinnedSectionHeader,
+  DragDropZone,
 } from "../shared.js";
 import { CustomAgentsTab } from "./CustomizationView.js";
 

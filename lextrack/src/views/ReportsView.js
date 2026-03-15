@@ -1,18 +1,24 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
-import { BarChart3, Download, Search, Filter, ChevronDown, ChevronUp, Menu, X, Plus, Trash2, Pencil, Check, Eye, Briefcase, Calendar, Clock, AlertTriangle, CheckSquare, Sparkles, Scale, User, CalendarDays, ClipboardList, AlertCircle, BarChart2, CalendarClock, FileText, Lock } from "lucide-react";
+import { BarChart3, Download, Search, Menu, AlertTriangle, CheckSquare, Sparkles, Scale, User, CalendarDays, ClipboardList, AlertCircle, BarChart2, CalendarClock, FileText, Lock } from "lucide-react";
 import {
-  apiGetCaseTasks, apiCreateTask, apiUpdateTask, apiCompleteTask,
-  apiGetNotes, apiCreateNote, apiUpdateNote, apiDeleteNote,
-  apiGetLinks, apiCreateLink, apiDeleteLink,
-  apiGetActivity, apiCreateActivity,
-  apiGetDeadlines, apiCreateDeadline, apiUpdateDeadline, apiDeleteDeadline,
-  apiDeleteCase, apiUpdateCase,
+  apiCreateNote,
+  apiUpdateNote,
+  apiDeleteNote,
+  apiCreateLink,
+  apiDeleteLink,
+  apiCreateActivity,
 } from "../api.js";
 import {
-  fmt, fmtFileSize, daysUntil, urgencyColor, Badge, getUserById, Avatar, isDarkMode, statusBadgeStyle,
-  hasRole, isAppAdmin, today, addDays,
-  PRIORITY_RANK, RANK_PRIORITY, getEffectivePriority,
-  SortTh, CaseSearchField, StaffSearchField, USERS, US_STATES,
+  fmt,
+  daysUntil,
+  urgencyColor,
+  Badge,
+  getUserById,
+  today,
+  getEffectivePriority,
+  StaffSearchField,
+  USERS,
+  US_STATES,
 } from "../shared.js";
 import { CaseDetailOverlay } from "./CaseDetailView.js";
 import { CustomReportBuilder } from "./CustomizationView.js";

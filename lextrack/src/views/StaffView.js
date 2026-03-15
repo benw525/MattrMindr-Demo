@@ -1,13 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { UserCog, Plus, Search, X, Pencil, Trash2, Check, Eye, Download, Upload, Menu, ChevronDown, Shield, Lock, AlertTriangle, Loader2, Camera, Pin } from "lucide-react";
+import { Plus, Menu, Pin } from "lucide-react";
 import {
-  apiGetUsers, apiCreateUser, apiDeleteUser, apiGetDeletedUsers, apiRestoreUser, apiUpdateUserRoles, apiUpdateUser,
-  apiUploadProfilePicture, apiDeleteProfilePicture,
-  apiSavePreferences, apiSendTempPassword,
+  apiCreateUser,
+  apiDeleteUser,
+  apiRestoreUser,
+  apiUpdateUserRoles,
+  apiUpdateUser,
+  apiSavePreferences,
+  apiSendTempPassword,
 } from "../api.js";
 import {
-  STAFF_ROLES, hasRole, isAppAdmin, getUserById, Avatar, isDarkMode, Badge,
-  fmt, SortTh, Toggle, USERS, AVATAR_PALETTE, makeInitials, pickAvatar,
+  STAFF_ROLES,
+  isAppAdmin,
+  Badge,
+  USERS,
+  makeInitials,
+  pickAvatar,
 } from "../shared.js";
 function EditContactModal({ user, onSave, onClose }) {
   const [form, setForm] = useState({

@@ -1,13 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Trash2, Search, X, RotateCcw, Check, AlertTriangle, Menu, ChevronDown, ChevronRight, Filter, Loader2 } from "lucide-react";
+import { Trash2, Search, RotateCcw, Menu, ChevronRight, Loader2 } from "lucide-react";
 import {
   apiGetDeletedData, apiRestoreDeletedItem, apiBatchRestoreDeleted, apiBatchPurgeDeleted,
 } from "../api.js";
-import {
-  fmt, Badge, isDarkMode, getUserById, Avatar,
-  hasRole, isAppAdmin,
-  SortTh, Toggle,
-} from "../shared.js";
+
 function DeletedDataView({ onMenuToggle }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
