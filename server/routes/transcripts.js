@@ -575,6 +575,9 @@ router.put("/:id", requireAuth, async (req, res) => {
       values
     );
     if (!rows.length) return res.status(404).json({ error: "Transcript not found" });
+    if (transcript && rows[0].case_id) {
+      queueEmbeddingUpdate(rows[0].case_id, "transcript", rows[0].id);
+    }
     res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Update transcript error:", err.message);
@@ -866,6 +869,9 @@ router.post("/:id/revert/:historyId", requireAuth, async (req, res) => {
       [JSON.stringify(historyRows[0].previous_state), req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: "Transcript not found" });
+    if (rows[0].case_id) {
+      queueEmbeddingUpdate(rows[0].case_id, "transcript", rows[0].id);
+    }
     res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Revert transcript error:", err.message);

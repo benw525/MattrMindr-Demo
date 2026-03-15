@@ -187,6 +187,9 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
       [caseId, req.file.originalname, ct, fileDataForDb, r2FileKey, extractedText, docType || "Other", req.session.userId, userName, req.file.size, ocrStatus, folderVal]
     );
+    if (ocrStatus === "complete") {
+      queueEmbeddingUpdate(parseInt(caseId), "document", rows[0].id);
+    }
     return res.status(201).json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Document upload error:", err);

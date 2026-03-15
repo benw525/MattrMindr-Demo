@@ -76,7 +76,7 @@ async function upsertCaseEmbedding(caseId, contentType, text, sourceId = null) {
     `INSERT INTO case_embeddings (case_id, content_type, content_preview, embedding, source_id, updated_at)
      VALUES ($1, $2, $3, $4::vector, $5, NOW())
      ON CONFLICT (case_id, content_type, source_id)
-     DO UPDATE SET content_preview = $3, embedding = $4::vector, updated_at = NOW()`,
+     DO UPDATE SET content_preview = EXCLUDED.content_preview, embedding = EXCLUDED.embedding, updated_at = NOW()`,
     [caseId, contentType, preview, vectorStr, sourceId]
   );
 }

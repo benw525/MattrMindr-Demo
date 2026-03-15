@@ -9,10 +9,11 @@ exports.up = (pgm) => {
       content_preview TEXT NOT NULL DEFAULT '',
       embedding       vector(1536) NOT NULL,
       source_id       INTEGER,
-      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(case_id, content_type, source_id)
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  pgm.sql(`CREATE UNIQUE INDEX IF NOT EXISTS case_embeddings_unique_idx ON case_embeddings (case_id, content_type, source_id) NULLS NOT DISTINCT;`);
 
   pgm.sql(`CREATE INDEX IF NOT EXISTS idx_case_embeddings_case_id ON case_embeddings(case_id);`);
 
