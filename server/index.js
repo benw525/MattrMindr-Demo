@@ -193,6 +193,10 @@ const externalCorsOrigins = (() => {
         console.warn(`WARNING: Invalid origin '${origin}' in EXTERNAL_CORS_ORIGINS — must be a full URL (e.g. https://app.example.com). Skipping.`);
         continue;
       }
+      if (isProd && parsed.hostname.includes("*")) {
+        console.error(`SECURITY: Wildcard hostname '${origin}' in EXTERNAL_CORS_ORIGINS is rejected in production. Skipping.`);
+        continue;
+      }
       if (isProd && parsed.protocol !== "https:") {
         console.error(`SECURITY: Non-HTTPS origin '${origin}' in EXTERNAL_CORS_ORIGINS is rejected in production. Skipping.`);
         continue;
