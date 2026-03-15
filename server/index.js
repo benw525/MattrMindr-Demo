@@ -1,4 +1,4 @@
-require("dotenv").config({ path: require("path").resolve(__dirname, "..", ".env") });
+require("dotenv").config({ path: require("path").resolve(__dirname, "..", ".env"), override: true });
 
 const express = require("express");
 const session = require("express-session");
