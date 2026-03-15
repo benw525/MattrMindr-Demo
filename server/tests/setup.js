@@ -1,28 +1,38 @@
 const express = require("express");
 const session = require("express-session");
 const pgSession = require("connect-pg-simple")(session);
-const pool = require("../db");
 const { execSync } = require("child_process");
 const path = require("path");
 
-function createTestApp() {
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+}
+
+const pool = require("../db");
+
+function createTestApp(options = {}) {
   const app = express();
 
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true, limit: "30mb" }));
 
-  app.use(session({
-    store: new pgSession({
-      pool,
-      tableName: "user_sessions",
-      createTableIfMissing: true,
-    }),
+  const sessionConfig = {
     secret: "test-secret",
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false },
     name: "lextrack.sid",
-  }));
+  };
+
+  if (options.pgSessions) {
+    sessionConfig.store = new pgSession({
+      pool,
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+    });
+  }
+
+  app.use(session(sessionConfig));
 
   app.use("/api/auth", require("../routes/auth"));
   app.use("/api/cases", require("../routes/cases"));
@@ -36,19 +46,35 @@ function createTestApp() {
 }
 
 async function setupTestDB() {
+  const env = { ...process.env };
+  if (process.env.TEST_DATABASE_URL) {
+    env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+  }
+
   execSync("node schema.js", {
     cwd: path.resolve(__dirname, ".."),
     stdio: "pipe",
     timeout: 30000,
+    env,
   });
+
+  try {
+    execSync("npx node-pg-migrate up --migrations-dir migrations --migration-file-language js", {
+      cwd: path.resolve(__dirname, ".."),
+      stdio: "pipe",
+      timeout: 30000,
+      env,
+    });
+  } catch (e) {
+  }
 }
 
 async function cleanTestData() {
-  const dbUrl = process.env.DATABASE_URL || "";
   const isCI = process.env.NODE_ENV === "test" || process.env.CI === "true";
   const isReplit = !!process.env.REPL_ID;
-  if (!isCI && !isReplit) {
-    throw new Error("SAFETY: cleanTestData refused to run — set NODE_ENV=test or run on Replit/CI");
+  const hasTestDB = !!process.env.TEST_DATABASE_URL;
+  if (!isCI && !isReplit && !hasTestDB) {
+    throw new Error("SAFETY: cleanTestData refused to run — set NODE_ENV=test, TEST_DATABASE_URL, or run on Replit/CI");
   }
   await pool.query(`
     TRUNCATE
@@ -104,6 +130,10 @@ async function createAuthenticatedAgent(app, userOverrides = {}) {
   return { agent, user };
 }
 
+async function teardownTestDB() {
+  await pool.end();
+}
+
 module.exports = {
   createTestApp,
   setupTestDB,
@@ -111,5 +141,6 @@ module.exports = {
   createTestUser,
   loginAgent,
   createAuthenticatedAgent,
+  teardownTestDB,
   pool,
 };

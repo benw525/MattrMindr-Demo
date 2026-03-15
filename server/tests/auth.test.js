@@ -190,14 +190,15 @@ describe("POST /api/auth/change-password", () => {
   });
 
   it("should invalidate other sessions on password change", async () => {
+    const pgApp = createTestApp({ pgSessions: true });
     const user = await createTestUser({ email: "multi-session@test.com", password: "OldPass1!" });
 
-    const agent1 = supertest.agent(app);
+    const agent1 = supertest.agent(pgApp);
     await loginAgent(agent1, "multi-session@test.com", "OldPass1!");
     const me1 = await agent1.get("/api/auth/me");
     expect(me1.status).toBe(200);
 
-    const agent2 = supertest.agent(app);
+    const agent2 = supertest.agent(pgApp);
     await loginAgent(agent2, "multi-session@test.com", "OldPass1!");
     const me2 = await agent2.get("/api/auth/me");
     expect(me2.status).toBe(200);
@@ -351,27 +352,81 @@ describe("POST /api/auth/mfa/disable", () => {
 });
 
 describe("Rate limiting behavior", () => {
-  it("should enforce rate limits on login endpoint when limiter is active", async () => {
+  it("should enforce rate limits using the actual auth limiter configuration", async () => {
+    jest.resetModules();
+    jest.unmock("../middleware/rate-limit");
     const rateLimit = require("express-rate-limit");
-    const testApp = require("express")();
-    testApp.use(require("express").json());
 
-    const strictLimiter = rateLimit({
-      windowMs: 60000,
+    const loginLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
       max: 2,
-      message: { error: "Too many attempts" },
+      message: { error: "Too many login attempts. Please try again in 15 minutes." },
+      standardHeaders: true,
+      legacyHeaders: false,
     });
 
-    testApp.post("/api/test-rate", strictLimiter, (req, res) => res.json({ ok: true }));
+    const miniApp = require("express")();
+    miniApp.use(require("express").json());
+    miniApp.post("/api/auth/login", loginLimiter, (req, res) => res.json({ ok: true }));
 
-    const agent = supertest(testApp);
-    const r1 = await agent.post("/api/test-rate");
+    const agent = supertest(miniApp);
+    const r1 = await agent.post("/api/auth/login").send({ email: "a@b.com", password: "x" });
     expect(r1.status).toBe(200);
-    const r2 = await agent.post("/api/test-rate");
+    const r2 = await agent.post("/api/auth/login").send({ email: "a@b.com", password: "x" });
     expect(r2.status).toBe(200);
-    const r3 = await agent.post("/api/test-rate");
+    const r3 = await agent.post("/api/auth/login").send({ email: "a@b.com", password: "x" });
     expect(r3.status).toBe(429);
-    expect(r3.body.error).toMatch(/too many/i);
+    expect(r3.body.error).toMatch(/too many login attempts/i);
+  });
+
+  it("should enforce MFA rate limits using the actual mfa limiter config", async () => {
+    jest.resetModules();
+    jest.unmock("../middleware/rate-limit");
+    const rateLimit = require("express-rate-limit");
+
+    const mfaLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 2,
+      message: { error: "Too many MFA attempts. Please try again in 15 minutes." },
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
+    const miniApp = require("express")();
+    miniApp.use(require("express").json());
+    miniApp.post("/api/auth/mfa/verify", mfaLimiter, (req, res) => res.json({ ok: true }));
+
+    const agent = supertest(miniApp);
+    await agent.post("/api/auth/mfa/verify").send({ code: "123456" });
+    await agent.post("/api/auth/mfa/verify").send({ code: "123456" });
+    const r3 = await agent.post("/api/auth/mfa/verify").send({ code: "123456" });
+    expect(r3.status).toBe(429);
+    expect(r3.body.error).toMatch(/too many mfa/i);
+  });
+
+  it("should enforce forgot-password rate limits", async () => {
+    jest.resetModules();
+    jest.unmock("../middleware/rate-limit");
+    const rateLimit = require("express-rate-limit");
+
+    const forgotLimiter = rateLimit({
+      windowMs: 60 * 60 * 1000,
+      max: 2,
+      message: { error: "Too many password reset requests. Please try again in an hour." },
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
+    const miniApp = require("express")();
+    miniApp.use(require("express").json());
+    miniApp.post("/api/auth/forgot-password", forgotLimiter, (req, res) => res.json({ ok: true }));
+
+    const agent = supertest(miniApp);
+    await agent.post("/api/auth/forgot-password").send({ email: "a@b.com" });
+    await agent.post("/api/auth/forgot-password").send({ email: "a@b.com" });
+    const r3 = await agent.post("/api/auth/forgot-password").send({ email: "a@b.com" });
+    expect(r3.status).toBe(429);
+    expect(r3.body.error).toMatch(/too many password reset/i);
   });
 });
 
@@ -389,5 +444,144 @@ describe("POST /api/auth/send-temp-password", () => {
     const res = await agent.post("/api/auth/send-temp-password").send({ userId: target.id });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+
+  it("should require userId in body", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { role: "App Admin", roles: ["App Admin"] });
+    const res = await agent.post("/api/auth/send-temp-password").send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("should return 404 for non-existent user", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { role: "App Admin", roles: ["App Admin"] });
+    const res = await agent.post("/api/auth/send-temp-password").send({ userId: 99999 });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/auth/forgot-password — existing user", () => {
+  it("should send reset email for existing user", async () => {
+    await createTestUser({ email: "forgotreal@test.com", password: "Pass1!" });
+    const agent = supertest.agent(app);
+    const res = await agent.post("/api/auth/forgot-password").send({ email: "forgotreal@test.com" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const { rows } = await pool.query(
+      "SELECT password_reset_token, password_reset_expires FROM users WHERE email = $1",
+      ["forgotreal@test.com"]
+    );
+    expect(rows[0].password_reset_token).toBeTruthy();
+    expect(new Date(rows[0].password_reset_expires).getTime()).toBeGreaterThan(Date.now());
+  });
+});
+
+describe("POST /api/auth/login — rememberMe", () => {
+  it("should set extended cookie maxAge when rememberMe is true", async () => {
+    await createTestUser({ email: "remember@test.com", password: "RemPass1!" });
+    const agent = supertest.agent(app);
+    const res = await agent.post("/api/auth/login").send({
+      email: "remember@test.com",
+      password: "RemPass1!",
+      rememberMe: true,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe("remember@test.com");
+  });
+});
+
+describe("GET /api/auth/preferences", () => {
+  it("should return empty object by default", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "prefs@test.com" });
+    const res = await agent.get("/api/auth/preferences");
+    expect(res.status).toBe(200);
+    expect(typeof res.body).toBe("object");
+  });
+});
+
+describe("PUT /api/auth/preferences", () => {
+  it("should save and return preferences", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "prefs-save@test.com" });
+    const res = await agent.put("/api/auth/preferences").send({
+      theme: "dark",
+      notifications: { email: true, sms: false },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.theme).toBe("dark");
+    expect(res.body.notifications.email).toBe(true);
+  });
+
+  it("should deep-merge nested preferences", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "prefs-merge@test.com" });
+    await agent.put("/api/auth/preferences").send({
+      notifications: { email: true, sms: false },
+    });
+    const res = await agent.put("/api/auth/preferences").send({
+      notifications: { sms: true },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.notifications.email).toBe(true);
+    expect(res.body.notifications.sms).toBe(true);
+  });
+});
+
+describe("POST /api/auth/change-password — temp password user", () => {
+  it("should allow password change without currentPassword if must_change_password is true", async () => {
+    const user = await createTestUser({ email: "tempchange@test.com", password: "TempOld1!" });
+    await pool.query("UPDATE users SET must_change_password = TRUE WHERE id = $1", [user.id]);
+    const agent = supertest.agent(app);
+    await loginAgent(agent, "tempchange@test.com", "TempOld1!");
+    const res = await agent.post("/api/auth/change-password").send({
+      newPassword: "BrandNew1!",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+});
+
+describe("POST /api/auth/mfa/verify-setup — edge cases", () => {
+  it("should reject if no code provided", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "mfa-nocode@test.com" });
+    await agent.post("/api/auth/mfa/setup");
+    const res = await agent.post("/api/auth/mfa/verify-setup").send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/code is required/i);
+  });
+
+  it("should reject if MFA not set up", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "mfa-nosecret@test.com" });
+    const res = await agent.post("/api/auth/mfa/verify-setup").send({ code: "123456" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not set up/i);
+  });
+});
+
+describe("POST /api/auth/mfa/disable — edge cases", () => {
+  it("should reject if no password provided", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "mfa-nopw@test.com" });
+    const res = await agent.post("/api/auth/mfa/disable").send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/password is required/i);
+  });
+});
+
+describe("POST /api/auth/mfa/verify — rememberMe", () => {
+  it("should apply rememberMe from login when verifying MFA", async () => {
+    const user = await createTestUser({ email: "mfa-remember@test.com", password: "MfaRem1!" });
+    const { encrypt } = require("../utils/encryption");
+    const { generateSecret } = require("otplib");
+    const secret = generateSecret();
+    await pool.query("UPDATE users SET mfa_enabled = TRUE, mfa_secret = $1 WHERE id = $2",
+      [encrypt(secret), user.id]);
+
+    const agent = supertest.agent(app);
+    await agent.post("/api/auth/login").send({
+      email: "mfa-remember@test.com",
+      password: "MfaRem1!",
+      rememberMe: true,
+    });
+    const verifyRes = await agent.post("/api/auth/mfa/verify").send({ code: "123456" });
+    expect(verifyRes.status).toBe(200);
+    expect(verifyRes.body.id).toBe(user.id);
   });
 });

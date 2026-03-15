@@ -234,3 +234,113 @@ describe("GET /api/cases?deleted=true", () => {
     expect(res.body.some(x => x.id === c.body.id)).toBe(true);
   });
 });
+
+describe("GET /api/cases?includeDeleted=true", () => {
+  it("should return both active and deleted cases", async () => {
+    const { agent } = await createAuthenticatedAgent(app, {
+      role: "Managing Partner",
+      roles: ["Managing Partner"],
+    });
+    await agent.post("/api/cases").send({ title: "Active Case" });
+    const c2 = await agent.post("/api/cases").send({ title: "Deleted Case" });
+    await agent.delete(`/api/cases/${c2.body.id}`);
+    const res = await agent.get("/api/cases?includeDeleted=true");
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBe(2);
+  });
+});
+
+describe("GET /api/cases/pinned", () => {
+  it("should return empty array by default", async () => {
+    const { agent } = await createAuthenticatedAgent(app);
+    const res = await agent.get("/api/cases/pinned");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+});
+
+describe("PUT /api/cases/pinned", () => {
+  it("should save and return pinned case IDs", async () => {
+    const { agent } = await createAuthenticatedAgent(app);
+    const c = await agent.post("/api/cases").send({ title: "Pin Me" });
+    const res = await agent.put("/api/cases/pinned").send({ pinnedIds: [c.body.id] });
+    expect(res.status).toBe(200);
+    expect(res.body).toContain(c.body.id);
+
+    const getRes = await agent.get("/api/cases/pinned");
+    expect(getRes.body).toContain(c.body.id);
+  });
+
+  it("should reject non-array pinnedIds", async () => {
+    const { agent } = await createAuthenticatedAgent(app);
+    const res = await agent.put("/api/cases/pinned").send({ pinnedIds: "notarray" });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("PUT /api/cases/:id — litigation toggle", () => {
+  it("should toggle in_litigation and reassign tasks", async () => {
+    const { agent, user } = await createAuthenticatedAgent(app);
+    const createRes = await agent.post("/api/cases").send({
+      title: "Lit Toggle Case",
+      assignedAttorney: user.id,
+    });
+    const caseId = createRes.body.id;
+
+    const updateRes = await agent.put(`/api/cases/${caseId}`).send({
+      title: "Lit Toggle Case",
+      inLitigation: true,
+    });
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.body.inLitigation).toBe(true);
+
+    const revertRes = await agent.put(`/api/cases/${caseId}`).send({
+      title: "Lit Toggle Case",
+      inLitigation: false,
+    });
+    expect(revertRes.status).toBe(200);
+    expect(revertRes.body.inLitigation).toBe(false);
+  });
+});
+
+describe("PUT /api/cases/:id — confidential access", () => {
+  it("should deny update to confidential case for non-assigned user", async () => {
+    const { agent: adminAgent } = await createAuthenticatedAgent(app, {
+      role: "App Admin",
+      roles: ["App Admin"],
+    });
+    const createRes = await adminAgent.post("/api/cases").send({
+      title: "Confidential Update",
+      confidential: true,
+    });
+
+    const { agent: otherAgent } = await createAuthenticatedAgent(app, {
+      role: "Attorney",
+      roles: ["Attorney"],
+    });
+    const res = await otherAgent.put(`/api/cases/${createRes.body.id}`).send({
+      title: "Hacked Title",
+    });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("DELETE /api/cases/:id — confidential access", () => {
+  it("should deny delete of confidential case for non-assigned manager", async () => {
+    const { agent: adminAgent } = await createAuthenticatedAgent(app, {
+      role: "App Admin",
+      roles: ["App Admin"],
+    });
+    const createRes = await adminAgent.post("/api/cases").send({
+      title: "Conf Delete",
+      confidential: true,
+    });
+
+    const { agent: mgrAgent } = await createAuthenticatedAgent(app, {
+      role: "Managing Partner",
+      roles: ["Managing Partner"],
+    });
+    const res = await mgrAgent.delete(`/api/cases/${createRes.body.id}`);
+    expect(res.status).toBe(403);
+  });
+});
