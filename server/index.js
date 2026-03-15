@@ -218,210 +218,7 @@ if (isProd) {
   }
 }
 
-async function ensureColumns() {
-  const tableCreations = [
-    `CREATE TABLE IF NOT EXISTS transcript_history (
-      id SERIAL PRIMARY KEY,
-      transcript_id INTEGER REFERENCES case_transcripts(id) ON DELETE CASCADE,
-      change_type TEXT NOT NULL,
-      change_description TEXT,
-      previous_state JSONB,
-      changed_by TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    `CREATE TABLE IF NOT EXISTS custom_reports (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id),
-      name TEXT NOT NULL,
-      data_source TEXT NOT NULL,
-      config JSONB NOT NULL DEFAULT '{}',
-      visibility TEXT DEFAULT 'private',
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    `CREATE TABLE IF NOT EXISTS custom_agents (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id),
-      name TEXT NOT NULL,
-      system_prompt TEXT NOT NULL,
-      context_sources JSONB DEFAULT '[]',
-      needs_case BOOLEAN DEFAULT true,
-      interaction_mode TEXT DEFAULT 'single',
-      model TEXT DEFAULT 'gpt-4o-mini',
-      visibility TEXT DEFAULT 'private',
-      shared_with INTEGER[] DEFAULT '{}',
-      instruction_file BYTEA,
-      instruction_filename TEXT,
-      instruction_text TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-  ];
-
-  const migrations = [
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS is_video BOOLEAN DEFAULT false`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS video_data BYTEA`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS video_content_type TEXT`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS r2_audio_key TEXT`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS r2_video_key TEXT`,
-    `ALTER TABLE case_correspondence ADD COLUMN IF NOT EXISTS is_voicemail BOOLEAN DEFAULT false`,
-    `ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS annotations JSONB DEFAULT '[]'`,
-    `ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS content_html TEXT`,
-    `ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS ocr_status TEXT DEFAULT 'complete'`,
-    `ALTER TABLE jury_analyses ADD COLUMN IF NOT EXISTS daubert_challenge TEXT`,
-    `ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS ms_access_token TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS ms_refresh_token TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS ms_token_expiry TIMESTAMPTZ`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS ms_account_email TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS scribe_url TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS scribe_token TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS scribe_user_email TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS voirdire_url TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS voirdire_token TEXT`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS voirdire_user_email TEXT`,
-    `ALTER TABLE trial_jurors ADD COLUMN IF NOT EXISTS voirdire_juror_id TEXT`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS scribe_transcript_id TEXT`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS scribe_status TEXT`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS transcript_versions JSONB`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS summaries JSONB`,
-    `ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS pipeline_log JSONB`,
-    `ALTER TABLE cases ADD COLUMN IF NOT EXISTS fee_is_flat BOOLEAN DEFAULT false`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS billed NUMERIC(12,2)`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS owed NUMERIC(12,2)`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS reduction_value NUMERIC(12,2)`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS reduction_is_percent BOOLEAN DEFAULT false`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS client_paid NUMERIC(12,2)`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS firm_paid NUMERIC(12,2)`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS insurance_paid NUMERIC(12,2)`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS write_off NUMERIC(12,2)`,
-    `ALTER TABLE case_liens ADD COLUMN IF NOT EXISTS reduction_value NUMERIC(12,2)`,
-    `ALTER TABLE case_liens ADD COLUMN IF NOT EXISTS reduction_is_percent BOOLEAN DEFAULT false`,
-    `ALTER TABLE case_negotiations ADD COLUMN IF NOT EXISTS policy_id INTEGER`,
-    `ALTER TABLE case_negotiations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
-    `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_flow_id INTEGER`,
-    `ALTER TABLE custom_task_flow_steps ADD COLUMN IF NOT EXISTS conditions JSONB DEFAULT '[]'`,
-    `ALTER TABLE cases ADD COLUMN IF NOT EXISTS court_case_number TEXT NOT NULL DEFAULT ''`,
-    `ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS body_part TEXT NOT NULL DEFAULT ''`,
-    `ALTER TABLE case_damages ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT ''`,
-    `ALTER TABLE document_folders ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES document_folders(id) ON DELETE CASCADE`,
-    `CREATE TABLE IF NOT EXISTS integration_configs (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS ms_calendar_sync BOOLEAN DEFAULT false`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS ms_sync_deadline_types JSONB DEFAULT '[]'`,
-    `ALTER TABLE deadlines ADD COLUMN IF NOT EXISTS outlook_event_id TEXT`,
-  ];
-
-  try {
-    const { rows: colCheck } = await pool.query(
-      "SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'temp_password'"
-    );
-    if (colCheck.length > 0) {
-      await pool.query("ALTER TABLE users RENAME COLUMN temp_password TO temp_password_hash");
-      console.log("Renamed column temp_password -> temp_password_hash");
-    }
-  } catch (renameErr) {
-    if (!renameErr.message.includes("does not exist")) {
-      console.error("temp_password rename (non-fatal):", renameErr.message);
-    }
-  }
-
-  const newTableCreations = [
-    `CREATE TABLE IF NOT EXISTS permissions (
-      id SERIAL PRIMARY KEY,
-      permission_key TEXT NOT NULL,
-      target_type TEXT NOT NULL CHECK (target_type IN ('role', 'user')),
-      target_value TEXT NOT NULL,
-      granted BOOLEAN NOT NULL DEFAULT true,
-      expires_at TIMESTAMPTZ,
-      created_by INTEGER REFERENCES users(id),
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(permission_key, target_type, target_value)
-    )`,
-    `CREATE TABLE IF NOT EXISTS unmatched_filings_emails (
-      id SERIAL PRIMARY KEY,
-      from_email TEXT,
-      from_name TEXT,
-      to_emails TEXT,
-      cc_emails TEXT,
-      subject TEXT,
-      body_text TEXT,
-      body_html TEXT,
-      attachments JSONB DEFAULT '[]',
-      court_case_number TEXT DEFAULT '',
-      attachment_count INTEGER DEFAULT 0,
-      assigned_case_id INTEGER REFERENCES cases(id),
-      received_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    `CREATE TABLE IF NOT EXISTS custom_task_flows (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      trigger_condition JSONB NOT NULL,
-      trigger_on TEXT DEFAULT 'update',
-      is_active BOOLEAN DEFAULT true,
-      created_by INTEGER REFERENCES users(id),
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    `CREATE TABLE IF NOT EXISTS custom_task_flow_steps (
-      id SERIAL PRIMARY KEY,
-      flow_id INTEGER NOT NULL REFERENCES custom_task_flows(id) ON DELETE CASCADE,
-      title TEXT NOT NULL,
-      assigned_role VARCHAR(50),
-      assigned_user_id INTEGER REFERENCES users(id),
-      due_in_days INTEGER,
-      priority TEXT DEFAULT 'Medium',
-      depends_on_step_id INTEGER REFERENCES custom_task_flow_steps(id) ON DELETE SET NULL,
-      recurring BOOLEAN DEFAULT false,
-      recurring_days INTEGER,
-      auto_escalate BOOLEAN DEFAULT true,
-      escalate_medium_days INTEGER DEFAULT 30,
-      escalate_high_days INTEGER DEFAULT 14,
-      escalate_urgent_days INTEGER DEFAULT 7,
-      notes TEXT,
-      sort_order INTEGER DEFAULT 0
-    )`,
-    `CREATE TABLE IF NOT EXISTS task_flow_executions (
-      id SERIAL PRIMARY KEY,
-      flow_id INTEGER NOT NULL REFERENCES custom_task_flows(id) ON DELETE CASCADE,
-      case_id INTEGER NOT NULL,
-      triggered_by INTEGER REFERENCES users(id),
-      triggered_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    `CREATE TABLE IF NOT EXISTS custom_dashboard_widgets (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id),
-      name TEXT NOT NULL,
-      widget_type TEXT NOT NULL,
-      data_source TEXT NOT NULL,
-      config JSONB NOT NULL DEFAULT '{}',
-      size TEXT DEFAULT 'half',
-      visibility TEXT DEFAULT 'private',
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )`,
-  ];
-
-  for (const sql of tableCreations) {
-    await pool.query(sql).catch(() => {});
-  }
-  for (const sql of newTableCreations) {
-    await pool.query(sql).catch(() => {});
-  }
-  for (const sql of migrations) {
-    await pool.query(sql).catch(() => {});
-  }
-
-  try {
-    await pool.query(
-      `UPDATE case_correspondence SET is_voicemail = true
-       WHERE is_voicemail = false AND subject ~* 'voice\\s*message'`
-    );
-  } catch (vmFixErr) {
-    console.error("Voicemail retroactive fix (non-fatal):", vmFixErr.message);
-  }
-
+async function seedAdminUser() {
   try {
     const bcrypt = require("bcryptjs");
     const crypto = require("crypto");
@@ -443,7 +240,9 @@ async function ensureColumns() {
   } catch (seedErr) {
     console.error("Admin seed error (non-fatal):", seedErr.message);
   }
+}
 
+async function rehashLegacyTempPasswords() {
   try {
     const bcryptMig = require("bcryptjs");
     const { rows: legacyTempUsers } = await pool.query(
@@ -462,18 +261,21 @@ async function ensureColumns() {
   } catch (tpErr) {
     console.error("Temp password migration (non-fatal):", tpErr.message);
   }
-
-  console.log("Runtime schema migrations applied.");
 }
 
 const listenPort = process.env.PORT || (isProd ? 5000 : PORT);
 
 (async () => {
   try {
-    await ensureColumns();
+    const { runMigrations } = require("./utils/migrate-runner");
+    await runMigrations();
+    console.log("Database migrations applied.");
   } catch (err) {
-    console.error("Runtime migration error (non-fatal):", err.message);
+    console.error("Migration error (non-fatal):", err.message);
   }
+
+  await seedAdminUser();
+  await rehashLegacyTempPasswords();
 
   app.listen(listenPort, "0.0.0.0", async () => {
     console.log(`MattrMindr API listening on port ${listenPort}`);

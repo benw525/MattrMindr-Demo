@@ -8,7 +8,10 @@
     "start": "node index.js",
     "dev": "node index.js",
     "seed": "node seed.js",
-    "schema": "node schema.js"
+    "schema": "node schema.js",
+    "migrate:up": "node-pg-migrate up --migrations-dir migrations --migration-file-language js",
+    "migrate:down": "node-pg-migrate down --migrations-dir migrations --migration-file-language js",
+    "migrate:create": "node-pg-migrate create --migrations-dir migrations --migration-file-language js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -20,6 +23,7 @@
     "express-rate-limit": "^8.3.1",
     "express-session": "^1.18.0",
     "mailparser": "^3.9.3",
+    "node-pg-migrate": "^8.0.4",
     "otplib": "^13.3.0",
     "pdf-parse": "^1.1.1",
     "pg": "^8.12.0",

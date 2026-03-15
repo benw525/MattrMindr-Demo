@@ -16,6 +16,8 @@ A case management system for personal injury law firms. Tracks PI cases, manages
 - **OpenAI**: Centralized client in `server/utils/openai.js` (single `OPENAI_API_KEY` env var, `store: false` enforced globally to prevent training on attorney-client privileged data). No `AI_INTEGRATIONS_OPENAI_*` env vars — all routes use the shared wrapper.
 - **Field Encryption**: AES-256-GCM at-rest encryption for sensitive columns (client_ssn, ms_access_token, ms_refresh_token, ms_account_email, scribe_token, voirdire_token, mfa_secret) via `server/utils/encryption.js`. Optional: set `FIELD_ENCRYPTION_KEY` (64-char hex) to enable. Without the key, fields stored as plaintext. Migration script: `node server/scripts/encrypt-existing-fields.js`
 - **Input Validation**: Zod schemas in `server/middleware/validate.js` for all high-risk routes: auth (login, MFA, forgot/reset/change-password), portal auth, external auth, case create, AI agents (liability-analysis, deadline-generator, case-strategy, draft-document, client-summary, task-suggestions, classify-filing, doc-summary, advocate), SMS send, document folders, batch delete/move. Includes type coercion for integer IDs, string length caps, enum validation, E.164 phone format, and pagination limits.
+- **Database Migrations**: `node-pg-migrate` manages schema changes via numbered migration files in `server/migrations/`. Migrations run automatically at startup via `server/utils/migrate-runner.js`. CLI: `npm run migrate:up`, `migrate:down`, `migrate:create` in server/. Migration state tracked in `pgmigrations` table.
+- **Backups**: `deploy/backup.sh` — pg_dump cron template with retention policy (7 daily, 4 weekly, 6 monthly). Optional S3 sync via `S3_BUCKET` env var. Recovery procedures documented in `RECOVERY.md`.
 - **Medical Record Staging**: Upload/from-document routes return staged entries for preview; user reviews with Add All/Discard/per-entry remove; commit endpoint saves selected entries
 - **Medical Record Parsing**: AI extracts per-visit: provider, date, body part treated, procedures/treatments, pain levels, progress notes, diagnoses/ICD codes, objective findings, referrals. Entries with no meaningful clinical detail are omitted. `body_part` column in `medical_records` table.
 - **System Dependencies**: ffmpeg (Nix package, required for audio transcription), pdftoppm (for PDF-to-image conversion during OCR)
@@ -55,9 +57,12 @@ server/
     validate.js     — Zod validation middleware and schemas
   scripts/
     encrypt-existing-fields.js — Encrypt existing plaintext sensitive fields
-    rename-temp-password.sql   — SQL migration to rename temp_password column
   migrations/
-    001_rename_temp_password.sql — Dedicated migration file for temp_password -> temp_password_hash
+    0001_baseline-schema.js    — All CREATE TABLE IF NOT EXISTS (baseline)
+    0002_schema-columns.js     — All ALTER TABLE ADD COLUMN (schema extensions)
+    0003_runtime-tables.js     — Runtime tables (permissions, custom flows, widgets, etc.)
+    0004_rename-temp-password.js — temp_password → temp_password_hash rename
+    0005_data-fixes.js         — Data fixes (stage rename, voicemail flag)
   routes/
     auth.js         — login, logout, me, change-password, forgot/reset-password
     case-documents.js — CRUD /api/case-documents; PUT /:docId/move for folder drag-and-drop

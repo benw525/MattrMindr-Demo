@@ -93,9 +93,13 @@ Fill in all values. At minimum you need:
 
 ## 9. Initialize the Database
 
-The app auto-creates tables on first startup via `server/schema.js`. Just start the app and it will set up the schema:
+The app uses `node-pg-migrate` for schema management. Migrations run automatically at startup, but you can also run them manually:
 
 ```bash
+# Run all pending migrations
+sudo -u mattrmindr bash -c 'cd /opt/mattrmindr/server && set -a && source ../.env && set +a && npm run migrate:up'
+
+# Or run the legacy schema.js for a fresh database
 sudo -u mattrmindr bash -c 'cd /opt/mattrmindr && set -a && source .env && set +a && node server/schema.js'
 ```
 
@@ -176,6 +180,51 @@ curl -s -X POST https://YOUR_DOMAIN.com/api/auth/login \
 
 # Authenticated API call
 curl -s -b /tmp/cookies.txt https://YOUR_DOMAIN.com/api/cases | head
+```
+
+---
+
+## 14. Configure Automated Backups
+
+MattrMindr includes a backup script at `deploy/backup.sh` that manages pg_dump backups with a retention policy of 7 daily, 4 weekly, and 6 monthly backups.
+
+### Setup
+
+```bash
+# Create backup directories
+sudo -u mattrmindr mkdir -p /opt/mattrmindr/backups/{daily,weekly,monthly}
+
+# Test the backup script manually
+sudo -u mattrmindr bash -c '
+  cd /opt/mattrmindr
+  set -a && source .env && set +a
+  bash deploy/backup.sh
+'
+
+# Add to cron (runs daily at 2:00 AM)
+sudo -u mattrmindr crontab -e
+```
+
+Add this line to the crontab:
+```
+0 2 * * * cd /opt/mattrmindr && set -a && source .env && set +a && bash deploy/backup.sh >> /var/log/mattrmindr/backup.log 2>&1
+```
+
+### Optional: S3 off-site backup
+
+Set the `S3_BUCKET` environment variable to enable automatic S3 sync:
+
+```bash
+# In .env or crontab
+S3_BUCKET=mattrmindr-backups
+```
+
+### Monitoring
+
+```bash
+# Check backup status
+ls -lh /opt/mattrmindr/backups/daily/
+tail -20 /var/log/mattrmindr/backup.log
 ```
 
 ---
