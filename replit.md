@@ -43,6 +43,8 @@ Login: email + password (existing users default: `1234`, new users get temp pass
 - **Run**: `NODE_ENV=production node server/index.js` (serves API + React build on port 5000)
 - **Note**: `CI=false` is required because Replit's deployment sets `CI=true`, which causes `react-scripts build` to treat ESLint warnings as errors
 - **EC2/Self-hosted**: See `deploy/EC2_SETUP_GUIDE.md` — Nginx config, PM2 ecosystem file, systemd unit, and `.env.example` are in the `deploy/` directory
+- **HTTPS Redirect**: Production-only middleware in `server/index.js` checks `X-Forwarded-Proto` and redirects non-HTTPS requests to HTTPS (skips `/api/health`). Activated when `NODE_ENV=production`.
+- **External API CORS**: `EXTERNAL_CORS_ORIGINS` env var validated at startup — rejects wildcards (`*`) in production, rejects bare/invalid domains, warns on non-HTTPS origins, logs warning if unset. In dev, defaults to permissive; in production, defaults to rejecting all cross-origin requests if unset.
 - **Email**: Supports both Replit SendGrid integration (auto-detected) and direct `SENDGRID_API_KEY` + `SENDGRID_FROM_EMAIL` env vars
 - **App URL**: Set `APP_URL` env var for password reset links on self-hosted; falls back to `REPLIT_DEV_DOMAIN` on Replit
 - **Session/CORS**: `CORS_ORIGIN` env var for custom domain CORS; `TRUST_PROXY` for reverse proxy depth; `DB_SSL` for database SSL mode

@@ -67,6 +67,19 @@ const isProd = process.env.NODE_ENV === "production";
 
 if (isProd || process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
 
+if (isProd) {
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/health")) return next();
+    if (!req.secure) {
+      const canonicalHost = process.env.APP_URL
+        ? new URL(process.env.APP_URL).host
+        : req.headers.host;
+      return res.redirect(301, `https://${canonicalHost}${req.originalUrl}`);
+    }
+    next();
+  });
+}
+
 app.use(cors({
   origin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map(s => s.trim())
@@ -155,9 +168,44 @@ app.use("/api/onlyoffice", onlyofficeRoutes);
 app.use("/api/scribe", scribeRoutes);
 app.use("/api/voirdire", voirdireRoutes);
 
-const externalCorsOrigins = process.env.EXTERNAL_CORS_ORIGINS ? process.env.EXTERNAL_CORS_ORIGINS.split(",") : null;
+const externalCorsOrigins = (() => {
+  const raw = process.env.EXTERNAL_CORS_ORIGINS;
+  if (!raw) {
+    if (isProd) {
+      console.warn("WARNING: EXTERNAL_CORS_ORIGINS is not set. External API CORS will reject all cross-origin requests in production.");
+    }
+    return isProd ? [] : true;
+  }
+  const origins = raw.split(",").map(s => s.trim()).filter(Boolean);
+  const validated = [];
+  for (const origin of origins) {
+    if (origin === "*") {
+      if (isProd) {
+        console.error("SECURITY: Wildcard '*' in EXTERNAL_CORS_ORIGINS is rejected in production. Skipping.");
+        continue;
+      }
+      validated.push(origin);
+      continue;
+    }
+    try {
+      const parsed = new URL(origin);
+      if (isProd && parsed.protocol !== "https:") {
+        console.warn(`WARNING: Non-HTTPS origin '${origin}' in EXTERNAL_CORS_ORIGINS is insecure for production.`);
+      }
+      if (!parsed.hostname) {
+        console.warn(`WARNING: Invalid origin '${origin}' in EXTERNAL_CORS_ORIGINS — must be a full URL (e.g. https://app.example.com). Skipping.`);
+        continue;
+      }
+      validated.push(parsed.origin);
+    } catch {
+      console.warn(`WARNING: Invalid URL '${origin}' in EXTERNAL_CORS_ORIGINS. Skipping.`);
+    }
+  }
+  return validated.length ? validated : (isProd ? [] : true);
+})();
+
 app.use("/api/external", cors({
-  origin: externalCorsOrigins || true,
+  origin: externalCorsOrigins,
   credentials: false,
 }), externalRoutes);
 
