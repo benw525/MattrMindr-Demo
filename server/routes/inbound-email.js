@@ -161,11 +161,7 @@ router.post("/", upload.any(), async (req, res) => {
           if (filingRows.length > 0 && extractedText) {
             const filingId = filingRows[0].id;
             try {
-              const OpenAI = require("openai");
-              const openai = new OpenAI({
-                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-                baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-              });
+              const openai = require("../utils/openai");
               const classifyPrompt = `You are a court filing classification assistant for a personal injury law firm. Analyze the court filing text and classify it. Return ONLY valid JSON with these fields:
 - "suggestedName" (string — proper legal filing name)
 - "filedBy" (one of: "Plaintiff", "Defendant", "Court", "Third Party", "Other")
@@ -289,11 +285,7 @@ router.post("/", upload.any(), async (req, res) => {
           if (filingRows.length > 0 && extractedText) {
             const filingId = filingRows[0].id;
             try {
-              const OpenAI = require("openai");
-              const openai = new OpenAI({
-                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-                baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-              });
+              const openai = require("../utils/openai");
               const classifyPrompt = `You are a court filing classification assistant for a personal injury law firm. Analyze the court filing text and classify it. Return ONLY valid JSON with these fields:
 - "suggestedName" (string — proper legal filing name)
 - "filedBy" (one of: "Plaintiff", "Defendant", "Court", "Third Party", "Other")
@@ -364,11 +356,7 @@ router.post("/", upload.any(), async (req, res) => {
           if (docRows.length > 0 && extractedText) {
             const docId = docRows[0].id;
             try {
-              const OpenAI = require("openai");
-              const openai = new OpenAI({
-                apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-                baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-              });
+              const openai = require("../utils/openai");
               const docClassifyPrompt = `You are a document classification assistant for a personal injury law firm. Analyze the document text and classify it. Return ONLY valid JSON with these fields:
 - "suggestedName" (string — descriptive document name based on content)
 - "docType" (one of: "Police Report", "Medical Records", "Accident Report", "Witness Statement", "Insurance Correspondence", "Expert Report", "Demand Letter", "Settlement Agreement", "Discovery Material", "Court Order", "Billing Records", "Other")`;
@@ -480,11 +468,7 @@ router.post("/", upload.any(), async (req, res) => {
         if (docRows.length > 0 && extractedText) {
           const docId = docRows[0].id;
           try {
-            const OpenAI = require("openai");
-            const openai = new OpenAI({
-              apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-              baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-            });
+            const openai = require("../utils/openai");
             const classifyPrompt = `You are a document classification assistant for a personal injury law firm. Analyze the document text and classify it. Return ONLY valid JSON with these fields:
 - "suggestedName" (string — descriptive document name based on content)
 - "docType" (one of: "Police Report", "Medical Records", "Accident Report", "Witness Statement", "Insurance Correspondence", "Expert Report", "Demand Letter", "Settlement Agreement", "Discovery Material", "Court Order", "Billing Records", "Other")`;

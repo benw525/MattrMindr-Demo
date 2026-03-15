@@ -1,14 +1,9 @@
 const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
-const OpenAI = require("openai");
+const openai = require("../utils/openai");
 
 const router = express.Router();
-
-let openai;
-try {
-  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "placeholder" });
-} catch (e) { openai = null; }
 
 const SCHEMA_MAP = {
   cases: {
@@ -225,8 +220,6 @@ router.post("/ai-assist", requireAuth, async (req, res) => {
   try {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: "Prompt required" });
-
-    if (!openai) openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "placeholder" });
 
     const schemaDescription = Object.entries(SCHEMA_MAP).map(([source, schema]) => {
       const cols = Object.entries(schema.columns).map(([k, v]) => `  - ${k} (${v.label}${v.type ? ', type: ' + v.type : ''})`).join("\n");

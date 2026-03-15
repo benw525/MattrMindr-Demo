@@ -6,6 +6,10 @@ const { sendTempPasswordEmail, sendPasswordResetEmail } = require("../email");
 const { requireAuth } = require("../middleware/auth");
 const { generateSecret, generateURI, verifySync } = require("otplib");
 const QRCode = require("qrcode");
+const { encrypt, decrypt } = require("../utils/encryption");
+const { authLimiter, mfaLimiter, forgotPasswordLimiter } = require("../middleware/rate-limit");
+const { validate, loginSchema, mfaVerifySchema, forgotPasswordSchema } = require("../middleware/validate");
+const { invalidateUserSessions } = require("../utils/session-invalidation");
 
 const router = express.Router();
 
@@ -56,11 +60,8 @@ function userPayload(user) {
   };
 }
 
-router.post("/login", async (req, res) => {
-  const { email, password, rememberMe } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
-  }
+router.post("/login", authLimiter, validate(loginSchema), async (req, res) => {
+  const { email, password, rememberMe } = req.validatedBody;
   try {
     const { rows } = await pool.query(
       "SELECT * FROM users WHERE LOWER(email) = LOWER($1)",
@@ -82,13 +83,13 @@ router.post("/login", async (req, res) => {
       authenticated = await bcrypt.compare(password, user.password_hash);
     }
 
-    if (!authenticated && user.temp_password) {
-      const tempMatch = await bcrypt.compare(password, user.temp_password);
+    if (!authenticated && user.temp_password_hash) {
+      const tempMatch = await bcrypt.compare(password, user.temp_password_hash);
       if (tempMatch) {
         authenticated = true;
         const hash = await bcrypt.hash(password, 10);
         await pool.query(
-          "UPDATE users SET password_hash = $1, temp_password = '', must_change_password = TRUE WHERE id = $2",
+          "UPDATE users SET password_hash = $1, temp_password_hash = '', must_change_password = TRUE WHERE id = $2",
           [hash, user.id]
         );
         user.must_change_password = true;
@@ -138,9 +139,10 @@ router.post("/change-password", requireAuth, async (req, res) => {
 
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query(
-      "UPDATE users SET password_hash = $1, must_change_password = FALSE, temp_password = '' WHERE id = $2",
+      "UPDATE users SET password_hash = $1, must_change_password = FALSE, temp_password_hash = '' WHERE id = $2",
       [hash, user.id]
     );
+    await invalidateUserSessions(user.id, req.sessionID);
     return res.json({ ok: true });
   } catch (err) {
     console.error("Change password error:", err);
@@ -164,9 +166,10 @@ router.post("/send-temp-password", requireAuth, async (req, res) => {
     const tempPw = generateTempPassword();
     const tempHash = await bcrypt.hash(tempPw, 10);
     await pool.query(
-      "UPDATE users SET temp_password = $1, must_change_password = TRUE WHERE id = $2",
+      "UPDATE users SET temp_password_hash = $1, must_change_password = TRUE WHERE id = $2",
       [tempHash, user.id]
     );
+    await invalidateUserSessions(user.id);
     await sendTempPasswordEmail(user.email, user.name, tempPw);
     return res.json({ ok: true, message: `Temporary password sent to ${user.email}` });
   } catch (err) {
@@ -175,9 +178,8 @@ router.post("/send-temp-password", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/forgot-password", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: "Email is required" });
+router.post("/forgot-password", forgotPasswordLimiter, validate(forgotPasswordSchema), async (req, res) => {
+  const { email } = req.validatedBody;
 
   try {
     const { rows } = await pool.query(
@@ -230,9 +232,10 @@ router.post("/reset-password", async (req, res) => {
 
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query(
-      "UPDATE users SET password_hash = $1, must_change_password = FALSE, temp_password = '', password_reset_token = '', password_reset_expires = NULL WHERE id = $2",
+      "UPDATE users SET password_hash = $1, must_change_password = FALSE, temp_password_hash = '', password_reset_token = '', password_reset_expires = NULL WHERE id = $2",
       [hash, user.id]
     );
+    await invalidateUserSessions(user.id);
     return res.json({ ok: true });
   } catch (err) {
     console.error("Reset password error:", err);
@@ -302,7 +305,7 @@ router.post("/mfa/setup", requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: "User not found" });
     const otpauth = generateURI({ issuer: "MattrMindr", label: rows[0].email, secret, type: "totp" });
     const qrDataUrl = await QRCode.toDataURL(otpauth);
-    await pool.query("UPDATE users SET mfa_secret = $1 WHERE id = $2", [secret, req.session.userId]);
+    await pool.query("UPDATE users SET mfa_secret = $1 WHERE id = $2", [encrypt(secret), req.session.userId]);
     return res.json({ secret, qrCode: qrDataUrl });
   } catch (err) {
     console.error("MFA setup error:", err);
@@ -317,7 +320,7 @@ router.post("/mfa/verify-setup", requireAuth, async (req, res) => {
     const { rows } = await pool.query("SELECT mfa_secret FROM users WHERE id = $1", [req.session.userId]);
     if (!rows.length) return res.status(404).json({ error: "User not found" });
     if (!rows[0].mfa_secret) return res.status(400).json({ error: "MFA not set up" });
-    const result = verifySync({ token: code.toString(), secret: rows[0].mfa_secret });
+    const result = verifySync({ token: code.toString(), secret: decrypt(rows[0].mfa_secret) });
     if (!result.valid) return res.status(400).json({ error: "Invalid code. Try again." });
     await pool.query("UPDATE users SET mfa_enabled = TRUE WHERE id = $1", [req.session.userId]);
     return res.json({ ok: true });
@@ -327,16 +330,15 @@ router.post("/mfa/verify-setup", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/mfa/verify", async (req, res) => {
+router.post("/mfa/verify", mfaLimiter, validate(mfaVerifySchema), async (req, res) => {
   try {
-    const code = req.body.code || req.body.token;
-    if (!code) return res.status(400).json({ error: "Code is required" });
+    const code = req.validatedBody.code || req.validatedBody.token;
     const pendingUserId = req.session.mfaPendingUserId;
     if (!pendingUserId) return res.status(400).json({ error: "No MFA verification pending" });
     const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [pendingUserId]);
     if (!rows.length) return res.status(404).json({ error: "User not found" });
     const user = rows[0];
-    const result = verifySync({ token: code.toString(), secret: user.mfa_secret });
+    const result = verifySync({ token: code.toString(), secret: decrypt(user.mfa_secret) });
     if (!result.valid) return res.status(401).json({ error: "Invalid verification code" });
 
     if (req.session.mfaRememberMe) {

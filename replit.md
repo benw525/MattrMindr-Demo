@@ -7,13 +7,15 @@ A case management system for personal injury law firms. Tracks PI cases, manages
 - **Frontend**: React 19 (Create React App), port 5000
 - **Backend**: Node.js + Express 4, port 3001
 - **Database**: PostgreSQL (Replit-provisioned), accessed via `DATABASE_URL`
-- **Auth**: express-session with bcrypt password hashing; session restore on page refresh via `/api/auth/me`; temporary passwords hashed with bcrypt before storage; SESSION_SECRET required in production; login form wrapped in `<form>` for proper browser autofill/submit
+- **Auth**: express-session with bcrypt password hashing; session restore on page refresh via `/api/auth/me`; temporary passwords hashed with bcrypt before storage (column: `temp_password_hash`); SESSION_SECRET required in production; login form wrapped in `<form>` for proper browser autofill/submit; rate limiting on login/MFA/forgot-password routes via express-rate-limit; session invalidation on password change, user deactivation, role change, and temp password send
 - **Email**: SendGrid (Replit integration) for auth emails; SendGrid Inbound Parse for case correspondence
 - **Styling**: Tailwind CSS v3 + CSS-in-JS template literal; Inter font, slate/amber color palette, lucide-react icons
 - **Icons**: All AI Center agent cards and Reports page cards use lucide-react Icon components with colored rounded-lg background containers
 - **OCR**: Tiered Gemini OCR pipeline via `@google/generative-ai`: 1) `gemini-3.1-flash-lite-preview` sends PDF directly (fastest), 2) falls back to `gemini-2.0-flash` with image-based extraction (converts pages to JPEG, compresses oversized images with `sharp`, reduces DPI for PDFs >50MB), 3) falls back to tesseract.js; no page limit
 - **Page-tagged OCR**: `extractTextWithPages()` in `server/utils/extract-text.js` returns text with `[PAGE N]` markers. Uses `pdf-parse` pagerender first (for digital PDFs), falls back to Gemini/Tesseract with per-page tagging. Used by medical record parsing for accurate page references.
-- **OpenAI Privacy**: All `openai.chat.completions.create()` calls include `store: false` to prevent training on attorney-client privileged data
+- **OpenAI**: Centralized client in `server/utils/openai.js` (single `OPENAI_API_KEY` env var, `store: false` enforced globally to prevent training on attorney-client privileged data). No `AI_INTEGRATIONS_OPENAI_*` env vars — all routes use the shared wrapper.
+- **Field Encryption**: AES-256-GCM at-rest encryption for sensitive columns (client_ssn, ms_access_token, ms_refresh_token, ms_account_email, scribe_token, voirdire_token, mfa_secret) via `server/utils/encryption.js`. Optional: set `FIELD_ENCRYPTION_KEY` (64-char hex) to enable. Without the key, fields stored as plaintext. Migration script: `node server/scripts/encrypt-existing-fields.js`
+- **Input Validation**: Zod schemas in `server/middleware/validate.js` for login, MFA, forgot-password routes
 - **Medical Record Staging**: Upload/from-document routes return staged entries for preview; user reviews with Add All/Discard/per-entry remove; commit endpoint saves selected entries
 - **Medical Record Parsing**: AI extracts per-visit: provider, date, body part treated, procedures/treatments, pain levels, progress notes, diagnoses/ICD codes, objective findings, referrals. Entries with no meaningful clinical detail are omitted. `body_part` column in `medical_records` table.
 - **System Dependencies**: ffmpeg (Nix package, required for audio transcription), pdftoppm (for PDF-to-image conversion during OCR)
@@ -44,6 +46,16 @@ server/
   sms.js            — Twilio SMS utility
   sms-scheduler.js  — SMS scheduler for appointment/treatment reminders
   r2.js             — Cloudflare R2 storage module (S3-compatible, hybrid fallback)
+  utils/
+    openai.js       — Centralized OpenAI client (single OPENAI_API_KEY, store:false)
+    encryption.js   — AES-256-GCM field encryption (encrypt/decrypt/isEncrypted)
+    session-invalidation.js — Invalidate user sessions on security events
+  middleware/
+    rate-limit.js   — express-rate-limit configs for auth, MFA, forgot-password, portal
+    validate.js     — Zod validation middleware and schemas
+  scripts/
+    encrypt-existing-fields.js — Encrypt existing plaintext sensitive fields
+    rename-temp-password.sql   — SQL migration to rename temp_password column
   routes/
     auth.js         — login, logout, me, change-password, forgot/reset-password
     case-documents.js — CRUD /api/case-documents; PUT /:docId/move for folder drag-and-drop

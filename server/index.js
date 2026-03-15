@@ -311,6 +311,20 @@ async function ensureColumns() {
     `ALTER TABLE deadlines ADD COLUMN IF NOT EXISTS outlook_event_id TEXT`,
   ];
 
+  try {
+    const { rows: colCheck } = await pool.query(
+      "SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'temp_password'"
+    );
+    if (colCheck.length > 0) {
+      await pool.query("ALTER TABLE users RENAME COLUMN temp_password TO temp_password_hash");
+      console.log("Renamed column temp_password -> temp_password_hash");
+    }
+  } catch (renameErr) {
+    if (!renameErr.message.includes("does not exist")) {
+      console.error("temp_password rename (non-fatal):", renameErr.message);
+    }
+  }
+
   const newTableCreations = [
     `CREATE TABLE IF NOT EXISTS permissions (
       id SERIAL PRIMARY KEY,
@@ -433,16 +447,16 @@ async function ensureColumns() {
   try {
     const bcryptMig = require("bcryptjs");
     const { rows: legacyTempUsers } = await pool.query(
-      "SELECT id, temp_password FROM users WHERE temp_password != '' AND temp_password IS NOT NULL"
+      "SELECT id, temp_password_hash FROM users WHERE temp_password_hash != '' AND temp_password_hash IS NOT NULL"
     );
     for (const u of legacyTempUsers) {
-      if (!u.temp_password.startsWith("$2a$") && !u.temp_password.startsWith("$2b$")) {
-        const hashed = await bcryptMig.hash(u.temp_password, 10);
-        await pool.query("UPDATE users SET temp_password = $1 WHERE id = $2", [hashed, u.id]);
+      if (!u.temp_password_hash.startsWith("$2a$") && !u.temp_password_hash.startsWith("$2b$")) {
+        const hashed = await bcryptMig.hash(u.temp_password_hash, 10);
+        await pool.query("UPDATE users SET temp_password_hash = $1 WHERE id = $2", [hashed, u.id]);
       }
     }
     if (legacyTempUsers.length > 0) {
-      const rehashed = legacyTempUsers.filter(u => !u.temp_password.startsWith("$2a$") && !u.temp_password.startsWith("$2b$")).length;
+      const rehashed = legacyTempUsers.filter(u => !u.temp_password_hash.startsWith("$2a$") && !u.temp_password_hash.startsWith("$2b$")).length;
       if (rehashed > 0) console.log(`Rehashed ${rehashed} legacy plaintext temp password(s).`);
     }
   } catch (tpErr) {

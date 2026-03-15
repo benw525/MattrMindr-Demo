@@ -2,10 +2,11 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const pool = require("../db");
 const { generateToken, requireExternalAuth } = require("../middleware/external-auth");
+const { portalLoginLimiter } = require("../middleware/rate-limit");
 
 const router = express.Router();
 
-router.post("/auth/login", async (req, res) => {
+router.post("/auth/login", portalLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
@@ -17,8 +18,8 @@ router.post("/auth/login", async (req, res) => {
     const user = rows[0];
     let authenticated = false;
     if (user.password_hash) authenticated = await bcrypt.compare(password, user.password_hash);
-    if (!authenticated && user.temp_password) {
-      const tempMatch = await bcrypt.compare(password, user.temp_password);
+    if (!authenticated && user.temp_password_hash) {
+      const tempMatch = await bcrypt.compare(password, user.temp_password_hash);
       if (tempMatch) authenticated = true;
     }
     if (!authenticated) return res.status(401).json({ error: "Invalid email or password" });
@@ -33,7 +34,7 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
-router.post("/auth", async (req, res) => {
+router.post("/auth", portalLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
@@ -45,8 +46,8 @@ router.post("/auth", async (req, res) => {
     const user = rows[0];
     let authenticated = false;
     if (user.password_hash) authenticated = await bcrypt.compare(password, user.password_hash);
-    if (!authenticated && user.temp_password) {
-      const tempMatch = await bcrypt.compare(password, user.temp_password);
+    if (!authenticated && user.temp_password_hash) {
+      const tempMatch = await bcrypt.compare(password, user.temp_password_hash);
       if (tempMatch) authenticated = true;
     }
     if (!authenticated) return res.status(401).json({ error: "Invalid email or password" });

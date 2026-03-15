@@ -4,6 +4,7 @@ const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
 const { evaluateFlowsForCase } = require("./task-flows");
+const { encrypt, decrypt } = require("../utils/encryption");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -63,7 +64,7 @@ const toFrontend = (row) => ({
   inLitigation: !!row.in_litigation,
   demandResponseDue: row.demand_response_due ? row.demand_response_due.toISOString().split("T")[0] : "",
   clientDob: row.client_dob ? row.client_dob.toISOString().split("T")[0] : "",
-  clientSsn: row.client_ssn || "",
+  clientSsn: decrypt(row.client_ssn) || "",
   clientAddress: row.client_address || "",
   clientPhones: Array.isArray(row.client_phones) ? row.client_phones : [],
   clientEmergencyContact: row.client_emergency_contact || "",
@@ -215,7 +216,7 @@ router.post("/", requireAuth, async (req, res) => {
         JSON.stringify(d._hiddenFields || []), d.offices || [],
         !!d.confidential, JSON.stringify(d._customTeam || []),
         !!d.inLitigation, orNull(d.demandResponseDue),
-        orNull(d.clientDob), d.clientSsn || "", d.clientAddress || "",
+        orNull(d.clientDob), encrypt(d.clientSsn || ""), d.clientAddress || "",
         JSON.stringify(d.clientPhones || []), d.clientEmergencyContact || "", d.clientEmail || "",
         !!d.clientBankruptcy,
         !!d.feeIsFlat,
@@ -294,7 +295,7 @@ router.put("/:id", requireAuth, async (req, res) => {
         JSON.stringify(d._hiddenFields || []), d.offices || [],
         !!d.confidential, JSON.stringify(d._customTeam || []),
         !!d.inLitigation, orNull(d.demandResponseDue),
-        orNull(d.clientDob), d.clientSsn || "", d.clientAddress || "",
+        orNull(d.clientDob), encrypt(d.clientSsn || ""), d.clientAddress || "",
         JSON.stringify(d.clientPhones || []), d.clientEmergencyContact || "", d.clientEmail || "",
         !!d.clientBankruptcy,
         !!d.feeIsFlat,
@@ -377,8 +378,7 @@ router.post("/parse-intake", requireAuth, upload.single("file"), async (req, res
       return res.status(422).json({ error: "Could not extract text from the uploaded file" });
     }
 
-    const OpenAI = require("openai");
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = require("../utils/openai");
 
     const resp = await openai.chat.completions.create({
       model: "gpt-4o",

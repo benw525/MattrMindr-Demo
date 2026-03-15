@@ -2,17 +2,13 @@ const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const multer = require("multer");
-const OpenAI = require("openai");
+const openai = require("../utils/openai");
 const { extractTextWithPages } = require("../utils/extract-text");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const router = express.Router();
 
-let openai = null;
-const getOpenAI = () => {
-  if (!openai) openai = new OpenAI({ apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY, baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL });
-  return openai;
-};
+const getOpenAI = () => openai;
 
 const parseBillingText = async (text) => {
   const ai = getOpenAI();

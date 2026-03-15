@@ -4,9 +4,9 @@ const { writeFile, unlink, readFile } = require("fs/promises");
 const { randomUUID } = require("crypto");
 const { tmpdir } = require("os");
 const path = require("path");
-const OpenAI = require("openai");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const openai = require("../utils/openai");
 
 const router = express.Router();
 
@@ -126,13 +126,7 @@ router.post("/:id/transcribe", requireAuth, async (req, res) => {
     const { toFile } = await import("openai");
     const file = await toFile(wavBuffer, "voicemail.wav");
 
-    const directKey = process.env.OPENAI_API_KEY;
-    const whisperClient = directKey
-      ? new OpenAI({ apiKey: directKey })
-      : new OpenAI({
-          apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-          baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-        });
+    const whisperClient = openai;
 
     let response;
     try {

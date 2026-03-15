@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { encrypt, decrypt } = require("../utils/encryption");
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ async function getVoirdireCredentials(userId) {
     [userId]
   );
   if (!rows.length || !rows[0].voirdire_url || !rows[0].voirdire_token) return null;
-  return { voirdire_url: rows[0].voirdire_url, voirdire_token: rows[0].voirdire_token };
+  return { voirdire_url: rows[0].voirdire_url, voirdire_token: decrypt(rows[0].voirdire_token) };
 }
 
 router.get("/status", requireAuth, async (req, res) => {
@@ -71,7 +72,7 @@ router.post("/connect", requireAuth, async (req, res) => {
 
       await pool.query(
         "UPDATE users SET voirdire_url = $1, voirdire_token = $2, voirdire_user_email = $3 WHERE id = $4",
-        [VOIRDIRE_BASE_URL, userToken, email, req.session.userId]
+        [VOIRDIRE_BASE_URL, encrypt(userToken), email, req.session.userId]
       );
       res.json({ ok: true });
     } catch (fetchErr) {

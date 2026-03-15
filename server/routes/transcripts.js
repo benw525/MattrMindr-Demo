@@ -5,9 +5,9 @@ const { writeFile, unlink, readFile } = require("fs/promises");
 const { randomUUID } = require("crypto");
 const { tmpdir } = require("os");
 const path = require("path");
-const OpenAI = require("openai");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const openai = require("../utils/openai");
 const { isR2Configured, uploadToR2, downloadFromR2, streamFromR2, deleteFromR2, createMultipartUpload, uploadPart, completeMultipartUpload, abortMultipartUpload } = require("../r2");
 
 const router = express.Router();
@@ -32,10 +32,6 @@ async function verifyTranscriptAccess(req, transcriptId) {
   return hasAccess ? rows[0].case_id : false;
 }
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 
 const ALLOWED_AUDIO = [
@@ -142,10 +138,6 @@ async function splitAudio(inputPath, chunkDurationSec, outputDir) {
 }
 
 function getWhisperClient() {
-  const directKey = process.env.OPENAI_API_KEY;
-  if (directKey) {
-    return new OpenAI({ apiKey: directKey });
-  }
   return openai;
 }
 

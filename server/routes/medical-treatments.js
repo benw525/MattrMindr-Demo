@@ -1,22 +1,12 @@
 const express = require("express");
 const pool = require("../db");
 const multer = require("multer");
-const OpenAI = require("openai");
 const { requireAuth } = require("../middleware/auth");
 const { extractText, extractTextWithPages } = require("../utils/extract-text");
+const openai = require("../utils/openai");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
-
-let openai;
-try {
-  openai = new OpenAI({
-    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  });
-} catch (e) {
-  openai = null;
-}
 
 const toFrontend = (r) => ({
   id: r.id,
@@ -158,7 +148,6 @@ router.get("/:caseId/records/:treatmentId", requireAuth, async (req, res) => {
 });
 
 const parseMedicalText = async (text) => {
-  if (!openai) openai = new OpenAI({ apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY, baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL });
   const completion = await openai.chat.completions.create({
     model: "gpt-5-mini",
     messages: [

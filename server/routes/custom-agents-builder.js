@@ -1,39 +1,22 @@
 const express = require("express");
 const pool = require("../db");
 const multer = require("multer");
-const OpenAI = require("openai");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
+const openai = require("../utils/openai");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-const VALID_MODELS = ["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet", "gemini-2.0-flash"];
-
-let standardOpenAIClient;
-try {
-  standardOpenAIClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "placeholder" });
-} catch (e) { standardOpenAIClient = null; }
+const VALID_MODELS = ["gpt-4o", "gpt-4o-mini"];
 
 function resolveModel(model) {
   if (!VALID_MODELS.includes(model)) return "gpt-4o-mini";
-  if (!model.startsWith("gpt-") && !process.env.AI_INTEGRATIONS_OPENAI_API_KEY) return "gpt-4o-mini";
   return model;
 }
 
 function getClientForModel(model) {
-  if (model.startsWith("gpt-")) {
-    if (!standardOpenAIClient) standardOpenAIClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "placeholder" });
-    return standardOpenAIClient;
-  }
-  if (process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-    return new OpenAI({
-      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-    });
-  }
-  if (!standardOpenAIClient) standardOpenAIClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "placeholder" });
-  return standardOpenAIClient;
+  return openai;
 }
 
 const toFrontend = (r) => ({
@@ -290,15 +273,15 @@ router.delete("/:id/clear-instructions", requireAuth, async (req, res) => {
 });
 
 router.get("/available-models", requireAuth, (req, res) => {
-  const hasIntegration = !!process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  const hasApiKey = !!process.env.OPENAI_API_KEY;
   res.json({
     models: VALID_MODELS.map(m => ({
       id: m,
       name: m,
       provider: m.startsWith("gpt-") ? "OpenAI" : m.startsWith("claude") ? "Anthropic" : "Google",
-      available: m.startsWith("gpt-") || hasIntegration,
+      available: hasApiKey,
     })),
-    hasIntegration,
+    hasIntegration: hasApiKey,
   });
 });
 

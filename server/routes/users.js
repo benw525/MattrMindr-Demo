@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { invalidateUserSessions } = require("../utils/session-invalidation");
 
 const router = express.Router();
 const ppUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -111,6 +112,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
       [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    await invalidateUserSessions(req.params.id);
     return res.json({ ok: true });
   } catch (err) {
     console.error("User soft-delete error:", err);
@@ -161,6 +163,7 @@ router.put("/:id/roles", requireAuth, async (req, res) => {
       [primaryRole, roles, req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    await invalidateUserSessions(req.params.id);
     return res.json(normalizeUser(rows[0]));
   } catch (err) {
     console.error("User roles update error:", err);

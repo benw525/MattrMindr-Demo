@@ -189,11 +189,7 @@ router.post("/:id/summarize", requireAuth, async (req, res) => {
     if (!(await verifyCaseAccess(req, filing.case_id))) return res.status(403).json({ error: "Access denied" });
     if (!filing.extracted_text) return res.status(400).json({ error: "No text could be extracted from this filing" });
 
-    const OpenAI = require("openai");
-    const openai = new OpenAI({
-      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-    });
+    const openai = require("../utils/openai");
 
     const systemPrompt = `You are a personal injury attorney's court filing analysis assistant. Summarize the court filing for a PI attorney reviewing a case. Focus on information relevant to the plaintiff's personal injury claim.
 

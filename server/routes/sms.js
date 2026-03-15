@@ -1,15 +1,10 @@
 const express = require("express");
-const OpenAI = require("openai");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { sendSMS, formatPhoneNumber, isConfigured } = require("../sms");
+const openai = require("../utils/openai");
 
 const router = express.Router();
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 router.get("/status", requireAuth, async (req, res) => {
   res.json({ configured: await isConfigured() });

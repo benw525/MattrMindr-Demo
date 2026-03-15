@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { encrypt, decrypt } = require("../utils/encryption");
 const router = express.Router();
 
 const pendingOAuthStates = new Map();
@@ -38,7 +39,7 @@ router.get("/status", requireAuth, async (req, res) => {
     if (!rows.length || !rows[0].ms_access_token) return res.json({ connected: false, configured: true });
     const user = rows[0];
     const expired = user.ms_token_expiry && new Date(user.ms_token_expiry) < new Date();
-    res.json({ connected: true, configured: true, email: user.ms_account_email, expired });
+    res.json({ connected: true, configured: true, email: decrypt(user.ms_account_email), expired });
   } catch (err) {
     console.error("MS status error:", err.message);
     res.json({ connected: false, configured: false });
@@ -116,7 +117,7 @@ router.get("/callback", async (req, res) => {
 
     await pool.query(
       `UPDATE users SET ms_access_token = $1, ms_refresh_token = $2, ms_token_expiry = $3, ms_account_email = $4 WHERE id = $5`,
-      [tokens.access_token, tokens.refresh_token || null, expiry, accountEmail, userId]
+      [encrypt(tokens.access_token), encrypt(tokens.refresh_token || null), expiry, encrypt(accountEmail), userId]
     );
     res.send(`<html><body><script>window.close();</script><p>Microsoft account connected. You can close this window.</p></body></html>`);
   } catch (err) {
@@ -132,10 +133,12 @@ async function getValidToken(userId) {
   );
   if (!rows.length || !rows[0].ms_access_token) return null;
   const user = rows[0];
+  const accessToken = decrypt(user.ms_access_token);
+  const refreshToken = decrypt(user.ms_refresh_token);
   if (user.ms_token_expiry && new Date(user.ms_token_expiry) > new Date(Date.now() + 60000)) {
-    return user.ms_access_token;
+    return accessToken;
   }
-  if (!user.ms_refresh_token) return null;
+  if (!refreshToken) return null;
   const creds = await getMsCredentials();
   if (!creds) return null;
   try {
@@ -145,7 +148,7 @@ async function getValidToken(userId) {
       body: new URLSearchParams({
         client_id: creds.clientId,
         client_secret: creds.clientSecret,
-        refresh_token: user.ms_refresh_token,
+        refresh_token: refreshToken,
         grant_type: "refresh_token",
         scope: MS_SCOPES,
       }),
@@ -155,7 +158,7 @@ async function getValidToken(userId) {
     const expiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
     await pool.query(
       `UPDATE users SET ms_access_token = $1, ms_refresh_token = $2, ms_token_expiry = $3 WHERE id = $4`,
-      [tokens.access_token, tokens.refresh_token || user.ms_refresh_token, expiry, userId]
+      [encrypt(tokens.access_token), encrypt(tokens.refresh_token || refreshToken), expiry, userId]
     );
     return tokens.access_token;
   } catch { return null; }

@@ -1,14 +1,9 @@
 const express = require("express");
-const OpenAI = require("openai");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const openai = require("../utils/openai");
 
 const router = express.Router();
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 router.post("/", requireAuth, async (req, res) => {
   const { query } = req.body;

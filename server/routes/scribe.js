@@ -2,6 +2,7 @@ const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { randomUUID } = require("crypto");
+const { encrypt, decrypt } = require("../utils/encryption");
 
 const router = express.Router();
 
@@ -55,7 +56,7 @@ router.post("/connect", requireAuth, async (req, res) => {
 
       await pool.query(
         "UPDATE users SET scribe_url = $1, scribe_token = $2, scribe_user_email = $3 WHERE id = $4",
-        [SCRIBE_BASE_URL, userToken, email, req.session.userId]
+        [SCRIBE_BASE_URL, encrypt(userToken), email, req.session.userId]
       );
       res.json({ ok: true });
     } catch (fetchErr) {
@@ -90,7 +91,8 @@ router.post("/send/:transcriptId", requireAuth, async (req, res) => {
     if (!userRows.length || !userRows[0].scribe_url || !userRows[0].scribe_token) {
       return res.status(400).json({ error: "Scribe not connected" });
     }
-    const { scribe_url, scribe_token } = userRows[0];
+    const scribe_url = userRows[0].scribe_url;
+    const scribe_token = decrypt(userRows[0].scribe_token);
 
     const { rows: tRows } = await pool.query(
       "SELECT id, filename, case_id, content_type, file_size, description FROM case_transcripts WHERE id = $1",
@@ -199,7 +201,8 @@ router.get("/transcript-status/:scribeTranscriptId", requireAuth, async (req, re
     if (!userRows.length || !userRows[0].scribe_url) {
       return res.status(400).json({ error: "Scribe not connected" });
     }
-    const { scribe_url, scribe_token } = userRows[0];
+    const scribe_url = userRows[0].scribe_url;
+    const scribe_token = decrypt(userRows[0].scribe_token);
     const statusRes = await fetch(`${scribe_url}/api/external/transcripts/${req.params.scribeTranscriptId}/status`, {
       headers: { Authorization: `Bearer ${scribe_token}` },
     });
@@ -234,7 +237,8 @@ router.post("/import/:transcriptId", requireAuth, async (req, res) => {
     if (!userRows.length || !userRows[0].scribe_url) {
       return res.status(400).json({ error: "Scribe not connected" });
     }
-    const { scribe_url, scribe_token } = userRows[0];
+    const scribe_url = userRows[0].scribe_url;
+    const scribe_token = decrypt(userRows[0].scribe_token);
 
     const importRes = await fetch(`${scribe_url}/api/external/transcripts/${tRows[0].scribe_transcript_id}/status`, {
       headers: { Authorization: `Bearer ${scribe_token}` },
@@ -287,7 +291,7 @@ async function getScribeCredentials(userId) {
     [userId]
   );
   if (!rows.length || !rows[0].scribe_url || !rows[0].scribe_token) return null;
-  return { scribe_url: rows[0].scribe_url, scribe_token: rows[0].scribe_token };
+  return { scribe_url: rows[0].scribe_url, scribe_token: decrypt(rows[0].scribe_token) };
 }
 
 router.get("/list-transcripts", requireAuth, async (req, res) => {
