@@ -14,7 +14,10 @@ function encrypt(plaintext) {
   if (!plaintext || typeof plaintext !== "string") return plaintext;
 
   const key = getKey();
-  if (!key) return plaintext;
+  if (!key) {
+    console.warn("FIELD_ENCRYPTION_KEY not set — sensitive field will be stored as plaintext");
+    return plaintext;
+  }
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 

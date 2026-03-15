@@ -165,9 +165,9 @@ router.put("/pinned", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1", [req.validatedParams.id]);
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     if (!canAccessCase(rows[0], req)) return res.status(403).json({ error: "Access denied — this case is confidential" });
     return res.json(toFrontend(rows[0]));
@@ -252,10 +252,10 @@ router.post("/", requireAuth, validate(caseCreateSchema), async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   const d = req.body;
   try {
-    const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.validatedParams.id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: "Not found" });
     if (!canAccessCase(existing.rows[0], req)) return res.status(403).json({ error: "Access denied — this case is confidential" });
     const { rows } = await pool.query(
@@ -301,7 +301,7 @@ router.put("/:id", requireAuth, async (req, res) => {
         !!d.clientBankruptcy,
         !!d.feeIsFlat,
         d.courtCaseNumber || "",
-        req.params.id,
+        req.validatedParams.id,
       ]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
@@ -313,13 +313,13 @@ router.put("/:id", requireAuth, async (req, res) => {
           await pool.query(
             `UPDATE tasks SET assigned_role = 'Paralegal', assigned = (SELECT paralegal FROM cases WHERE id = $1)
              WHERE case_id = $1 AND title = 'Call Client - Case Manager Check-in' AND status != 'Complete' AND deleted_at IS NULL`,
-            [req.params.id]
+            [req.validatedParams.id]
           );
         } else {
           await pool.query(
             `UPDATE tasks SET assigned_role = 'Case Manager', assigned = (SELECT case_manager FROM cases WHERE id = $1)
              WHERE case_id = $1 AND title = 'Call Client - Case Manager Check-in' AND status != 'Complete' AND deleted_at IS NULL`,
-            [req.params.id]
+            [req.validatedParams.id]
           );
         }
       } catch (e) { console.error("Litigation task reassign error:", e.message); }
@@ -329,7 +329,7 @@ router.put("/:id", requireAuth, async (req, res) => {
       const oldCase = toFrontend(existing.rows[0]);
       const newCase = toFrontend(rows[0]);
       newCase._triggeredBy = req.session.userId;
-      await evaluateFlowsForCase(req.params.id, oldCase, newCase);
+      await evaluateFlowsForCase(req.validatedParams.id, oldCase, newCase);
     } catch (e) { console.error("Task flow eval error:", e.message); }
 
     return res.json(toFrontend(rows[0]));
@@ -339,14 +339,14 @@ router.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, requireManagement, async (req, res) => {
+router.delete("/:id", requireAuth, requireManagement, validateParams(idParamSchema), async (req, res) => {
   try {
-    const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.validatedParams.id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: "Not found or already deleted" });
     if (!canAccessCase(existing.rows[0], req)) return res.status(403).json({ error: "Access denied — this case is confidential" });
     const { rows } = await pool.query(
       "UPDATE cases SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *",
-      [req.params.id]
+      [req.validatedParams.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found or already deleted" });
     return res.json(toFrontend(rows[0]));
@@ -356,11 +356,11 @@ router.delete("/:id", requireAuth, requireManagement, async (req, res) => {
   }
 });
 
-router.post("/:id/restore", requireAuth, requireManagement, async (req, res) => {
+router.post("/:id/restore", requireAuth, requireManagement, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "UPDATE cases SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING *",
-      [req.params.id]
+      [req.validatedParams.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found or not deleted" });
     return res.json(toFrontend(rows[0]));

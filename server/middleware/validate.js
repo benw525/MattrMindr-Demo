@@ -78,24 +78,48 @@ const portalLoginSchema = z.object({
   password: z.string().min(1, "Password is required").max(500),
 });
 
+const e164Phone = z.string().min(10, "Valid phone number is required").max(20).regex(/^\+?1?\d{10,15}$/, "Phone number must be in E.164 format (e.g. +12125551234)");
+
 const smsSchema = z.object({
-  phoneNumber: z.string().min(10, "Valid phone number is required").max(20),
+  phoneNumber: e164Phone,
   body: z.string().min(1, "Message body is required").max(1600),
   caseId: coerceInt.optional().nullable(),
   contactName: z.string().max(200).optional(),
 });
+
+const CASE_TYPES = ["Auto Accident", "Truck Accident", "Motorcycle Accident", "Pedestrian Accident", "Bicycle Accident", "Slip and Fall", "Trip and Fall", "Premises Liability", "Product Liability", "Medical Malpractice", "Dog Bite", "Wrongful Death", "Workers Compensation", "Nursing Home Abuse", "Other"];
+const CASE_STATUSES = ["Active", "Pre-Litigation", "Litigation", "Settlement", "Closed", "Archived"];
+const CASE_STAGES = ["Intake", "Investigation", "Treatment", "Pre-Litigation", "Litigation", "Discovery", "Mediation", "Trial", "Settlement", "Post-Settlement", "Closed"];
 
 const caseCreateSchema = z.object({
   title: z.string().min(1, "Case title is required").max(500),
   clientName: z.string().max(300).optional().default(""),
   caseType: z.string().max(100).optional().default("Auto Accident"),
   type: z.string().max(100).optional().default("Auto Accident"),
-  status: z.enum(["Active", "Pre-Litigation", "Litigation", "Settlement", "Closed", "Archived"]).optional().default("Active"),
-  stage: z.string().max(100).optional().default("Intake"),
+  status: z.enum(CASE_STATUSES).optional().default("Active"),
+  stage: z.enum(CASE_STAGES).optional().default("Intake"),
+  accidentDate: z.string().max(30).optional().nullable(),
+  statuteOfLimitationsDate: z.string().max(30).optional().nullable(),
+  clientEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
+  clientPhone: z.string().max(20).optional().nullable().or(z.literal("")),
+  clientSsn: z.string().max(20).optional().nullable().or(z.literal("")),
+  county: z.string().max(200).optional().nullable().or(z.literal("")),
+  court: z.string().max(200).optional().nullable().or(z.literal("")),
+  stateJurisdiction: z.string().max(100).optional().nullable().or(z.literal("")),
 }).passthrough();
 
 const aiAgentSchema = z.object({
   caseId: coerceInt,
+  incidentDescription: z.string().max(10000).optional(),
+  incidentLocation: z.string().max(500).optional(),
+  injuryType: z.string().max(200).optional(),
+  liabilityAssessment: z.string().max(5000).optional(),
+  comparativeFaultPct: z.union([z.number().min(0).max(100), z.string().max(10)]).optional(),
+  stateJurisdiction: z.string().max(100).optional(),
+  caseType: z.string().max(100).optional(),
+  documentType: z.string().max(200).optional(),
+  customInstructions: z.string().max(10000).optional(),
+  stage: z.string().max(100).optional(),
 }).passthrough();
 
 const docFolderSchema = z.object({

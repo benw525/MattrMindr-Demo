@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const pool = require("../db");
 const { requireClientAuth } = require("../middleware/clientAuth");
 const { portalLoginLimiter } = require("../middleware/rate-limit");
-const { validate, portalLoginSchema } = require("../middleware/validate");
+const { validate, portalLoginSchema, changePasswordSchema } = require("../middleware/validate");
 
 router.post("/login", portalLoginLimiter, validate(portalLoginSchema), async (req, res) => {
   const { email, password } = req.validatedBody;
@@ -70,11 +70,8 @@ router.post("/logout", (req, res) => {
   });
 });
 
-router.post("/change-password", requireClientAuth, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!newPassword || newPassword.length < 8) {
-    return res.status(400).json({ error: "Password must be at least 8 characters" });
-  }
+router.post("/change-password", requireClientAuth, validate(changePasswordSchema), async (req, res) => {
+  const { currentPassword, newPassword } = req.validatedBody;
   try {
     const { rows } = await pool.query("SELECT password_hash FROM client_users WHERE id = $1", [req.session.clientId]);
     if (rows.length === 0) return res.status(401).json({ error: "Client not found" });

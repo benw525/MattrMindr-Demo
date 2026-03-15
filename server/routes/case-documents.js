@@ -3,7 +3,7 @@ const multer = require("multer");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
-const { validate, docFolderSchema, batchDeleteSchema } = require("../middleware/validate");
+const { validate, validateParams, docFolderSchema, batchDeleteSchema, idParamSchema } = require("../middleware/validate");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -206,10 +206,10 @@ router.get("/:id/ocr-status", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/:id/re-extract", requireAuth, async (req, res) => {
+router.post("/:id/re-extract", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT cd.case_id, cd.file_data, cd.content_type, cd.filename FROM case_documents cd WHERE cd.id = $1", [req.params.id]
+      "SELECT cd.case_id, cd.file_data, cd.content_type, cd.filename FROM case_documents cd WHERE cd.id = $1", [req.validatedParams.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Document not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
@@ -225,11 +225,11 @@ router.post("/:id/re-extract", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/:id/summarize", requireAuth, async (req, res) => {
+router.post("/:id/summarize", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT cd.*, c.title as case_title, c.client_name FROM case_documents cd JOIN cases c ON cd.case_id = c.id WHERE cd.id = $1",
-      [req.params.id]
+      [req.validatedParams.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Document not found" });
     const doc = rows[0];
@@ -307,9 +307,9 @@ router.get("/:id/html", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id/content", requireAuth, async (req, res) => {
+router.put("/:id/content", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.validatedParams.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, check[0].case_id))) return res.status(403).json({ error: "Access denied" });
     const { html } = req.body;
@@ -440,9 +440,9 @@ router.get("/:id/view", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, async (req, res) => {
+router.put("/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.validatedParams.id]);
     if (check.length === 0) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, check[0].case_id))) return res.status(403).json({ error: "Access denied" });
 

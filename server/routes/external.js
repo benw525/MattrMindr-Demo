@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const pool = require("../db");
 const { generateToken, requireExternalAuth } = require("../middleware/external-auth");
 const { portalLoginLimiter } = require("../middleware/rate-limit");
-const { validate, loginSchema } = require("../middleware/validate");
+const { validate, validateParams, loginSchema, idParamSchema } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -118,9 +118,9 @@ router.get("/cases", requireExternalAuth, async (req, res) => {
   }
 });
 
-router.get("/cases/:id", requireExternalAuth, async (req, res) => {
+router.get("/cases/:id", requireExternalAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.validatedParams.id]);
     if (!rows.length) return res.status(404).json({ error: "Case not found" });
     const c = rows[0];
     const user = req.extUser;
@@ -139,9 +139,9 @@ router.get("/cases/:id", requireExternalAuth, async (req, res) => {
   }
 });
 
-router.post("/cases/:id/jury-analysis", requireExternalAuth, async (req, res) => {
+router.post("/cases/:id/jury-analysis", requireExternalAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const caseId = parseInt(req.params.id);
+    const caseId = parseInt(req.validatedParams.id);
     const { rows: caseRows } = await pool.query("SELECT id FROM cases WHERE id = $1 AND deleted_at IS NULL", [caseId]);
     if (!caseRows.length) return res.status(404).json({ error: "Case not found" });
     const { jurors, strikeStrategy, causeChallenges, causeStrategy, daubertChallenge, source } = req.body;
@@ -161,9 +161,9 @@ router.post("/cases/:id/jury-analysis", requireExternalAuth, async (req, res) =>
   }
 });
 
-router.get("/cases/:id/files", requireExternalAuth, async (req, res) => {
+router.get("/cases/:id/files", requireExternalAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const caseId = parseInt(req.params.id);
+    const caseId = parseInt(req.validatedParams.id);
     const { rows: caseRows } = await pool.query("SELECT id FROM cases WHERE id = $1 AND deleted_at IS NULL", [caseId]);
     if (!caseRows.length) return res.status(404).json({ error: "Case not found" });
 
@@ -205,9 +205,9 @@ router.get("/cases/:id/files", requireExternalAuth, async (req, res) => {
   }
 });
 
-router.post("/cases/:id/files", requireExternalAuth, async (req, res) => {
+router.post("/cases/:id/files", requireExternalAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const caseId = parseInt(req.params.id);
+    const caseId = parseInt(req.validatedParams.id);
     const { rows: caseRows } = await pool.query("SELECT id FROM cases WHERE id = $1 AND deleted_at IS NULL", [caseId]);
     if (!caseRows.length) return res.status(404).json({ error: "Case not found" });
 
