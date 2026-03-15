@@ -1,7 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
-const { isR2Configured, getPresignedUrl, downloadFromR2 } = require("../r2");
+const { isR2Configured, getPresignedUrl } = require("../r2");
 
 const router = express.Router();
 
