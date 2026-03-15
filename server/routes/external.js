@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const pool = require("../db");
 const { generateToken, requireExternalAuth } = require("../middleware/external-auth");
 const { portalLoginLimiter } = require("../middleware/rate-limit");
-const { validate, validateParams, loginSchema, idParamSchema } = require("../middleware/validate");
+const { validate, validateParams, loginSchema, idParamSchema, juryAnalysisSchema } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -139,13 +139,12 @@ router.get("/cases/:id", requireExternalAuth, validateParams(idParamSchema), asy
   }
 });
 
-router.post("/cases/:id/jury-analysis", requireExternalAuth, validateParams(idParamSchema), async (req, res) => {
+router.post("/cases/:id/jury-analysis", requireExternalAuth, validateParams(idParamSchema), validate(juryAnalysisSchema), async (req, res) => {
   try {
     const caseId = parseInt(req.validatedParams.id);
     const { rows: caseRows } = await pool.query("SELECT id FROM cases WHERE id = $1 AND deleted_at IS NULL", [caseId]);
     if (!caseRows.length) return res.status(404).json({ error: "Case not found" });
-    const { jurors, strikeStrategy, causeChallenges, causeStrategy, daubertChallenge, source } = req.body;
-    if (!jurors || !Array.isArray(jurors)) return res.status(400).json({ error: "jurors array is required" });
+    const { jurors, strikeStrategy, causeChallenges, causeStrategy, daubertChallenge, source } = req.validatedBody;
     const sanitizedDaubert = daubertChallenge ? String(daubertChallenge).slice(0, 10000) : null;
     const { rows } = await pool.query(
       `INSERT INTO jury_analyses (case_id, jurors, strike_strategy, cause_challenges, cause_strategy, daubert_challenge, imported_by, source)

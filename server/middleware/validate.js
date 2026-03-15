@@ -200,6 +200,43 @@ const caseIdParamSchema = z.object({
   caseId: z.string().regex(/^\d+$/, "Case ID must be a number"),
 });
 
+const caseUpdateSchema = z.object({
+  title: z.string().min(1).max(500).optional(),
+  clientName: z.string().max(300).optional(),
+  caseType: z.string().max(100).optional(),
+  type: z.string().max(100).optional(),
+  status: z.enum(CASE_STATUSES).optional(),
+  stage: z.enum(CASE_STAGES).optional(),
+  accidentDate: z.string().max(30).optional().nullable().or(z.literal("")),
+  statuteOfLimitationsDate: z.string().max(30).optional().nullable().or(z.literal("")),
+  clientEmail: z.string().max(255).optional().nullable().or(z.literal("")),
+  clientPhone: z.string().max(20).optional().nullable().or(z.literal("")),
+  clientSsn: z.string().max(20).optional().nullable().or(z.literal("")),
+  county: z.string().max(200).optional().nullable().or(z.literal("")),
+  court: z.string().max(200).optional().nullable().or(z.literal("")),
+  stateJurisdiction: z.string().max(100).optional().nullable().or(z.literal("")),
+}).passthrough();
+
+const juryAnalysisSchema = z.object({
+  jurors: z.array(z.object({}).passthrough()).min(1, "jurors array is required"),
+  strikeStrategy: z.string().max(10000).optional(),
+  causeChallenges: z.array(z.any()).optional(),
+  causeStrategy: z.string().max(10000).optional(),
+  daubertChallenge: z.string().max(10000).optional().nullable(),
+  source: z.string().max(100).optional(),
+});
+
+const portalClientCreateSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200),
+  email: z.string().email("Valid email is required").max(255),
+  phone: z.string().max(20).optional().nullable().or(z.literal("")),
+  sendWelcomeEmail: z.boolean().optional(),
+});
+
+const portalMessageSchema = z.object({
+  body: z.string().min(1, "Message is required").max(5000),
+});
+
 const casesListQuerySchema = z.object({
   deleted: z.enum(["true", "false"]).optional(),
   includeDeleted: z.enum(["true", "false"]).optional(),
@@ -237,6 +274,10 @@ module.exports = {
   smsDraftSchema,
   idParamSchema,
   caseIdParamSchema,
+  caseUpdateSchema,
+  juryAnalysisSchema,
+  portalClientCreateSchema,
+  portalMessageSchema,
   casesListQuerySchema,
   paginationSchema,
 };

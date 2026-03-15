@@ -4,10 +4,11 @@ const bcrypt = require("bcryptjs");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { sendEmail } = require("../email");
+const { validate, validateParams, caseIdParamSchema, portalClientCreateSchema, portalMessageSchema } = require("../middleware/validate");
 
 router.use(requireAuth);
 
-router.get("/:caseId/settings", async (req, res) => {
+router.get("/:caseId/settings", validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT * FROM client_portal_settings WHERE case_id = $1",
@@ -36,7 +37,7 @@ router.get("/:caseId/settings", async (req, res) => {
   }
 });
 
-router.put("/:caseId/settings", async (req, res) => {
+router.put("/:caseId/settings", validateParams(caseIdParamSchema), async (req, res) => {
   const caseId = req.params.caseId;
   const s = req.body;
   try {
@@ -74,7 +75,7 @@ router.put("/:caseId/settings", async (req, res) => {
   }
 });
 
-router.get("/:caseId/clients", async (req, res) => {
+router.get("/:caseId/clients", validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT id, name, email, phone, is_active, last_login, created_at FROM client_users WHERE case_id = $1 ORDER BY created_at DESC",
@@ -87,9 +88,8 @@ router.get("/:caseId/clients", async (req, res) => {
   }
 });
 
-router.post("/:caseId/clients", async (req, res) => {
-  const { name, email, phone, sendWelcomeEmail } = req.body;
-  if (!name || !email) return res.status(400).json({ error: "Name and email are required" });
+router.post("/:caseId/clients", validateParams(caseIdParamSchema), validate(portalClientCreateSchema), async (req, res) => {
+  const { name, email, phone, sendWelcomeEmail } = req.validatedBody;
   try {
     const existing = await pool.query("SELECT id FROM client_users WHERE LOWER(email) = LOWER($1)", [email.trim()]);
     if (existing.rows.length > 0) return res.status(400).json({ error: "A client with this email already exists" });
@@ -138,7 +138,7 @@ router.post("/:caseId/clients", async (req, res) => {
   }
 });
 
-router.delete("/:caseId/clients/:clientId", async (req, res) => {
+router.delete("/:caseId/clients/:clientId", validateParams(caseIdParamSchema), async (req, res) => {
   try {
     await pool.query("UPDATE client_users SET is_active = FALSE WHERE id = $1 AND case_id = $2", [req.params.clientId, req.params.caseId]);
     res.json({ ok: true });
@@ -148,7 +148,7 @@ router.delete("/:caseId/clients/:clientId", async (req, res) => {
   }
 });
 
-router.get("/:caseId/messages", async (req, res) => {
+router.get("/:caseId/messages", validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT id, sender_type, sender_name, body, read_at, created_at FROM client_messages WHERE case_id = $1 ORDER BY created_at ASC",
@@ -161,9 +161,8 @@ router.get("/:caseId/messages", async (req, res) => {
   }
 });
 
-router.post("/:caseId/messages", async (req, res) => {
-  const { body } = req.body;
-  if (!body || !body.trim()) return res.status(400).json({ error: "Message is required" });
+router.post("/:caseId/messages", validateParams(caseIdParamSchema), validate(portalMessageSchema), async (req, res) => {
+  const { body } = req.validatedBody;
   try {
     const { rows: userRows } = await pool.query("SELECT name FROM users WHERE id = $1", [req.session.userId]);
     const senderName = userRows[0]?.name || "Firm";
@@ -179,7 +178,7 @@ router.post("/:caseId/messages", async (req, res) => {
   }
 });
 
-router.put("/:caseId/messages/:msgId/read", async (req, res) => {
+router.put("/:caseId/messages/:msgId/read", validateParams(caseIdParamSchema), async (req, res) => {
   try {
     await pool.query(
       "UPDATE client_messages SET read_at = NOW() WHERE id = $1 AND case_id = $2 AND read_at IS NULL",

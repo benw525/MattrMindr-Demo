@@ -5,7 +5,7 @@ const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
 const { evaluateFlowsForCase } = require("./task-flows");
 const { encrypt, decrypt } = require("../utils/encryption");
-const { validate, validateParams, validateQuery, caseCreateSchema, idParamSchema, casesListQuerySchema } = require("../middleware/validate");
+const { validate, validateParams, validateQuery, caseCreateSchema, caseUpdateSchema, idParamSchema, casesListQuerySchema } = require("../middleware/validate");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -252,8 +252,8 @@ router.post("/", requireAuth, validate(caseCreateSchema), async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
-  const d = req.body;
+router.put("/:id", requireAuth, validateParams(idParamSchema), validate(caseUpdateSchema), async (req, res) => {
+  const d = req.validatedBody;
   try {
     const existing = await pool.query("SELECT * FROM cases WHERE id = $1 AND deleted_at IS NULL", [req.validatedParams.id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: "Not found" });

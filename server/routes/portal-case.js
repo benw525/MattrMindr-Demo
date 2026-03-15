@@ -4,6 +4,7 @@ const multer = require("multer");
 const pool = require("../db");
 const { requireClientAuth } = require("../middleware/clientAuth");
 const { extractText } = require("../utils/extract-text");
+const { validate, validateParams, portalMessageSchema, idParamSchema } = require("../middleware/validate");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
@@ -138,9 +139,8 @@ router.get("/messages", requireClientAuth, async (req, res) => {
   }
 });
 
-router.post("/messages", requireClientAuth, async (req, res) => {
-  const { body } = req.body;
-  if (!body || !body.trim()) return res.status(400).json({ error: "Message is required" });
+router.post("/messages", requireClientAuth, validate(portalMessageSchema), async (req, res) => {
+  const { body } = req.validatedBody;
   try {
     const { rows: clientRows } = await pool.query("SELECT name FROM client_users WHERE id = $1", [req.session.clientId]);
     const senderName = clientRows[0]?.name || "Client";
@@ -221,7 +221,7 @@ router.post("/documents/upload", requireClientAuth, upload.single("file"), async
   }
 });
 
-router.get("/documents/:id/download", requireClientAuth, async (req, res) => {
+router.get("/documents/:id/download", requireClientAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT file_data, content_type, filename FROM case_documents WHERE id = $1 AND case_id = $2",
