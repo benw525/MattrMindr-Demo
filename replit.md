@@ -30,7 +30,7 @@ Login: email + password (existing users default: `1234`, new users get temp pass
 
 ## Testing
 - **Framework**: Jest + Supertest (server/tests/)
-- **Run**: `cd server && npm test` — runs all 86 tests across 7 suites in ~60s
+- **Run**: `cd server && npm test` — runs all 98 tests across 7 suites in ~60s
 - **Config**: `server/jest.config.js` — runs in-band, mocks rate limiters/otplib/qrcode
 - **DB Cleanup**: Each test uses TRUNCATE CASCADE for isolation; tests share the app DB
 - **CI**: `.github/workflows/test.yml` — GitHub Actions with PostgreSQL 15 service container

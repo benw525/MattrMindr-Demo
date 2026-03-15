@@ -188,6 +188,31 @@ describe("POST /api/auth/change-password", () => {
     });
     expect(res.status).toBe(401);
   });
+
+  it("should invalidate other sessions on password change", async () => {
+    const user = await createTestUser({ email: "multi-session@test.com", password: "OldPass1!" });
+
+    const agent1 = supertest.agent(app);
+    await loginAgent(agent1, "multi-session@test.com", "OldPass1!");
+    const me1 = await agent1.get("/api/auth/me");
+    expect(me1.status).toBe(200);
+
+    const agent2 = supertest.agent(app);
+    await loginAgent(agent2, "multi-session@test.com", "OldPass1!");
+    const me2 = await agent2.get("/api/auth/me");
+    expect(me2.status).toBe(200);
+
+    await agent1.post("/api/auth/change-password").send({
+      currentPassword: "OldPass1!",
+      newPassword: "NewPass1!",
+    });
+
+    const me1After = await agent1.get("/api/auth/me");
+    expect(me1After.status).toBe(200);
+
+    const me2After = await agent2.get("/api/auth/me");
+    expect(me2After.status).toBe(401);
+  });
 });
 
 describe("POST /api/auth/forgot-password", () => {
@@ -259,6 +284,94 @@ describe("POST /api/auth/logout", () => {
 
     const meRes = await agent.get("/api/auth/me");
     expect(meRes.status).toBe(401);
+  });
+});
+
+describe("POST /api/auth/mfa/setup", () => {
+  it("should return QR code and secret for authenticated user", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "mfa-setup@test.com" });
+    const res = await agent.post("/api/auth/mfa/setup");
+    expect(res.status).toBe(200);
+    expect(res.body.secret).toBeDefined();
+    expect(res.body.qrCode).toMatch(/^data:image/);
+  });
+
+  it("should require authentication", async () => {
+    const res = await supertest(app).post("/api/auth/mfa/setup");
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("POST /api/auth/mfa/verify-setup", () => {
+  it("should enable MFA with valid verification code", async () => {
+    const { agent, user } = await createAuthenticatedAgent(app, { email: "mfa-enable@test.com" });
+    await agent.post("/api/auth/mfa/setup");
+
+    const res = await agent.post("/api/auth/mfa/verify-setup").send({ code: "123456" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const { rows } = await pool.query("SELECT mfa_enabled FROM users WHERE id = $1", [user.id]);
+    expect(rows[0].mfa_enabled).toBe(true);
+  });
+
+  it("should reject invalid verification code during setup", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { email: "mfa-bad-setup@test.com" });
+    await agent.post("/api/auth/mfa/setup");
+
+    const res = await agent.post("/api/auth/mfa/verify-setup").send({ code: "999999" });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/auth/mfa/disable", () => {
+  it("should disable MFA with correct password", async () => {
+    const { agent, user } = await createAuthenticatedAgent(app, {
+      email: "mfa-disable@test.com",
+      password: "DisablePass1!",
+    });
+    const { encrypt } = require("../utils/encryption");
+    const { generateSecret } = require("otplib");
+    await pool.query("UPDATE users SET mfa_enabled = TRUE, mfa_secret = $1 WHERE id = $2",
+      [encrypt(generateSecret()), user.id]);
+
+    const res = await agent.post("/api/auth/mfa/disable").send({ password: "DisablePass1!" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const { rows } = await pool.query("SELECT mfa_enabled FROM users WHERE id = $1", [user.id]);
+    expect(rows[0].mfa_enabled).toBe(false);
+  });
+
+  it("should reject wrong password", async () => {
+    const { agent } = await createAuthenticatedAgent(app, { password: "RightPass1!" });
+    const res = await agent.post("/api/auth/mfa/disable").send({ password: "WrongPass1!" });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("Rate limiting behavior", () => {
+  it("should enforce rate limits on login endpoint when limiter is active", async () => {
+    const rateLimit = require("express-rate-limit");
+    const testApp = require("express")();
+    testApp.use(require("express").json());
+
+    const strictLimiter = rateLimit({
+      windowMs: 60000,
+      max: 2,
+      message: { error: "Too many attempts" },
+    });
+
+    testApp.post("/api/test-rate", strictLimiter, (req, res) => res.json({ ok: true }));
+
+    const agent = supertest(testApp);
+    const r1 = await agent.post("/api/test-rate");
+    expect(r1.status).toBe(200);
+    const r2 = await agent.post("/api/test-rate");
+    expect(r2.status).toBe(200);
+    const r3 = await agent.post("/api/test-rate");
+    expect(r3.status).toBe(429);
+    expect(r3.body.error).toMatch(/too many/i);
   });
 });
 

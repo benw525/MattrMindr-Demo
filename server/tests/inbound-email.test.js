@@ -103,6 +103,52 @@ describe("POST /api/inbound-email — voicemail detection", () => {
   });
 });
 
+describe("POST /api/inbound-email — attachments", () => {
+  it("should store attachment metadata with correspondence", async () => {
+    const { rows } = await pool.query(
+      `INSERT INTO cases (case_num, title, client_name, status, stage, case_type, type)
+       VALUES ('C-ATT', 'Attach Case', 'Client', 'Active', 'Intake', 'Auto Accident', 'Auto Accident') RETURNING id`
+    );
+    const caseId = rows[0].id;
+
+    const pdfBuffer = Buffer.from("%PDF-1.4 test attachment");
+    const res = await supertest(app)
+      .post("/api/inbound-email")
+      .field("to", `case-${caseId}@mattrmindr.com`)
+      .field("from", "docs@example.com")
+      .field("subject", "Documents Attached")
+      .field("text", "Please see attached")
+      .attach("attachment1", pdfBuffer, { filename: "contract.pdf", contentType: "application/pdf" });
+    expect(res.status).toBe(200);
+
+    const { rows: corrs } = await pool.query(
+      "SELECT * FROM case_correspondence WHERE case_id = $1", [caseId]
+    );
+    expect(corrs.length).toBe(1);
+    expect(corrs[0].subject).toBe("Documents Attached");
+  });
+
+  it("should handle multiple attachments", async () => {
+    const { rows } = await pool.query(
+      `INSERT INTO cases (case_num, title, client_name, status, stage, case_type, type)
+       VALUES ('C-MULTI', 'Multi Attach', 'Client', 'Active', 'Intake', 'Auto Accident', 'Auto Accident') RETURNING id`
+    );
+    const caseId = rows[0].id;
+
+    const pdf1 = Buffer.from("%PDF-1.4 file one");
+    const pdf2 = Buffer.from("%PDF-1.4 file two");
+    const res = await supertest(app)
+      .post("/api/inbound-email")
+      .field("to", `case-${caseId}@mattrmindr.com`)
+      .field("from", "multi@example.com")
+      .field("subject", "Multiple Files")
+      .field("text", "Two files")
+      .attach("attachment1", pdf1, { filename: "file1.pdf", contentType: "application/pdf" })
+      .attach("attachment2", pdf2, { filename: "file2.pdf", contentType: "application/pdf" });
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("POST /api/inbound-email — non-existent case", () => {
   it("should gracefully handle non-existent case ID", async () => {
     const res = await supertest(app)

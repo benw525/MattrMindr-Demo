@@ -1,5 +1,6 @@
 const express = require("express");
 const session = require("express-session");
+const pgSession = require("connect-pg-simple")(session);
 const pool = require("../db");
 const { execSync } = require("child_process");
 const path = require("path");
@@ -11,6 +12,11 @@ function createTestApp() {
   app.use(express.urlencoded({ extended: true, limit: "30mb" }));
 
   app.use(session({
+    store: new pgSession({
+      pool,
+      tableName: "user_sessions",
+      createTableIfMissing: true,
+    }),
     secret: "test-secret",
     resave: false,
     saveUninitialized: false,
