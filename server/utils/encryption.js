@@ -7,6 +7,9 @@ const AUTH_TAG_LENGTH = 16;
 function getKey() {
   const key = process.env.FIELD_ENCRYPTION_KEY;
   if (!key) return null;
+  if (key.length !== 64 || !/^[0-9a-fA-F]+$/.test(key)) {
+    throw new Error("FIELD_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
+  }
   return Buffer.from(key, "hex");
 }
 
