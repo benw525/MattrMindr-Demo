@@ -21,6 +21,10 @@ function encrypt(plaintext) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("FIELD_ENCRYPTION_KEY is required in production — refusing to store sensitive data as plaintext");
     }
+    if (!encrypt._warnedOnce) {
+      console.warn("⚠ FIELD_ENCRYPTION_KEY not set — sensitive fields stored as plaintext (development mode only)");
+      encrypt._warnedOnce = true;
+    }
     return plaintext;
   }
   const iv = crypto.randomBytes(IV_LENGTH);
