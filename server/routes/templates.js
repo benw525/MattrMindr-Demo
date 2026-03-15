@@ -5,8 +5,10 @@ const PizZip = require("pizzip");
 const Docxtemplater = require("docxtemplater");
 const path = require("path");
 const fs = require("fs");
+const { randomUUID } = require("crypto");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { isR2Configured, uploadToR2, downloadFromR2 } = require("../r2");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -366,9 +368,17 @@ router.post("/", requireAuth, upload.single("file"), async (req, res) => {
     const useSystemSignature = req.body.useSystemSignature !== "false";
     const useSystemCos = req.body.useSystemCos !== "false";
 
+    let r2FileKey = null;
+    let docxDataForDb = docxBuffer;
+    if (isR2Configured()) {
+      r2FileKey = `templates/${randomUUID()}/${name.trim().replace(/[^a-zA-Z0-9._-]/g, "_")}.docx`;
+      await uploadToR2(r2FileKey, docxBuffer, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      docxDataForDb = null;
+    }
+
     const { rows } = await pool.query(
-      `INSERT INTO doc_templates (name, tags, created_by, created_by_name, placeholders, docx_data, visibility, category, sub_type, use_system_header, use_system_signature, use_system_cos)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO doc_templates (name, tags, created_by, created_by_name, placeholders, docx_data, r2_file_key, visibility, category, sub_type, use_system_header, use_system_signature, use_system_cos)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING ${TEMPLATE_FIELDS}`,
       [
         name.trim(),
@@ -376,7 +386,8 @@ router.post("/", requireAuth, upload.single("file"), async (req, res) => {
         req.session.userId,
         req.session.userName,
         JSON.stringify(storedPlaceholders),
-        docxBuffer,
+        docxDataForDb,
+        r2FileKey,
         req.body.visibility === "personal" ? "personal" : "global",
         category || "General",
         subType || "",
@@ -394,12 +405,18 @@ router.post("/", requireAuth, upload.single("file"), async (req, res) => {
 
 router.get("/:id/source", requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT docx_data, placeholders, created_by FROM doc_templates WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT docx_data, r2_file_key, placeholders, created_by FROM doc_templates WHERE id = $1", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     if (!canEditTemplate(req, rows[0])) return res.status(403).json({ error: "Permission denied" });
 
+    let docxData = rows[0].docx_data;
+    if (!docxData && rows[0].r2_file_key && isR2Configured()) {
+      docxData = await downloadFromR2(rows[0].r2_file_key);
+    }
+    if (!docxData) return res.status(400).json({ error: "No template data available" });
+
     const oldPlaceholders = rows[0].placeholders || [];
-    const zip = new PizZip(rows[0].docx_data);
+    const zip = new PizZip(docxData);
     let xml = "";
     const xmlFile = zip.file("word/document.xml");
     if (xmlFile) xml = xmlFile.asText();
@@ -410,7 +427,7 @@ router.get("/:id/source", requireAuth, async (req, res) => {
       cleanXml = cleanXml.replace(tokenPattern, (ph.original || `<<${ph.token}>>`));
     }
 
-    const cleanZip = new PizZip(rows[0].docx_data);
+    const cleanZip = new PizZip(docxData);
     cleanZip.file("word/document.xml", cleanXml);
     const cleanBuffer = cleanZip.generate({ type: "nodebuffer" });
 
@@ -454,7 +471,7 @@ router.get("/:id/source", requireAuth, async (req, res) => {
 router.put("/:id", requireAuth, async (req, res) => {
   const { name, tags, placeholders, visibility, reprocessDocx, category, subType, useSystemHeader, useSystemSignature, useSystemCos } = req.body;
   try {
-    const { rows: existing } = await pool.query("SELECT created_by, docx_data, placeholders AS old_placeholders FROM doc_templates WHERE id = $1", [req.params.id]);
+    const { rows: existing } = await pool.query("SELECT created_by, docx_data, r2_file_key, placeholders AS old_placeholders FROM doc_templates WHERE id = $1", [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ error: "Not found" });
     if (!canEditTemplate(req, existing[0])) return res.status(403).json({ error: "Only the creator or a Shareholder can edit this template" });
 
@@ -485,7 +502,12 @@ router.put("/:id", requireAuth, async (req, res) => {
 
     if (reprocessDocx && placeholders !== undefined) {
       const oldPhs = existing[0].old_placeholders || [];
-      const zip = new PizZip(existing[0].docx_data);
+      let existingDocx = existing[0].docx_data;
+      if (!existingDocx && existing[0].r2_file_key && isR2Configured()) {
+        existingDocx = await downloadFromR2(existing[0].r2_file_key);
+      }
+      if (!existingDocx) return res.status(400).json({ error: "No template data available for reprocessing" });
+      const zip = new PizZip(existingDocx);
       const xmlFiles = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml", "word/footer1.xml", "word/footer2.xml", "word/footer3.xml"];
 
       for (const xmlPath of xmlFiles) {
@@ -514,8 +536,17 @@ router.put("/:id", requireAuth, async (req, res) => {
       }
 
       const newDocxData = zip.generate({ type: "nodebuffer" });
-      sets.push(`docx_data = $${idx++}`);
-      vals.push(newDocxData);
+      if (isR2Configured()) {
+        const r2Key = existing[0].r2_file_key || `templates/${randomUUID()}/template.docx`;
+        await uploadToR2(r2Key, newDocxData, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        sets.push(`docx_data = $${idx++}`);
+        vals.push(null);
+        sets.push(`r2_file_key = $${idx++}`);
+        vals.push(r2Key);
+      } else {
+        sets.push(`docx_data = $${idx++}`);
+        vals.push(newDocxData);
+      }
     }
 
     vals.push(req.params.id);
@@ -584,6 +615,10 @@ router.post("/:id/generate", requireAuth, async (req, res) => {
     }
 
     let docxBuffer = template.docx_data;
+    if (!docxBuffer && template.r2_file_key && isR2Configured()) {
+      docxBuffer = await downloadFromR2(template.r2_file_key);
+    }
+    if (!docxBuffer) return res.status(400).json({ error: "No template data available" });
 
     if (isPleading) {
       const useSystemHeader = template.use_system_header !== false;

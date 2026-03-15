@@ -1,7 +1,9 @@
 const express = require("express");
+const { randomUUID } = require("crypto");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
+const { isR2Configured, uploadToR2 } = require("../r2");
 
 const router = express.Router();
 
@@ -66,10 +68,17 @@ router.put("/assign/:id", requireAuth, async (req, res) => {
           console.error("Unmatched assign: PDF text extraction error:", pErr.message);
         }
 
+        let r2Key = null;
+        let fileDataForDb = fileBuffer;
+        if (isR2Configured()) {
+          r2Key = `filings/${caseId}/${randomUUID()}/${pdfAtt.filename}`;
+          await uploadToR2(r2Key, fileBuffer, "application/pdf");
+          fileDataForDb = null;
+        }
         await client.query(
-          `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, source, source_email_from)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', $8)`,
-          [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, pdfAtt.size, email.from_email]
+          `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, r2_file_key, extracted_text, file_size, source, source_email_from)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'email', $9)`,
+          [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileDataForDb, r2Key, extractedText, pdfAtt.size, email.from_email]
         );
         console.log(`Unmatched assign: filing created from ${pdfAtt.filename} for case ${caseId}`);
       } catch (pErr) {
@@ -242,10 +251,17 @@ router.post("/reprocess", requireAuth, async (req, res) => {
                 console.error("Reprocess: PDF text extraction error:", pErr.message);
               }
 
+              let r2KeyReproc = null;
+              let fileDataReproc = fileBuffer;
+              if (isR2Configured()) {
+                r2KeyReproc = `filings/${caseId}/${randomUUID()}/${pdfAtt.filename}`;
+                await uploadToR2(r2KeyReproc, fileBuffer, "application/pdf");
+                fileDataReproc = null;
+              }
               await client.query(
-                `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, source, source_email_from)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', $8)`,
-                [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, pdfAtt.size, email.from_email]
+                `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, r2_file_key, extracted_text, file_size, source, source_email_from)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'email', $9)`,
+                [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileDataReproc, r2KeyReproc, extractedText, pdfAtt.size, email.from_email]
               );
             } catch (pErr) {
               console.error("Reprocess: PDF processing error:", pErr.message);

@@ -3,11 +3,13 @@ const multer = require("multer");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { invalidateUserSessions } = require("../utils/session-invalidation");
+const { isR2Configured, uploadToR2, downloadFromR2, deleteFromR2 } = require("../r2");
+const { randomUUID } = require("crypto");
 
 const router = express.Router();
 const ppUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-const USER_FIELDS = "id, name, role, roles, email, initials, phone, cell, ext, avatar, offices, deleted_at, (profile_picture IS NOT NULL AND profile_picture_type IS NOT NULL) as has_profile_picture";
+const USER_FIELDS = "id, name, role, roles, email, initials, phone, cell, ext, avatar, offices, deleted_at, (profile_picture IS NOT NULL AND profile_picture_type IS NOT NULL OR r2_profile_picture_key IS NOT NULL) as has_profile_picture";
 
 function normalizeUser(r) {
   return {
@@ -183,10 +185,19 @@ router.post("/:id/profile-picture", requireAuth, ppUpload.single("picture"), asy
     if (!ALLOWED_IMAGE_TYPES.includes(req.file.mimetype)) {
       return res.status(400).json({ error: "Only JPEG, PNG, WebP, and GIF images are supported" });
     }
-    await pool.query(
-      "UPDATE users SET profile_picture = $1, profile_picture_type = $2 WHERE id = $3",
-      [req.file.buffer, req.file.mimetype, targetId]
-    );
+    if (isR2Configured()) {
+      const r2Key = `profile-pictures/${targetId}/${randomUUID()}`;
+      await uploadToR2(r2Key, req.file.buffer, req.file.mimetype);
+      await pool.query(
+        "UPDATE users SET profile_picture = NULL, profile_picture_type = $1, r2_profile_picture_key = $2 WHERE id = $3",
+        [req.file.mimetype, r2Key, targetId]
+      );
+    } else {
+      await pool.query(
+        "UPDATE users SET profile_picture = $1, profile_picture_type = $2 WHERE id = $3",
+        [req.file.buffer, req.file.mimetype, targetId]
+      );
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("Profile picture upload error:", err);
@@ -197,15 +208,27 @@ router.post("/:id/profile-picture", requireAuth, ppUpload.single("picture"), asy
 router.get("/:id/profile-picture", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT profile_picture, profile_picture_type FROM users WHERE id = $1",
+      "SELECT profile_picture, profile_picture_type, r2_profile_picture_key FROM users WHERE id = $1",
       [req.params.id]
     );
-    if (!rows.length || !rows[0].profile_picture) {
+    if (!rows.length) return res.status(404).json({ error: "No profile picture" });
+    const user = rows[0];
+    if (user.r2_profile_picture_key && isR2Configured()) {
+      try {
+        const data = await downloadFromR2(user.r2_profile_picture_key);
+        res.setHeader("Content-Type", user.profile_picture_type || "image/jpeg");
+        res.setHeader("Cache-Control", "public, max-age=300");
+        return res.send(data);
+      } catch (err) {
+        console.error("R2 profile picture fallback to BYTEA:", err.message);
+      }
+    }
+    if (!user.profile_picture) {
       return res.status(404).json({ error: "No profile picture" });
     }
-    res.setHeader("Content-Type", rows[0].profile_picture_type);
+    res.setHeader("Content-Type", user.profile_picture_type);
     res.setHeader("Cache-Control", "public, max-age=300");
-    return res.send(rows[0].profile_picture);
+    return res.send(user.profile_picture);
   } catch (err) {
     console.error("Profile picture fetch error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -218,8 +241,12 @@ router.delete("/:id/profile-picture", requireAuth, async (req, res) => {
     if (req.session.userId !== targetId && !isAppAdmin(req)) {
       return res.status(403).json({ error: "Not authorized" });
     }
+    const { rows } = await pool.query("SELECT r2_profile_picture_key FROM users WHERE id = $1", [targetId]);
+    if (rows.length && rows[0].r2_profile_picture_key && isR2Configured()) {
+      try { await deleteFromR2(rows[0].r2_profile_picture_key); } catch (e) { console.error("R2 delete error:", e.message); }
+    }
     await pool.query(
-      "UPDATE users SET profile_picture = NULL, profile_picture_type = NULL WHERE id = $1",
+      "UPDATE users SET profile_picture = NULL, profile_picture_type = NULL, r2_profile_picture_key = NULL WHERE id = $1",
       [targetId]
     );
     return res.json({ ok: true });

@@ -1,10 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
+const { randomUUID } = require("crypto");
 const pool = require("../db");
 const { requireClientAuth } = require("../middleware/clientAuth");
 const { extractText } = require("../utils/extract-text");
 const { validate, validateParams, portalMessageSchema, idParamSchema } = require("../middleware/validate");
+const { isR2Configured, uploadToR2, downloadFromR2, getPresignedUrl } = require("../r2");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
@@ -209,10 +211,18 @@ router.post("/documents/upload", requireClientAuth, upload.single("file"), async
       extractedText = await extractText(req.file.buffer, req.file.mimetype, req.file.originalname) || "";
     } catch (_) {}
 
+    let r2FileKey = null;
+    let fileDataForDb = req.file.buffer;
+    if (isR2Configured()) {
+      r2FileKey = `documents/${caseId}/${randomUUID()}/${req.file.originalname}`;
+      await uploadToR2(r2FileKey, req.file.buffer, req.file.mimetype);
+      fileDataForDb = null;
+    }
+
     const { rows } = await pool.query(
-      `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, source)
-       VALUES ($1, $2, $3, $4, $5, 'Client Upload', $6, $7, $8, 'client') RETURNING id, filename, doc_type, file_size, source, created_at`,
-      [caseId, req.file.originalname, req.file.mimetype, req.file.buffer, extractedText, req.session.clientId, uploaderName, req.file.size]
+      `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, source)
+       VALUES ($1, $2, $3, $4, $5, $6, 'Client Upload', $7, $8, $9, 'client') RETURNING id, filename, doc_type, file_size, source, created_at`,
+      [caseId, req.file.originalname, req.file.mimetype, fileDataForDb, r2FileKey, extractedText, req.session.clientId, uploaderName, req.file.size]
     );
     res.json(rows[0]);
   } catch (err) {
@@ -224,13 +234,22 @@ router.post("/documents/upload", requireClientAuth, upload.single("file"), async
 router.get("/documents/:id/download", requireClientAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT file_data, content_type, filename FROM case_documents WHERE id = $1 AND case_id = $2",
+      "SELECT file_data, r2_file_key, content_type, filename FROM case_documents WHERE id = $1 AND case_id = $2",
       [req.params.id, req.session.clientCaseId]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Document not found" });
-    res.set("Content-Type", rows[0].content_type);
-    res.set("Content-Disposition", `attachment; filename="${rows[0].filename}"`);
-    res.send(rows[0].file_data);
+    const doc = rows[0];
+    if (doc.r2_file_key && isR2Configured()) {
+      try {
+        const url = await getPresignedUrl(doc.r2_file_key, 300, doc.content_type, `attachment; filename="${doc.filename}"`);
+        return res.redirect(url);
+      } catch (err) {
+        console.error("R2 presigned URL fallback to BYTEA:", err.message);
+      }
+    }
+    res.set("Content-Type", doc.content_type);
+    res.set("Content-Disposition", `attachment; filename="${doc.filename}"`);
+    res.send(doc.file_data);
   } catch (err) {
     console.error("Portal download error:", err);
     res.status(500).json({ error: "Server error" });

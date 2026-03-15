@@ -1,6 +1,8 @@
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand,
+  HeadObjectCommand,
   CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 let s3Client = null;
 
@@ -118,12 +120,33 @@ async function abortMultipartUpload(key, uploadId) {
   }));
 }
 
+async function headObject(key) {
+  const client = getClient();
+  if (!client) throw new Error("R2 not configured");
+  const resp = await client.send(new HeadObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: key,
+  }));
+  return { contentLength: resp.ContentLength, contentType: resp.ContentType };
+}
+
+async function getPresignedUrl(key, expiresIn = 3600, responseContentType, responseContentDisposition) {
+  const client = getClient();
+  if (!client) throw new Error("R2 not configured");
+  const params = { Bucket: process.env.R2_BUCKET_NAME, Key: key };
+  if (responseContentType) params.ResponseContentType = responseContentType;
+  if (responseContentDisposition) params.ResponseContentDisposition = responseContentDisposition;
+  return getSignedUrl(client, new GetObjectCommand(params), { expiresIn });
+}
+
 module.exports = {
   isR2Configured,
   uploadToR2,
   downloadFromR2,
   streamFromR2,
   deleteFromR2,
+  headObject,
+  getPresignedUrl,
   createMultipartUpload,
   uploadPart,
   completeMultipartUpload,

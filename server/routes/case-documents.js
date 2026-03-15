@@ -4,6 +4,7 @@ const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
 const { validate, validateParams, docFolderSchema, batchDeleteSchema, idParamSchema, caseIdParamSchema } = require("../middleware/validate");
+const { isR2Configured, uploadToR2, downloadFromR2, getPresignedUrl } = require("../r2");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -46,6 +47,23 @@ async function verifyCaseAccess(req, caseId) {
     [caseId, userId, userId, userId, userId, userId]
   );
   return rows.length > 0;
+}
+
+async function uploadFileToR2WithKey(caseId, filename, buffer, contentType) {
+  const key = `documents/${caseId}/${randomUUID()}/${filename}`;
+  await uploadToR2(key, buffer, contentType);
+  return key;
+}
+
+async function getFileBuffer(row) {
+  if (row.r2_file_key && isR2Configured()) {
+    try {
+      return await downloadFromR2(row.r2_file_key);
+    } catch (err) {
+      console.error("R2 download fallback to BYTEA:", err.message);
+    }
+  }
+  return row.file_data;
 }
 
 router.get("/:caseId/folders", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
@@ -131,11 +149,18 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
       if (!folderRows.length) return res.status(400).json({ error: "Folder not found for this case" });
     }
 
+    let r2FileKey = null;
+    let fileDataForDb = req.file.buffer;
+    if (isR2Configured()) {
+      r2FileKey = await uploadFileToR2WithKey(caseId, req.file.originalname, req.file.buffer, ct);
+      fileDataForDb = null;
+    }
+
     if (needsOcr(ct)) {
       const { rows } = await pool.query(
-        `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
-         VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, 'processing', $9) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
-        [caseId, req.file.originalname, ct, req.file.buffer, docType || "Other", req.session.userId, userName, req.file.size, folderVal]
+        `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
+         VALUES ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, 'processing', $10) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
+        [caseId, req.file.originalname, ct, fileDataForDb, r2FileKey, docType || "Other", req.session.userId, userName, req.file.size, folderVal]
       );
       const saved = rows[0];
       runOcrBackground(saved.id, req.file.buffer, ct, req.file.originalname);
@@ -151,9 +176,9 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
 
     const ocrStatus = (extractedText && extractedText.trim().length > 0) ? "complete" : "failed";
     const { rows } = await pool.query(
-      `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
-      [caseId, req.file.originalname, ct, req.file.buffer, extractedText, docType || "Other", req.session.userId, userName, req.file.size, ocrStatus, folderVal]
+      `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
+      [caseId, req.file.originalname, ct, fileDataForDb, r2FileKey, extractedText, docType || "Other", req.session.userId, userName, req.file.size, ocrStatus, folderVal]
     );
     return res.status(201).json(toFrontend(rows[0]));
   } catch (err) {
@@ -165,7 +190,7 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
 router.get("/:id/text", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT cd.extracted_text, cd.case_id, cd.file_data, cd.content_type, cd.filename FROM case_documents cd WHERE cd.id = $1", [req.params.id]
+      "SELECT cd.extracted_text, cd.case_id, cd.file_data, cd.r2_file_key, cd.content_type, cd.filename FROM case_documents cd WHERE cd.id = $1", [req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Document not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
@@ -173,9 +198,10 @@ router.get("/:id/text", requireAuth, validateParams(idParamSchema), async (req, 
     if (doc.extracted_text) {
       return res.json({ text: doc.extracted_text });
     }
-    if (doc.file_data) {
+    const buffer = await getFileBuffer(doc);
+    if (buffer) {
       try {
-        const liveText = await extractText(doc.file_data, doc.content_type, doc.filename);
+        const liveText = await extractText(buffer, doc.content_type, doc.filename);
         if (liveText) {
           pool.query("UPDATE case_documents SET extracted_text = $1 WHERE id = $2", [liveText, req.params.id]).catch(() => {});
           return res.json({ text: liveText });
@@ -209,13 +235,14 @@ router.get("/:id/ocr-status", requireAuth, validateParams(idParamSchema), async 
 router.post("/:id/re-extract", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT cd.case_id, cd.file_data, cd.content_type, cd.filename FROM case_documents cd WHERE cd.id = $1", [req.validatedParams.id]
+      "SELECT cd.case_id, cd.file_data, cd.r2_file_key, cd.content_type, cd.filename FROM case_documents cd WHERE cd.id = $1", [req.validatedParams.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: "Document not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
     const doc = rows[0];
-    if (!doc.file_data) return res.status(400).json({ error: "No file data available for re-extraction" });
-    const newText = await extractText(doc.file_data, doc.content_type, doc.filename);
+    const buffer = await getFileBuffer(doc);
+    if (!buffer) return res.status(400).json({ error: "No file data available for re-extraction" });
+    const newText = await extractText(buffer, doc.content_type, doc.filename);
     const newStatus = (newText && newText.trim().length > 0) ? "complete" : "failed";
     await pool.query("UPDATE case_documents SET extracted_text = $1, ocr_status = $2 WHERE id = $3", [newText || "", newStatus, req.params.id]);
     return res.json({ text: newText || "", length: (newText || "").length, ocrStatus: newStatus, hasText: newStatus === "complete" });
@@ -273,12 +300,20 @@ Be concise but thorough. Flag anything that could help the plaintiff's case.`;
 
 router.get("/:id/download", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT filename, content_type, file_data, case_id, source FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT filename, content_type, file_data, r2_file_key, case_id, source FROM case_documents WHERE id = $1", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     const doc = rows[0];
     if (!(await verifyCaseAccess(req, doc.case_id))) return res.status(403).json({ error: "Access denied" });
     if (doc.source === "client") {
       pool.query("UPDATE case_documents SET firm_viewed_at = NOW() WHERE id = $1 AND firm_viewed_at IS NULL", [req.params.id]).catch(() => {});
+    }
+    if (doc.r2_file_key && isR2Configured()) {
+      try {
+        const url = await getPresignedUrl(doc.r2_file_key, 300, doc.content_type, `attachment; filename="${doc.filename}"`);
+        return res.redirect(url);
+      } catch (err) {
+        console.error("R2 presigned URL fallback to BYTEA:", err.message);
+      }
     }
     res.setHeader("Content-Type", doc.content_type);
     res.setHeader("Content-Disposition", `attachment; filename="${doc.filename}"`);
@@ -291,14 +326,15 @@ router.get("/:id/download", requireAuth, validateParams(idParamSchema), async (r
 
 router.get("/:id/html", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT file_data, content_type, case_id, filename, content_html FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT file_data, r2_file_key, content_type, case_id, filename, content_html FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
     const doc = rows[0];
     if (doc.content_html) return res.json({ html: doc.content_html });
-    if (!doc.file_data) return res.status(400).json({ error: "No file data" });
+    const buffer = await getFileBuffer(doc);
+    if (!buffer) return res.status(400).json({ error: "No file data" });
     const mammoth = require("mammoth");
-    const result = await mammoth.convertToHtml({ buffer: doc.file_data });
+    const result = await mammoth.convertToHtml({ buffer });
     pool.query("UPDATE case_documents SET content_html = $1 WHERE id = $2", [result.value, req.params.id]).catch(() => {});
     res.json({ html: result.value });
   } catch (err) {
@@ -323,11 +359,13 @@ router.put("/:id/content", requireAuth, validateParams(idParamSchema), async (re
 
 router.get("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT file_data, r2_file_key, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
+    const buffer = await getFileBuffer(rows[0]);
+    if (!buffer) return res.status(400).json({ error: "No file data" });
     const XLSX = require("xlsx");
-    const workbook = XLSX.read(rows[0].file_data, { type: "buffer" });
+    const workbook = XLSX.read(buffer, { type: "buffer" });
     const sheets = workbook.SheetNames.map(name => {
       const sheet = workbook.Sheets[name];
       const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
@@ -342,7 +380,7 @@ router.get("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (
 
 router.put("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows: check } = await pool.query("SELECT case_id, r2_file_key FROM case_documents WHERE id = $1", [req.validatedParams.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, check[0].case_id))) return res.status(403).json({ error: "Access denied" });
     const XLSX = require("xlsx");
@@ -353,7 +391,15 @@ router.put("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (
       XLSX.utils.book_append_sheet(workbook, ws, sheet.name);
     }
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-    await pool.query("UPDATE case_documents SET file_data = $1 WHERE id = $2", [buffer, req.params.id]);
+    if (check[0].r2_file_key && isR2Configured()) {
+      await uploadToR2(check[0].r2_file_key, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      await pool.query("UPDATE case_documents SET file_data = NULL, file_size = $1 WHERE id = $2", [buffer.length, req.params.id]);
+    } else if (isR2Configured()) {
+      const r2Key = await uploadFileToR2WithKey(check[0].case_id, "spreadsheet.xlsx", buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      await pool.query("UPDATE case_documents SET file_data = NULL, r2_file_key = $1, file_size = $2 WHERE id = $3", [r2Key, buffer.length, req.params.id]);
+    } else {
+      await pool.query("UPDATE case_documents SET file_data = $1 WHERE id = $2", [buffer, req.params.id]);
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error("XLSX save error:", err);
@@ -363,11 +409,13 @@ router.put("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (
 
 router.get("/:id/pptx-slides", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT file_data, r2_file_key, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
+    const buffer = await getFileBuffer(rows[0]);
+    if (!buffer) return res.status(400).json({ error: "No file data" });
     const JSZip = require("jszip");
-    const zip = await JSZip.loadAsync(rows[0].file_data);
+    const zip = await JSZip.loadAsync(buffer);
     const slides = [];
     const slideFiles = Object.keys(zip.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort();
     for (const slideFile of slideFiles) {
@@ -389,7 +437,7 @@ router.get("/:id/pptx-slides", requireAuth, validateParams(idParamSchema), async
 
 router.put("/:id/pptx-slides", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.validatedParams.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, check[0].case_id))) return res.status(403).json({ error: "Access denied" });
     res.json({ ok: true });
@@ -401,7 +449,7 @@ router.put("/:id/pptx-slides", requireAuth, validateParams(idParamSchema), async
 
 router.put("/:id/annotations", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.validatedParams.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, check[0].case_id))) return res.status(403).json({ error: "Access denied" });
     const { annotations } = req.body;
@@ -427,10 +475,18 @@ router.get("/:id/annotations", requireAuth, validateParams(idParamSchema), async
 
 router.get("/:id/view", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT filename, content_type, file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT filename, content_type, file_data, r2_file_key, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
     const doc = rows[0];
+    if (doc.r2_file_key && isR2Configured()) {
+      try {
+        const url = await getPresignedUrl(doc.r2_file_key, 300, doc.content_type, `inline; filename="${doc.filename}"`);
+        return res.redirect(url);
+      } catch (err) {
+        console.error("R2 presigned URL fallback to BYTEA:", err.message);
+      }
+    }
     res.setHeader("Content-Type", doc.content_type);
     res.setHeader("Content-Disposition", `inline; filename="${doc.filename}"`);
     res.send(doc.file_data);
@@ -490,12 +546,11 @@ router.post("/folders", requireAuth, validate(docFolderSchema), async (req, res)
       const { rows: parentRows } = await pool.query("SELECT id FROM document_folders WHERE id = $1 AND case_id = $2", [parentId, caseId]);
       if (!parentRows.length) return res.status(400).json({ error: "Parent folder not found" });
     }
-    const { rows: maxRows } = await pool.query("SELECT COALESCE(MAX(sort_order), -1) + 1 as next FROM document_folders WHERE case_id = $1", [caseId]);
     const { rows } = await pool.query(
-      "INSERT INTO document_folders (case_id, name, sort_order, parent_id) VALUES ($1, $2, $3, $4) RETURNING *",
-      [caseId, name, maxRows[0].next, parentId || null]
+      "INSERT INTO document_folders (case_id, name, parent_id) VALUES ($1, $2, $3) RETURNING *",
+      [caseId, name, parentId || null]
     );
-    return res.status(201).json(rows[0]);
+    return res.json(rows[0]);
   } catch (err) {
     console.error("Create document folder error:", err);
     return res.status(500).json({ error: "Server error" });
@@ -658,11 +713,18 @@ router.post("/upload/complete", requireAuth, express.json(), async (req, res) =>
     const { rows: userRows } = await pool.query("SELECT name FROM users WHERE id = $1", [pending.userId]);
     const uploaderName = userRows.length ? userRows[0].name : "";
 
+    let r2FileKey = null;
+    let fileDataForDb = fullBuffer;
+    if (isR2Configured()) {
+      r2FileKey = await uploadFileToR2WithKey(pending.caseId, pending.filename, fullBuffer, pending.contentType);
+      fileDataForDb = null;
+    }
+
     if (needsOcr(pending.contentType)) {
       const { rows } = await pool.query(
-        `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
-         VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, 'processing', $9) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
-        [pending.caseId, pending.filename, pending.contentType, fullBuffer, pending.docType, pending.userId, uploaderName, fullBuffer.length, pending.folderId || null]
+        `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
+         VALUES ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, 'processing', $10) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
+        [pending.caseId, pending.filename, pending.contentType, fileDataForDb, r2FileKey, pending.docType, pending.userId, uploaderName, fullBuffer.length, pending.folderId || null]
       );
       runOcrBackground(rows[0].id, fullBuffer, pending.contentType, pending.filename);
       return res.json(toFrontend(rows[0]));
@@ -672,9 +734,9 @@ router.post("/upload/complete", requireAuth, express.json(), async (req, res) =>
     try { extractedText = await extractText(fullBuffer, pending.contentType, pending.filename); } catch (e) { console.error("Chunk text extraction error:", e); }
     const ocrStatus = (extractedText && extractedText.trim().length > 0) ? "complete" : "failed";
     const { rows } = await pool.query(
-      `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
-      [pending.caseId, pending.filename, pending.contentType, fullBuffer, extractedText, pending.docType, pending.userId, uploaderName, fullBuffer.length, ocrStatus, pending.folderId || null]
+      `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
+      [pending.caseId, pending.filename, pending.contentType, fileDataForDb, r2FileKey, extractedText, pending.docType, pending.userId, uploaderName, fullBuffer.length, ocrStatus, pending.folderId || null]
     );
     res.json(toFrontend(rows[0]));
   } catch (err) {
@@ -687,14 +749,14 @@ const officeViewTokens = new Map();
 
 router.get("/:id/office-view-url", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT id, filename, content_type, file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT id, filename, content_type, file_data, r2_file_key, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     const doc = rows[0];
     if (!(await verifyCaseAccess(req, doc.case_id))) return res.status(403).json({ error: "Access denied" });
     const ext = (doc.filename || "").split(".").pop().toLowerCase();
     const officeExts = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
     if (!officeExts.includes(ext)) return res.json({ url: null });
-    if (!doc.file_data) return res.json({ url: null });
+    if (!doc.file_data && !doc.r2_file_key) return res.json({ url: null });
 
     const token = randomUUID();
     officeViewTokens.set(token, { docId: doc.id, expiresAt: Date.now() + 10 * 60 * 1000 });
@@ -716,12 +778,14 @@ router.get("/office-download/:token", async (req, res) => {
     const entry = officeViewTokens.get(req.params.token);
     if (!entry || Date.now() > entry.expiresAt) return res.status(403).json({ error: "Token expired or invalid" });
 
-    const { rows } = await pool.query("SELECT filename, content_type, file_data FROM case_documents WHERE id = $1", [entry.docId]);
+    const { rows } = await pool.query("SELECT filename, content_type, file_data, r2_file_key FROM case_documents WHERE id = $1", [entry.docId]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     const doc = rows[0];
+    const buffer = await getFileBuffer(doc);
+    if (!buffer) return res.status(404).json({ error: "No file data" });
     res.setHeader("Content-Type", doc.content_type || "application/octet-stream");
     res.setHeader("Content-Disposition", `inline; filename="${doc.filename}"`);
-    res.send(doc.file_data);
+    res.send(buffer);
   } catch (err) {
     console.error("Office download error:", err.message);
     res.status(500).json({ error: "Server error" });

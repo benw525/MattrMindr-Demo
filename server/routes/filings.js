@@ -3,6 +3,7 @@ const multer = require("multer");
 const { randomUUID } = require("crypto");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { isR2Configured, uploadToR2, downloadFromR2, getPresignedUrl } = require("../r2");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -28,6 +29,23 @@ async function verifyCaseAccess(req, caseId) {
     [caseId, userId, userId, userId, userId, userId]
   );
   return rows.length > 0;
+}
+
+async function uploadFilingToR2(caseId, filename, buffer, contentType) {
+  const key = `filings/${caseId}/${randomUUID()}/${filename}`;
+  await uploadToR2(key, buffer, contentType);
+  return key;
+}
+
+async function getFilingBuffer(row) {
+  if (row.r2_file_key && isR2Configured()) {
+    try {
+      return await downloadFromR2(row.r2_file_key);
+    } catch (err) {
+      console.error("R2 filing download fallback to BYTEA:", err.message);
+    }
+  }
+  return row.file_data;
 }
 
 const toFrontend = (row) => ({
@@ -80,12 +98,19 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
       console.error("PDF text extraction error:", extractErr);
     }
 
+    let r2FileKey = null;
+    let fileDataForDb = req.file.buffer;
+    if (isR2Configured()) {
+      r2FileKey = await uploadFilingToR2(caseId, req.file.originalname, req.file.buffer, req.file.mimetype);
+      fileDataForDb = null;
+    }
+
     const userName = req.session.userName || "";
     const { rows } = await pool.query(
-      `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, filed_by, filing_date, doc_type, source, uploaded_by, uploaded_by_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'upload', $11, $12)
+      `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, r2_file_key, extracted_text, file_size, filed_by, filing_date, doc_type, source, uploaded_by, uploaded_by_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'upload', $12, $13)
        RETURNING id, case_id, filename, original_filename, content_type, file_size, filed_by, filing_date, summary, doc_type, source, source_email_from, uploaded_by, uploaded_by_name, created_at`,
-      [caseId, req.file.originalname, req.file.originalname, req.file.mimetype, req.file.buffer, extractedText, req.file.size, filedBy || "", filingDate || null, docType || "", req.session.userId, userName]
+      [caseId, req.file.originalname, req.file.originalname, req.file.mimetype, fileDataForDb, r2FileKey, extractedText, req.file.size, filedBy || "", filingDate || null, docType || "", req.session.userId, userName]
     );
     return res.status(201).json(toFrontend(rows[0]));
   } catch (err) {
@@ -96,11 +121,19 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
 
 router.get("/:id/download", requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT filename, content_type, file_data, case_id FROM case_filings WHERE id = $1", [req.params.id]);
+    const { rows } = await pool.query("SELECT filename, content_type, file_data, r2_file_key, case_id FROM case_filings WHERE id = $1", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     const doc = rows[0];
     if (!(await verifyCaseAccess(req, doc.case_id))) return res.status(403).json({ error: "Access denied" });
     const disposition = req.query.inline === "true" ? "inline" : "attachment";
+    if (doc.r2_file_key && isR2Configured()) {
+      try {
+        const url = await getPresignedUrl(doc.r2_file_key, 300, doc.content_type, `${disposition}; filename="${doc.filename}"`);
+        return res.redirect(url);
+      } catch (err) {
+        console.error("R2 presigned URL fallback to BYTEA:", err.message);
+      }
+    }
     res.setHeader("Content-Type", doc.content_type);
     res.setHeader("Content-Disposition", `${disposition}; filename="${doc.filename}"`);
     return res.send(doc.file_data);
@@ -317,11 +350,19 @@ router.post("/upload/complete", requireAuth, express.json(), async (req, res) =>
     try { extractedText = await extractPdfText(fullBuffer); } catch (e) { console.error("Filing chunk text extraction error:", e); }
     const { rows: userRows } = await pool.query("SELECT name FROM users WHERE id = $1", [pending.userId]);
     const uploaderName = userRows.length ? userRows[0].name : "";
+
+    let r2FileKey = null;
+    let fileDataForDb = fullBuffer;
+    if (isR2Configured()) {
+      r2FileKey = await uploadFilingToR2(pending.caseId, pending.filename, fullBuffer, "application/pdf");
+      fileDataForDb = null;
+    }
+
     const { rows } = await pool.query(
-      `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, filed_by, filing_date, doc_type, source, uploaded_by, uploaded_by_name)
-       VALUES ($1, $2, $3, 'application/pdf', $4, $5, $6, $7, $8, $9, 'upload', $10, $11)
+      `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, r2_file_key, extracted_text, file_size, filed_by, filing_date, doc_type, source, uploaded_by, uploaded_by_name)
+       VALUES ($1, $2, $3, 'application/pdf', $4, $5, $6, $7, $8, $9, $10, 'upload', $11, $12)
        RETURNING id, case_id, filename, original_filename, content_type, file_size, filed_by, filing_date, summary, doc_type, source, source_email_from, uploaded_by, uploaded_by_name, created_at`,
-      [pending.caseId, pending.filename, pending.filename, fullBuffer, extractedText, fullBuffer.length, pending.filedBy, pending.filingDate, pending.docType, pending.userId, uploaderName]
+      [pending.caseId, pending.filename, pending.filename, fileDataForDb, r2FileKey, extractedText, fullBuffer.length, pending.filedBy, pending.filingDate, pending.docType, pending.userId, uploaderName]
     );
     res.json(toFrontend(rows[0]));
   } catch (err) {

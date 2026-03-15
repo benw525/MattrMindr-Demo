@@ -1,8 +1,10 @@
 const express = require("express");
 const multer = require("multer");
 const { simpleParser } = require("mailparser");
+const { randomUUID } = require("crypto");
 const pool = require("../db");
 const { extractText } = require("../utils/extract-text");
+const { isR2Configured, uploadToR2 } = require("../r2");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, fieldSize: 50 * 1024 * 1024 } });
@@ -151,11 +153,19 @@ router.post("/", upload.any(), async (req, res) => {
             console.error("Filings PDF text extraction error:", pErr.message);
           }
 
+          let r2FilingKey = null;
+          let filingDataForDb = fileBuffer;
+          if (isR2Configured()) {
+            r2FilingKey = `filings/${caseId}/${randomUUID()}/${pdfAtt.filename}`;
+            await uploadToR2(r2FilingKey, fileBuffer, "application/pdf");
+            filingDataForDb = null;
+          }
+
           const { rows: filingRows } = await pool.query(
-            `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, source, source_email_from)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', $8)
+            `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, r2_file_key, extracted_text, file_size, source, source_email_from)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'email', $9)
              RETURNING id`,
-            [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, pdfAtt.size, fromEmail]
+            [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", filingDataForDb, r2FilingKey, extractedText, pdfAtt.size, fromEmail]
           );
 
           if (filingRows.length > 0 && extractedText) {
@@ -275,11 +285,18 @@ router.post("/", upload.any(), async (req, res) => {
         console.log(`PDF triage: "${pdfAtt.filename}" → ${isFiling ? `FILING (${matchedMarker} detected)` : "DOCUMENT (no filing marker)"}`);
 
         if (isFiling) {
+          let r2Key2 = null;
+          let fileData2 = fileBuffer;
+          if (isR2Configured()) {
+            r2Key2 = `filings/${caseId}/${randomUUID()}/${pdfAtt.filename}`;
+            await uploadToR2(r2Key2, fileBuffer, "application/pdf");
+            fileData2 = null;
+          }
           const { rows: filingRows } = await pool.query(
-            `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, extracted_text, file_size, source, source_email_from)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', $8)
+            `INSERT INTO case_filings (case_id, filename, original_filename, content_type, file_data, r2_file_key, extracted_text, file_size, source, source_email_from)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'email', $9)
              RETURNING id`,
-            [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, pdfAtt.size, fromEmail]
+            [caseId, pdfAtt.filename, pdfAtt.filename, "application/pdf", fileData2, r2Key2, extractedText, pdfAtt.size, fromEmail]
           );
 
           if (filingRows.length > 0 && extractedText) {
@@ -346,11 +363,18 @@ router.post("/", upload.any(), async (req, res) => {
           }
           console.log(`PDF filing created from email: ${pdfAtt.filename} for case ${caseId}`);
         } else {
+          let r2DocKey = null;
+          let docFileData = fileBuffer;
+          if (isR2Configured()) {
+            r2DocKey = `documents/${caseId}/${randomUUID()}/${pdfAtt.filename}`;
+            await uploadToR2(r2DocKey, fileBuffer, "application/pdf");
+            docFileData = null;
+          }
           const { rows: docRows } = await pool.query(
-            `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by_name, file_size)
-             VALUES ($1, $2, $3, $4, $5, 'Other', $6, $7)
+            `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by_name, file_size)
+             VALUES ($1, $2, $3, $4, $5, $6, 'Other', $7, $8)
              RETURNING id`,
-            [caseId, pdfAtt.filename, "application/pdf", fileBuffer, extractedText, `Email: ${fromEmail}`, pdfAtt.size]
+            [caseId, pdfAtt.filename, "application/pdf", docFileData, r2DocKey, extractedText, `Email: ${fromEmail}`, pdfAtt.size]
           );
 
           if (docRows.length > 0 && extractedText) {
@@ -410,10 +434,17 @@ router.post("/", upload.any(), async (req, res) => {
       for (const audioAtt of audioAttachments) {
         try {
           const fileBuffer = Buffer.from(audioAtt.data, "base64");
+          let r2VmKey = null;
+          let vmDataForDb = fileBuffer;
+          if (isR2Configured()) {
+            r2VmKey = `voicemails/${caseId}/${randomUUID()}/${audioAtt.filename}`;
+            await uploadToR2(r2VmKey, fileBuffer, audioAtt.contentType);
+            vmDataForDb = null;
+          }
           await pool.query(
-            `INSERT INTO case_voicemails (case_id, caller_name, caller_number, audio_data, audio_mime, received_at)
-             VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [caseId, fromName || "Unknown", "", fileBuffer, audioAtt.contentType]
+            `INSERT INTO case_voicemails (case_id, caller_name, caller_number, audio_data, r2_file_key, audio_mime, received_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+            [caseId, fromName || "Unknown", "", vmDataForDb, r2VmKey, audioAtt.contentType]
           );
           console.log(`Voicemail audio saved to case_voicemails: ${audioAtt.filename} for case ${caseId}`);
         } catch (audioErr) {
@@ -424,10 +455,17 @@ router.post("/", upload.any(), async (req, res) => {
       for (const audioAtt of audioAttachments) {
         try {
           const fileBuffer = Buffer.from(audioAtt.data, "base64");
+          let r2TransKey = null;
+          let transDataForDb = fileBuffer;
+          if (isR2Configured()) {
+            r2TransKey = `transcripts/${caseId}/${randomUUID()}/${audioAtt.filename}`;
+            await uploadToR2(r2TransKey, fileBuffer, audioAtt.contentType);
+            transDataForDb = null;
+          }
           const { rows: tRows } = await pool.query(
-            `INSERT INTO case_transcripts (case_id, filename, content_type, audio_data, file_size, uploaded_by_name)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [caseId, audioAtt.filename, audioAtt.contentType, fileBuffer, audioAtt.size, `Email: ${fromEmail}`]
+            `INSERT INTO case_transcripts (case_id, filename, content_type, audio_data, r2_audio_key, file_size, uploaded_by_name)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+            [caseId, audioAtt.filename, audioAtt.contentType, transDataForDb, r2TransKey, audioAtt.size, `Email: ${fromEmail}`]
           );
           if (tRows.length > 0) {
             const { processTranscription } = require("./transcripts");
@@ -458,11 +496,18 @@ router.post("/", upload.any(), async (req, res) => {
           console.error("Doc text extraction error:", eErr.message);
         }
 
+        let r2DocKey2 = null;
+        let docFileData2 = fileBuffer;
+        if (isR2Configured()) {
+          r2DocKey2 = `documents/${caseId}/${randomUUID()}/${docAtt.filename}`;
+          await uploadToR2(r2DocKey2, fileBuffer, docAtt.contentType);
+          docFileData2 = null;
+        }
         const { rows: docRows } = await pool.query(
-          `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by_name, file_size)
-           VALUES ($1, $2, $3, $4, $5, 'Other', $6, $7)
+          `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by_name, file_size)
+           VALUES ($1, $2, $3, $4, $5, $6, 'Other', $7, $8)
            RETURNING id`,
-          [caseId, docAtt.filename, docAtt.contentType, fileBuffer, extractedText, `Email: ${fromEmail}`, docAtt.size]
+          [caseId, docAtt.filename, docAtt.contentType, docFileData2, r2DocKey2, extractedText, `Email: ${fromEmail}`, docAtt.size]
         );
 
         if (docRows.length > 0 && extractedText) {

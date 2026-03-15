@@ -14,6 +14,7 @@ A case management system for personal injury law firms. Tracks PI cases, manages
 - **OCR**: Tiered Gemini OCR pipeline via `@google/generative-ai`: 1) `gemini-3.1-flash-lite-preview` sends PDF directly (fastest), 2) falls back to `gemini-2.0-flash` with image-based extraction (converts pages to JPEG, compresses oversized images with `sharp`, reduces DPI for PDFs >50MB), 3) falls back to tesseract.js; no page limit
 - **Page-tagged OCR**: `extractTextWithPages()` in `server/utils/extract-text.js` returns text with `[PAGE N]` markers. Uses `pdf-parse` pagerender first (for digital PDFs), falls back to Gemini/Tesseract with per-page tagging. Used by medical record parsing for accurate page references.
 - **OpenAI**: Centralized client in `server/utils/openai.js` (single `OPENAI_API_KEY` env var, `store: false` enforced globally to prevent training on attorney-client privileged data). No `AI_INTEGRATIONS_OPENAI_*` env vars — all routes use the shared wrapper.
+- **File Storage (R2)**: Cloudflare R2 (S3-compatible) for file storage with BYTEA fallback. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` to enable. When R2 is configured, uploads go to R2 and `file_data`/`audio_data` columns are set to NULL; downloads serve presigned URL redirects (5 min expiry). When R2 is not configured, files stored in PostgreSQL BYTEA columns. All routes handle both modes. Backfill script: `node server/scripts/migrate-bytea-to-r2.js`. Key patterns: `documents/{caseId}/{uuid}/{filename}`, `filings/...`, `voicemails/...`, `templates/{uuid}/{name}`, `medical-records/...`, `demonstratives/...`, `profile-pictures/{userId}/{uuid}`, `transcripts/{caseId}/{uuid}/{filename}`.
 - **Field Encryption**: AES-256-GCM at-rest encryption for sensitive columns (client_ssn, ms_access_token, ms_refresh_token, ms_account_email, scribe_token, voirdire_token, mfa_secret) via `server/utils/encryption.js`. Optional: set `FIELD_ENCRYPTION_KEY` (64-char hex) to enable. Without the key, fields stored as plaintext. Migration script: `node server/scripts/encrypt-existing-fields.js`
 - **Input Validation**: Zod schemas in `server/middleware/validate.js` for all high-risk routes: auth (login, MFA, forgot/reset/change-password), portal auth, external auth, case create, AI agents (liability-analysis, deadline-generator, case-strategy, draft-document, client-summary, task-suggestions, classify-filing, doc-summary, advocate), SMS send, document folders, batch delete/move. Includes type coercion for integer IDs, string length caps, enum validation, E.164 phone format, and pagination limits.
 - **Database Migrations**: `node-pg-migrate` manages schema changes via numbered migration files in `server/migrations/`. Migrations run automatically at startup via `server/utils/migrate-runner.js`. CLI: `npm run migrate:up`, `migrate:down`, `migrate:create` in server/. Migration state tracked in `pgmigrations` table.
@@ -57,12 +58,14 @@ server/
     validate.js     — Zod validation middleware and schemas
   scripts/
     encrypt-existing-fields.js — Encrypt existing plaintext sensitive fields
+    migrate-bytea-to-r2.js     — Backfill BYTEA data → R2 for all tables (batch, resumable)
   migrations/
     0001_baseline-schema.js    — All CREATE TABLE IF NOT EXISTS (baseline)
     0002_schema-columns.js     — All ALTER TABLE ADD COLUMN (schema extensions)
     0003_runtime-tables.js     — Runtime tables (permissions, custom flows, widgets, etc.)
     0004_rename-temp-password.js — temp_password → temp_password_hash rename
     0005_data-fixes.js         — Data fixes (stage rename, voicemail flag)
+    0006_r2-file-keys.js       — Add r2_file_key columns to all BYTEA tables
   routes/
     auth.js         — login, logout, me, change-password, forgot/reset-password
     case-documents.js — CRUD /api/case-documents; PUT /:docId/move for folder drag-and-drop

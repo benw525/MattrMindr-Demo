@@ -1,0 +1,19 @@
+exports.up = (pgm) => {
+  pgm.sql(`ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
+  pgm.sql(`ALTER TABLE case_filings ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
+  pgm.sql(`ALTER TABLE case_voicemails ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
+  pgm.sql(`ALTER TABLE doc_templates ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
+  pgm.sql(`ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
+  pgm.sql(`ALTER TABLE trial_timeline_events ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
+  pgm.sql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS r2_profile_picture_key TEXT`);
+};
+
+exports.down = (pgm) => {
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS r2_file_key`);
+  pgm.sql(`ALTER TABLE case_filings DROP COLUMN IF EXISTS r2_file_key`);
+  pgm.sql(`ALTER TABLE case_voicemails DROP COLUMN IF EXISTS r2_file_key`);
+  pgm.sql(`ALTER TABLE doc_templates DROP COLUMN IF EXISTS r2_file_key`);
+  pgm.sql(`ALTER TABLE medical_records DROP COLUMN IF EXISTS r2_file_key`);
+  pgm.sql(`ALTER TABLE trial_timeline_events DROP COLUMN IF EXISTS r2_file_key`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS r2_profile_picture_key`);
+};

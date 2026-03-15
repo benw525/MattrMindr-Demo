@@ -1,9 +1,11 @@
 const express = require("express");
 const pool = require("../db");
 const multer = require("multer");
+const { randomUUID } = require("crypto");
 const { requireAuth } = require("../middleware/auth");
 const { extractText, extractTextWithPages } = require("../utils/extract-text");
 const openai = require("../utils/openai");
+const { isR2Configured, uploadToR2, downloadFromR2, getPresignedUrl } = require("../r2");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -295,13 +297,16 @@ router.post("/:caseId/records/:treatmentId/from-document", requireAuth, async (r
     if (!treatmentRows.length) return res.status(404).json({ error: "Treatment not found for this case" });
 
     const { rows: docRows } = await pool.query(
-      "SELECT file_data, content_type, filename, extracted_text FROM case_documents WHERE id = $1 AND case_id = $2 AND deleted_at IS NULL",
+      "SELECT file_data, r2_file_key, content_type, filename, extracted_text FROM case_documents WHERE id = $1 AND case_id = $2 AND deleted_at IS NULL",
       [documentId, caseId]
     );
     if (!docRows.length) return res.status(404).json({ error: "Document not found" });
 
     const doc = docRows[0];
-    const buffer = doc.file_data;
+    let buffer = doc.file_data;
+    if (!buffer && doc.r2_file_key && isR2Configured()) {
+      try { buffer = await downloadFromR2(doc.r2_file_key); } catch (e) { console.error("R2 download error:", e.message); }
+    }
     const filename = doc.filename;
     const mimeType = doc.content_type;
 
@@ -390,6 +395,12 @@ router.post("/:caseId/records/:treatmentId/commit", requireAuth, upload.single("
 
     const buffer = req.file ? req.file.buffer : null;
 
+    let r2FileKey = null;
+    if (buffer && isR2Configured()) {
+      r2FileKey = `medical-records/${caseId}/${randomUUID()}/${filename}`;
+      await uploadToR2(r2FileKey, buffer, mimeType);
+    }
+
     const inserted = [];
     for (const visit of entries) {
       const dateVal = visit.date_of_service && /^\d{4}-\d{2}-\d{2}$/.test(visit.date_of_service) ? visit.date_of_service : null;
@@ -414,10 +425,17 @@ router.post("/:caseId/records/:treatmentId/commit", requireAuth, upload.single("
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`;
         params.push(documentId);
       } else if (buffer) {
-        sql = `INSERT INTO medical_records
-          (treatment_id, case_id, provider_name, date_of_service, body_part, description, source_pages, summary, file_data, file_size, filename, mime_type, uploaded_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`;
-        params.splice(8, 0, buffer);
+        if (r2FileKey) {
+          sql = `INSERT INTO medical_records
+            (treatment_id, case_id, provider_name, date_of_service, body_part, description, source_pages, summary, r2_file_key, file_size, filename, mime_type, uploaded_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`;
+          params.splice(8, 0, r2FileKey);
+        } else {
+          sql = `INSERT INTO medical_records
+            (treatment_id, case_id, provider_name, date_of_service, body_part, description, source_pages, summary, file_data, file_size, filename, mime_type, uploaded_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`;
+          params.splice(8, 0, buffer);
+        }
       } else {
         sql = `INSERT INTO medical_records
           (treatment_id, case_id, provider_name, date_of_service, body_part, description, source_pages, summary, file_size, filename, mime_type, uploaded_by)

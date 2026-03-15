@@ -2,7 +2,9 @@ const express = require("express");
 const pool = require("../db");
 const multer = require("multer");
 const mammoth = require("mammoth");
+const { randomUUID } = require("crypto");
 const { requireAuth } = require("../middleware/auth");
+const { isR2Configured, uploadToR2, downloadFromR2, getPresignedUrl } = require("../r2");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 const router = express.Router();
@@ -213,11 +215,20 @@ router.post("/demonstratives/upload", requireAuth, upload.single("file"), async 
     const caseRow = await verifyCaseAccess(sess.rows[0].case_id, req);
     if (!caseRow) return res.status(403).json({ error: "Access denied" });
     const file = req.file;
+
+    let r2FileKey = null;
+    let fileDataForDb = file ? file.buffer : null;
+    if (file && isR2Configured()) {
+      r2FileKey = `demonstratives/${sess.rows[0].case_id}/${randomUUID()}/${file.originalname}`;
+      await uploadToR2(r2FileKey, file.buffer, file.mimetype);
+      fileDataForDb = null;
+    }
+
     const { rows } = await pool.query(
-      `INSERT INTO trial_timeline_events (trial_session_id, title, description, association, file_data, file_name, file_type, file_size)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, trial_session_id, title, description, association, file_name, file_type, file_size, event_date, sort_order, created_at`,
+      `INSERT INTO trial_timeline_events (trial_session_id, title, description, association, file_data, r2_file_key, file_name, file_type, file_size)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, trial_session_id, title, description, association, file_name, file_type, file_size, event_date, sort_order, created_at`,
       [sessionId, title || "", description || "", association || "general",
-       file ? file.buffer : null, file ? file.originalname : "", file ? file.mimetype : "", file ? file.size : 0]
+       fileDataForDb, r2FileKey, file ? file.originalname : "", file ? file.mimetype : "", file ? file.size : 0]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -229,11 +240,20 @@ router.post("/demonstratives/upload", requireAuth, upload.single("file"), async 
 router.get("/demonstratives/:id/download", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT * FROM trial_timeline_events WHERE id = $1", [req.params.id]);
-    if (!rows.length || !rows[0].file_data) return res.status(404).json({ error: "File not found" });
+    if (!rows.length) return res.status(404).json({ error: "File not found" });
     const sess = await pool.query("SELECT case_id FROM trial_sessions WHERE id = $1", [rows[0].trial_session_id]);
     if (!sess.rows.length) return res.status(404).json({ error: "Session not found" });
     const caseRow = await verifyCaseAccess(sess.rows[0].case_id, req);
     if (!caseRow) return res.status(403).json({ error: "Access denied" });
+    if (rows[0].r2_file_key && isR2Configured()) {
+      try {
+        const url = await getPresignedUrl(rows[0].r2_file_key, 300, rows[0].file_type, `attachment; filename="${encodeURIComponent(rows[0].file_name)}"`);
+        return res.redirect(url);
+      } catch (err) {
+        console.error("R2 presigned URL fallback to BYTEA:", err.message);
+      }
+    }
+    if (!rows[0].file_data) return res.status(404).json({ error: "File not found" });
     res.setHeader("Content-Type", rows[0].file_type || "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(rows[0].file_name)}"`);
     res.send(rows[0].file_data);
@@ -254,10 +274,17 @@ router.post("/exhibits/upload", requireAuth, upload.single("file"), async (req, 
     let linkedDocId = null;
     let docName = "";
     if (req.file) {
+      let r2DocKey = null;
+      let fileDataForDb = req.file.buffer;
+      if (isR2Configured()) {
+        r2DocKey = `documents/${sess.rows[0].case_id}/${randomUUID()}/${req.file.originalname}`;
+        await uploadToR2(r2DocKey, req.file.buffer, req.file.mimetype);
+        fileDataForDb = null;
+      }
       const docResult = await pool.query(
-        `INSERT INTO case_documents (case_id, filename, content_type, file_size, file_data, uploaded_by, uploaded_by_name)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, filename`,
-        [sess.rows[0].case_id, req.file.originalname, req.file.mimetype, req.file.size, req.file.buffer, req.session.userId, req.session.userName || ""]
+        `INSERT INTO case_documents (case_id, filename, content_type, file_size, file_data, r2_file_key, uploaded_by, uploaded_by_name)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, filename`,
+        [sess.rows[0].case_id, req.file.originalname, req.file.mimetype, req.file.size, fileDataForDb, r2DocKey, req.session.userId, req.session.userName || ""]
       );
       linkedDocId = docResult.rows[0].id;
       docName = docResult.rows[0].filename;
