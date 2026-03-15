@@ -186,49 +186,55 @@ async function migrateCorrespondenceAttachments() {
   let totalErrors = 0;
 
   for (const table of tables) {
-    const { rows: candidates } = await pool.query(
-      `SELECT id, attachments, ${table === "case_correspondence" ? "case_id" : "NULL AS case_id"} FROM ${table}
-       WHERE attachments IS NOT NULL AND attachments::text LIKE '%"data"%' AND attachments::text NOT LIKE '%"r2Key"%'
-       ORDER BY id LIMIT ${BATCH_SIZE}`
-    );
+    const caseIdExpr = table === "case_correspondence" ? "case_id" : "NULL AS case_id";
+    let tableMigrated = 0;
 
-    if (candidates.length === 0) {
-      console.log(`  ${table} attachments: 0 rows to migrate — skipping`);
-      continue;
-    }
-    console.log(`  ${table} attachments: ${candidates.length} rows to process`);
+    while (true) {
+      const { rows: candidates } = await pool.query(
+        `SELECT id, attachments, ${caseIdExpr} FROM ${table}
+         WHERE attachments IS NOT NULL AND attachments::text LIKE '%"data"%'
+         ORDER BY id LIMIT ${BATCH_SIZE}`
+      );
 
-    for (const row of candidates) {
-      try {
-        let atts = row.attachments;
-        if (typeof atts === "string") atts = JSON.parse(atts);
-        if (!Array.isArray(atts) || atts.length === 0) continue;
+      if (candidates.length === 0) break;
 
-        let changed = false;
-        for (const att of atts) {
-          if (att.r2Key || !att.data) continue;
-          const buffer = Buffer.from(att.data, "base64");
-          const r2Key = `correspondence/${row.case_id || "unmatched"}/${randomUUID()}/${att.filename || "attachment"}`;
-          await uploadToR2(r2Key, buffer, att.contentType || "application/octet-stream");
-          const head = await headObject(r2Key);
-          if (!head || head.contentLength !== buffer.length) {
-            throw new Error(`HEAD verification failed for ${r2Key}`);
+      for (const row of candidates) {
+        try {
+          let atts = row.attachments;
+          if (typeof atts === "string") atts = JSON.parse(atts);
+          if (!Array.isArray(atts) || atts.length === 0) continue;
+
+          let changed = false;
+          for (const att of atts) {
+            if (att.r2Key || !att.data) continue;
+            const buffer = Buffer.from(att.data, "base64");
+            const r2Key = `correspondence/${row.case_id || "unmatched"}/${randomUUID()}/${att.filename || "attachment"}`;
+            await uploadToR2(r2Key, buffer, att.contentType || "application/octet-stream");
+            const head = await headObject(r2Key);
+            if (!head || head.contentLength !== buffer.length) {
+              throw new Error(`HEAD verification failed for ${r2Key}`);
+            }
+            att.r2Key = r2Key;
+            delete att.data;
+            changed = true;
           }
-          att.r2Key = r2Key;
-          delete att.data;
-          changed = true;
-        }
 
-        if (changed) {
-          await pool.query(`UPDATE ${table} SET attachments = $1 WHERE id = $2`, [JSON.stringify(atts), row.id]);
-          totalMigrated++;
+          if (changed) {
+            await pool.query(`UPDATE ${table} SET attachments = $1 WHERE id = $2`, [JSON.stringify(atts), row.id]);
+            tableMigrated++;
+            totalMigrated++;
+            if (tableMigrated % 100 === 0) {
+              console.log(`    ${table} attachments: ${tableMigrated} migrated...`);
+            }
+          }
+        } catch (err) {
+          totalErrors++;
+          console.error(`    ${table} id=${row.id}: correspondence attachment migration failed — ${err.message}`);
         }
-      } catch (err) {
-        totalErrors++;
-        console.error(`    ${table} id=${row.id}: correspondence attachment migration failed — ${err.message}`);
       }
     }
-    console.log(`  ${table} attachments: done`);
+
+    console.log(`  ${table} attachments: done — ${tableMigrated} migrated`);
   }
 
   return { table: "correspondence_attachments", migrated: totalMigrated, errors: totalErrors };
