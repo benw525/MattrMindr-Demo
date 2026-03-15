@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "rea
 import { createPortal } from "react-dom";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { USERS } from "./firmData.js";
+import { VIEWS } from "./navigation.js";
 import PortalApp from "./portal/PortalApp.js";
 import DocViewerWindow from "./DocViewerWindow.js";
 import TranscriptViewerWindow from "./TranscriptViewerWindow.js";
@@ -802,7 +803,7 @@ export default function App() {
 function FirmApp() {
   const navigate = useNavigate();
   const location = useLocation();
-  const view = location.pathname.split("/")[1] || "dashboard";
+  const view = location.pathname.split("/")[1] || VIEWS.DASHBOARD;
   const setView = useCallback((v) => { localStorage.setItem("lextrack-last-view", v); navigate("/" + v); }, [navigate]);
   const [currentUser, setCurrentUser] = useState(null);
   const [userPerms, setUserPerms] = useState({});
@@ -1150,13 +1151,13 @@ function FirmApp() {
     }
   }, [darkMode]);
   useEffect(() => {
-    if (view === "contacts" && !contextContactsCache) {
+    if (view === VIEWS.CONTACTS && !contextContactsCache) {
       apiGetContacts().then(setContextContactsCache).catch(() => {});
     }
-    if (view === "documents" && !contextTemplatesCache) {
+    if (view === VIEWS.DOCUMENTS && !contextTemplatesCache) {
       apiGetTemplates().then(setContextTemplatesCache).catch(() => {});
     }
-    if (view === "timelog" && currentUser) {
+    if (view === VIEWS.TIMELOG && currentUser) {
       const now = new Date();
       const day = now.getDay();
       const mon = new Date(now); mon.setDate(now.getDate() - ((day + 6) % 7));
@@ -1429,7 +1430,7 @@ function FirmApp() {
     apiSavePreferences({ trialCenterCaseId: caseId }).catch(() => {});
     setCurrentUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), trialCenterCaseId: caseId } } : prev);
     setSelectedCase(null);
-    setView("trialcenter");
+    setView(VIEWS.TRIAL_CENTER);
   }, []);
 
   const advocateSend = useCallback((text) => {
@@ -1498,19 +1499,19 @@ function FirmApp() {
   };
 
   const SCREEN_LABELS = {
-    dashboard: { icon: "⬛", label: "Dashboard" },
-    cases: { icon: "⚖️", label: "Cases" },
-    deadlines: { icon: "📅", label: "Calendar" },
-    tasks: { icon: "✅", label: "Tasks" },
-    documents: { icon: "📄", label: "Templates" },
-    timelog: { icon: "🕐", label: "Time Log" },
-    reports: { icon: "📊", label: "Reports" },
-    aicenter: { icon: "✦", label: "AI Center" },
-    collaborate: { icon: "💬", label: "Collaborate" },
-    contacts: { icon: "📇", label: "Contacts" },
-    staff: { icon: "👥", label: "Staff" },
-    trialcenter: { icon: "⚖️", label: "Trial Center" },
-    customization: { icon: "⚙️", label: "Customization" },
+    [VIEWS.DASHBOARD]: { icon: "⬛", label: "Dashboard" },
+    [VIEWS.CASES]: { icon: "⚖️", label: "Cases" },
+    [VIEWS.DEADLINES]: { icon: "📅", label: "Calendar" },
+    [VIEWS.TASKS]: { icon: "✅", label: "Tasks" },
+    [VIEWS.DOCUMENTS]: { icon: "📄", label: "Templates" },
+    [VIEWS.TIMELOG]: { icon: "🕐", label: "Time Log" },
+    [VIEWS.REPORTS]: { icon: "📊", label: "Reports" },
+    [VIEWS.AI_CENTER]: { icon: "✦", label: "AI Center" },
+    [VIEWS.COLLABORATE]: { icon: "💬", label: "Collaborate" },
+    [VIEWS.CONTACTS]: { icon: "📇", label: "Contacts" },
+    [VIEWS.STAFF]: { icon: "👥", label: "Staff" },
+    [VIEWS.TRIAL_CENTER]: { icon: "⚖️", label: "Trial Center" },
+    [VIEWS.CUSTOMIZATION]: { icon: "⚙️", label: "Customization" },
     helpcenter: { icon: "❓", label: "Help Center" },
   };
 
@@ -1596,11 +1597,11 @@ function FirmApp() {
 
         const lastCaseId = localStorage.getItem("lextrack-last-case-id");
         const lastView = localStorage.getItem("lextrack-last-view");
-        if (lastCaseId && lastView === "cases") {
+        if (lastCaseId && lastView === VIEWS.CASES) {
           const found = cases.find(c => c.id === Number(lastCaseId));
           if (found) {
             setSelectedCase(found);
-            navigate("/cases");
+            navigate("/" + VIEWS.CASES);
             apiGetCaseTasks(found.id).then(caseTasks => {
               setTasks(prev => {
                 const ids = new Set(prev.map(t => t.id));
@@ -1724,7 +1725,7 @@ function FirmApp() {
       }));
 
       setSelectedCase(created);
-      setView("cases");
+      setView(VIEWS.CASES);
     } catch (err) {
       alert("Failed to create case: " + err.message);
     }
@@ -2109,21 +2110,21 @@ function FirmApp() {
         </div>
         <nav className="sidebar-nav !scrollbar-thin !scrollbar-thumb-slate-700">
           {[
-            { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
-            { id: "cases", icon: Briefcase, label: "Cases" },
-            { id: "deadlines", icon: Calendar, label: "Calendar" },
-            { id: "tasks", icon: CheckSquare, label: "Tasks", badge: overdueBadge || null },
-            { id: "documents", icon: FileText, label: "Templates" },
-            { id: "timelog", icon: Clock, label: "Time Log" },
-            { id: "reports", icon: BarChart3, label: "Reports" },
-            { id: "aicenter", icon: Brain, label: "AI Center" },
-            { id: "trialcenter", icon: Scale, label: "Trial Center" },
-            { id: "collaborate", icon: MessageSquare, label: "Collaborate", badge: collabUnread > 0 ? collabUnread : null },
-            { id: "contacts", icon: Users, label: "Contacts" },
-            { id: "unmatched", icon: Inbox, label: "Unmatched" },
-            { id: "staff", icon: UserCog, label: "Staff" },
-            ...((isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.access_customization) ? [{ id: "customization", icon: SlidersHorizontal, label: "Customization" }] : []),
-            ...((isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.view_deleted_data) ? [{ id: "deleted", icon: Trash2, label: "Deleted Data" }] : []),
+            { id: VIEWS.DASHBOARD, icon: LayoutDashboard, label: "Dashboard" },
+            { id: VIEWS.CASES, icon: Briefcase, label: "Cases" },
+            { id: VIEWS.DEADLINES, icon: Calendar, label: "Calendar" },
+            { id: VIEWS.TASKS, icon: CheckSquare, label: "Tasks", badge: overdueBadge || null },
+            { id: VIEWS.DOCUMENTS, icon: FileText, label: "Templates" },
+            { id: VIEWS.TIMELOG, icon: Clock, label: "Time Log" },
+            { id: VIEWS.REPORTS, icon: BarChart3, label: "Reports" },
+            { id: VIEWS.AI_CENTER, icon: Brain, label: "AI Center" },
+            { id: VIEWS.TRIAL_CENTER, icon: Scale, label: "Trial Center" },
+            { id: VIEWS.COLLABORATE, icon: MessageSquare, label: "Collaborate", badge: collabUnread > 0 ? collabUnread : null },
+            { id: VIEWS.CONTACTS, icon: Users, label: "Contacts" },
+            { id: VIEWS.UNMATCHED, icon: Inbox, label: "Unmatched" },
+            { id: VIEWS.STAFF, icon: UserCog, label: "Staff" },
+            ...((isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.access_customization) ? [{ id: VIEWS.CUSTOMIZATION, icon: SlidersHorizontal, label: "Customization" }] : []),
+            ...((isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.view_deleted_data) ? [{ id: VIEWS.DELETED, icon: Trash2, label: "Deleted Data" }] : []),
           ].map(item => {
             const Icon = item.icon;
             const isActive = view === item.id;
@@ -2156,23 +2157,23 @@ function FirmApp() {
       )}
       <div className="main">
         <Routes>
-          <Route path="/dashboard" element={<Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={(c, tab) => { setPendingTab(tab || null); handleSelectCase(c); setView("cases"); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onNavigate={(viewId) => setView(viewId)} pinnedContacts={pinnedContactsList} onSelectContact={() => setView("contacts")} confirmDelete={confirmDelete} />} />
-          <Route path="/cases" element={<CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} pendingTab={pendingTab} clearPendingTab={() => setPendingTab(null)} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onAddTask={(saved) => { setTasks(p => [...p, saved]); refreshCaseData(); }} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); refreshCaseData(); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); refreshCaseData(); } catch (err) { console.error("Failed to update deadline:", err); } }} onDeleteDeadline={async (id) => { try { await apiDeleteDeadline(id); setAllDeadlines(p => p.filter(d => d.id !== id)); refreshCaseData(); } catch (err) { console.error("Failed to delete deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onTogglePinnedCase={handleTogglePinnedCase} onOpenAdvocate={openAdvocateFromCase} onOpenTrialCenter={openTrialCenterFromCase} confirmDelete={confirmDelete} openAppDocViewer={openAppDocViewer} openAppFilingViewer={openAppFilingViewer} openBlobInViewer={openBlobInViewer} openTranscriptViewer={openTranscriptViewer} />} />
-          <Route path="/deadlines" element={<DeadlinesView deadlines={allDeadlines} tasks={tasks} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); refreshCaseData(); } catch (err) { alert("Failed to add deadline: " + err.message); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); refreshCaseData(); } catch (err) { console.error("Failed to update deadline:", err); } }} onDeleteDeadline={async (id) => { try { await apiDeleteDeadline(id); setAllDeadlines(p => p.filter(d => d.id !== id)); refreshCaseData(); } catch (err) { alert("Failed to remove deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onSelectCase={(c) => { handleSelectCase(c); setView("cases"); }} confirmDelete={confirmDelete} msStatus={appMsStatus} />} />
-          <Route path="/documents" element={<DocumentsView currentUser={currentUser} allCases={allCases} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} />} />
-          <Route path="/tasks" element={<TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); refreshCaseData(); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />} />
-          <Route path="/reports" element={<ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onAddTask={(saved) => { setTasks(p => [...p, saved]); refreshCaseData(); }} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); refreshCaseData(); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); refreshCaseData(); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} onOpenAdvocate={openAdvocateFromCase} onOpenTrialCenter={openTrialCenterFromCase} confirmDelete={confirmDelete} openAppDocViewer={openAppDocViewer} openAppFilingViewer={openAppFilingViewer} openBlobInViewer={openBlobInViewer} openTranscriptViewer={openTranscriptViewer} />} />
-          <Route path="/aicenter" element={<AiCenterView allCases={allCases} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} confirmDelete={confirmDelete} />} />
-          <Route path="/trialcenter" element={<TrialCenterView currentUser={currentUser} users={allUsers} cases={allCases} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onTrialCenterCaseChange={(caseId) => setCurrentUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), trialCenterCaseId: caseId } } : prev)} />} />
-          <Route path="/collaborate" element={<CollaborateView currentUser={currentUser} allUsers={allUsers} allCases={allCases} pinnedCaseIds={pinnedCaseIds} onMenuToggle={() => setSidebarOpen(true)} />} />
-          <Route path="/timelog" element={<TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />} />
-          <Route path="/contacts" element={<ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView("cases"); }} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} msStatus={appMsStatus} />} />
-          <Route path="/unmatched" element={<UnmatchedView allCases={allCases} onMenuToggle={() => setSidebarOpen(true)} />} />
-          <Route path="/staff" element={<StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} allUsers={allUsers} setAllUsers={setAllUsers} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} />} />
-          <Route path="/customization" element={(isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.access_customization) ? <CustomizationView currentUser={currentUser} allCases={allCases} allUsers={allUsers} pinnedCaseIds={pinnedCaseIds} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} /> : <Navigate to="/dashboard" replace />} />
-          <Route path="/deleted" element={(isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.view_deleted_data) ? <DeletedDataView onMenuToggle={() => setSidebarOpen(true)} /> : <Navigate to="/dashboard" replace />} />
-          <Route path="/" element={<Navigate to={localStorage.getItem("lextrack-last-view") ? "/" + localStorage.getItem("lextrack-last-view") : "/dashboard"} replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path={"/" + VIEWS.DASHBOARD} element={<Dashboard currentUser={currentUser} allCases={allCases} deadlines={allDeadlines} tasks={tasks} onSelectCase={(c, tab) => { setPendingTab(tab || null); handleSelectCase(c); setView(VIEWS.CASES); }} onAddRecord={handleAddRecord} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onNavigate={(viewId) => setView(viewId)} pinnedContacts={pinnedContactsList} onSelectContact={() => setView(VIEWS.CONTACTS)} confirmDelete={confirmDelete} />} />
+          <Route path={"/" + VIEWS.CASES} element={<CasesView currentUser={currentUser} allCases={allCases} tasks={tasks} selectedCase={selectedCase} setSelectedCase={handleSelectCase} pendingTab={pendingTab} clearPendingTab={() => setPendingTab(null)} onAddRecord={handleAddRecord} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onAddTask={(saved) => { setTasks(p => [...p, saved]); refreshCaseData(); }} deadlines={allDeadlines} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} deletedCases={deletedCases} setDeletedCases={setDeletedCases} onDeleteCase={handleDeleteCase} onRestoreCase={handleRestoreCase} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); refreshCaseData(); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); refreshCaseData(); } catch (err) { console.error("Failed to update deadline:", err); } }} onDeleteDeadline={async (id) => { try { await apiDeleteDeadline(id); setAllDeadlines(p => p.filter(d => d.id !== id)); refreshCaseData(); } catch (err) { console.error("Failed to delete deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onTogglePinnedCase={handleTogglePinnedCase} onOpenAdvocate={openAdvocateFromCase} onOpenTrialCenter={openTrialCenterFromCase} confirmDelete={confirmDelete} openAppDocViewer={openAppDocViewer} openAppFilingViewer={openAppFilingViewer} openBlobInViewer={openBlobInViewer} openTranscriptViewer={openTranscriptViewer} />} />
+          <Route path={"/" + VIEWS.DEADLINES} element={<DeadlinesView deadlines={allDeadlines} tasks={tasks} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); refreshCaseData(); } catch (err) { alert("Failed to add deadline: " + err.message); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); refreshCaseData(); } catch (err) { console.error("Failed to update deadline:", err); } }} onDeleteDeadline={async (id) => { try { await apiDeleteDeadline(id); setAllDeadlines(p => p.filter(d => d.id !== id)); refreshCaseData(); } catch (err) { alert("Failed to remove deadline: " + err.message); } }} allCases={allCases} calcInputs={calcInputs} setCalcInputs={setCalcInputs} calcResult={calcResult} runCalc={() => { const rule = COURT_RULES.find(r => r.id === Number(calcInputs.ruleId)); if (rule && calcInputs.fromDate) setCalcResult({ rule, from: calcInputs.fromDate, result: addDays(calcInputs.fromDate, rule.days) }); }} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onSelectCase={(c) => { handleSelectCase(c); setView(VIEWS.CASES); }} confirmDelete={confirmDelete} msStatus={appMsStatus} />} />
+          <Route path={"/" + VIEWS.DOCUMENTS} element={<DocumentsView currentUser={currentUser} allCases={allCases} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} />} />
+          <Route path={"/" + VIEWS.TASKS} element={<TasksView tasks={tasks} onAddTask={async (task) => { try { const saved = await apiCreateTask(task); setTasks(p => [...p, saved]); refreshCaseData(); } catch (err) { alert("Failed to add task: " + err.message); } }} allCases={allCases} currentUser={currentUser} onCompleteTask={handleCompleteTask} onUpdateTask={handleUpdateTask} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />} />
+          <Route path={"/" + VIEWS.REPORTS} element={<ReportsView allCases={allCases} tasks={tasks} deadlines={allDeadlines} currentUser={currentUser} onUpdateCase={handleUpdateCase} onCompleteTask={handleCompleteTask} onAddTask={(saved) => { setTasks(p => [...p, saved]); refreshCaseData(); }} onDeleteCase={handleDeleteCase} caseNotes={caseNotes} setCaseNotes={setCaseNotes} caseLinks={caseLinks} setCaseLinks={setCaseLinks} caseActivity={caseActivity} setCaseActivity={setCaseActivity} onAddDeadline={async (dl) => { try { const saved = await apiCreateDeadline(dl); setAllDeadlines(p => [...p, saved]); refreshCaseData(); } catch (err) { console.error("Failed to add deadline:", err); } }} onUpdateDeadline={async (id, data) => { try { const updated = await apiUpdateDeadline(id, data); setAllDeadlines(p => p.map(d => d.id === id ? updated : d)); refreshCaseData(); } catch (err) { console.error("Failed to update deadline:", err); } }} onMenuToggle={() => setSidebarOpen(true)} onOpenAdvocate={openAdvocateFromCase} onOpenTrialCenter={openTrialCenterFromCase} confirmDelete={confirmDelete} openAppDocViewer={openAppDocViewer} openAppFilingViewer={openAppFilingViewer} openBlobInViewer={openBlobInViewer} openTranscriptViewer={openTranscriptViewer} />} />
+          <Route path={"/" + VIEWS.AI_CENTER} element={<AiCenterView allCases={allCases} currentUser={currentUser} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} confirmDelete={confirmDelete} />} />
+          <Route path={"/" + VIEWS.TRIAL_CENTER} element={<TrialCenterView currentUser={currentUser} users={allUsers} cases={allCases} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} onTrialCenterCaseChange={(caseId) => setCurrentUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), trialCenterCaseId: caseId } } : prev)} />} />
+          <Route path={"/" + VIEWS.COLLABORATE} element={<CollaborateView currentUser={currentUser} allUsers={allUsers} allCases={allCases} pinnedCaseIds={pinnedCaseIds} onMenuToggle={() => setSidebarOpen(true)} />} />
+          <Route path={"/" + VIEWS.TIMELOG} element={<TimeLogView currentUser={currentUser} allCases={allCases} tasks={tasks} caseNotes={caseNotes} correspondence={allCorrespondence} allUsers={allUsers} onMenuToggle={() => setSidebarOpen(true)} pinnedCaseIds={pinnedCaseIds} />} />
+          <Route path={"/" + VIEWS.CONTACTS} element={<ContactsView currentUser={currentUser} allCases={allCases} onOpenCase={c => { handleSelectCase(c); setView(VIEWS.CASES); }} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} msStatus={appMsStatus} />} />
+          <Route path={"/" + VIEWS.UNMATCHED} element={<UnmatchedView allCases={allCases} onMenuToggle={() => setSidebarOpen(true)} />} />
+          <Route path={"/" + VIEWS.STAFF} element={<StaffView allCases={allCases} currentUser={currentUser} setCurrentUser={setCurrentUser} allUsers={allUsers} setAllUsers={setAllUsers} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} />} />
+          <Route path={"/" + VIEWS.CUSTOMIZATION} element={(isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.access_customization) ? <CustomizationView currentUser={currentUser} allCases={allCases} allUsers={allUsers} pinnedCaseIds={pinnedCaseIds} onMenuToggle={() => setSidebarOpen(true)} confirmDelete={confirmDelete} /> : <Navigate to={"/" + VIEWS.DASHBOARD} replace />} />
+          <Route path={"/" + VIEWS.DELETED} element={(isAppAdmin(currentUser) || userPerms._isAdmin || userPerms.view_deleted_data) ? <DeletedDataView onMenuToggle={() => setSidebarOpen(true)} /> : <Navigate to={"/" + VIEWS.DASHBOARD} replace />} />
+          <Route path="/" element={<Navigate to={"/" + (localStorage.getItem("lextrack-last-view") || VIEWS.DASHBOARD)} replace />} />
+          <Route path="*" element={<Navigate to={"/" + VIEWS.DASHBOARD} replace />} />
         </Routes>
       </div>
       <FollowUpPromptModal
@@ -2208,7 +2209,7 @@ function FirmApp() {
           className="advocate-fab"
           onClick={() => { if (!fabDragState.current.moved && !fabMoveMode) setShowAdvocateGlobal(true); }}
           title={fabMoveMode ? "Click and drag to move" : "Advocate AI"}
-          style={fabPosition ? { left: fabPosition.x, top: fabPosition.y, right: "auto", bottom: "auto", ...(fabDragging || fabMoveMode ? { animation: "none", cursor: fabDragging ? "grabbing" : "grab", transition: "none" } : {}) } : (view === "collaborate" ? { bottom: "auto", top: 62 } : (fabMoveMode ? { animation: "none", cursor: "grab" } : undefined))}
+          style={fabPosition ? { left: fabPosition.x, top: fabPosition.y, right: "auto", bottom: "auto", ...(fabDragging || fabMoveMode ? { animation: "none", cursor: fabDragging ? "grabbing" : "grab", transition: "none" } : {}) } : (view === VIEWS.COLLABORATE ? { bottom: "auto", top: 62 } : (fabMoveMode ? { animation: "none", cursor: "grab" } : undefined))}
           onMouseDown={(e) => {
             if (fabMoveMode && e.button === 0) {
               e.preventDefault();
@@ -2274,7 +2275,7 @@ function FirmApp() {
         </div>
       )}
       {showAdvocateGlobal && (
-        <div className="advocate-panel" style={view === "collaborate" ? { bottom: "auto", top: 62 } : undefined}>
+        <div className="advocate-panel" style={view === VIEWS.COLLABORATE ? { bottom: "auto", top: 62 } : undefined}>
           <div className="advocate-panel-header">
             <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
               <Bot size={18} className="text-indigo-500" />

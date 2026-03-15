@@ -113,7 +113,8 @@ lextrack/
       portalApi.js  — Portal API fetch wrapper
     views/
       DashboardView.js     — Dashboard with customizable widgets
-      CasesView.js         — Case list, detail overlay, case file management
+      CasesView.js         — Case list and orchestration (~589 lines)
+      CaseDetailView.js    — Case detail overlay, notes, links, print view (~6,938 lines)
       DeadlinesView.js     — Calendar, deadline list, court rule calculator
       TasksView.js         — Task list and management
       DocumentsView.js     — Document templates, generation, management

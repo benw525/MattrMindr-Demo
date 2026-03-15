@@ -14,7 +14,7 @@ import {
   PRIORITY_RANK, RANK_PRIORITY, getEffectivePriority,
   SortTh, CaseSearchField, StaffSearchField, USERS, US_STATES,
 } from "../shared.js";
-import { CaseDetailOverlay } from "./CasesView.js";
+import { CaseDetailOverlay } from "./CaseDetailView.js";
 import { CustomReportBuilder } from "./CustomizationView.js";
 const REPORT_DEFS = [
   {
