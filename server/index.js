@@ -189,11 +189,12 @@ const externalCorsOrigins = (() => {
     }
     try {
       const parsed = new URL(origin);
-      if (isProd && parsed.protocol !== "https:") {
-        console.warn(`WARNING: Non-HTTPS origin '${origin}' in EXTERNAL_CORS_ORIGINS is insecure for production.`);
-      }
       if (!parsed.hostname) {
         console.warn(`WARNING: Invalid origin '${origin}' in EXTERNAL_CORS_ORIGINS — must be a full URL (e.g. https://app.example.com). Skipping.`);
+        continue;
+      }
+      if (isProd && parsed.protocol !== "https:") {
+        console.error(`SECURITY: Non-HTTPS origin '${origin}' in EXTERNAL_CORS_ORIGINS is rejected in production. Skipping.`);
         continue;
       }
       validated.push(parsed.origin);
@@ -203,6 +204,10 @@ const externalCorsOrigins = (() => {
   }
   return validated.length ? validated : (isProd ? [] : true);
 })();
+
+if (Array.isArray(externalCorsOrigins)) {
+  console.log(`External API CORS: ${externalCorsOrigins.length ? externalCorsOrigins.join(", ") : "(none — all cross-origin requests rejected)"}`);
+}
 
 app.use("/api/external", cors({
   origin: externalCorsOrigins,
