@@ -183,6 +183,8 @@ async function processEmbeddingItem(item) {
     const text = buildCaseSummaryText(rows[0]);
     if (text.trim()) {
       await upsertCaseEmbedding(caseId, "case_summary", text);
+    } else {
+      await removeCaseEmbeddings(caseId, "case_summary");
     }
   } else if (contentType === "note") {
     const { rows } = await pool.query(
@@ -196,6 +198,8 @@ async function processEmbeddingItem(item) {
     const text = `Note (${rows[0].type}): ${rows[0].body || ""}`;
     if (text.trim().length > 10) {
       await upsertCaseEmbedding(caseId, "note", text, sourceId);
+    } else {
+      await removeCaseEmbeddings(caseId, "note", sourceId);
     }
   } else if (contentType === "document") {
     const { rows } = await pool.query(
@@ -209,6 +213,8 @@ async function processEmbeddingItem(item) {
     const text = `Document: ${rows[0].filename} (${rows[0].doc_type || "Other"})\n${(rows[0].extracted_text || "").substring(0, 6000)}`;
     if (text.trim().length > 20) {
       await upsertCaseEmbedding(caseId, "document", text, sourceId);
+    } else {
+      await removeCaseEmbeddings(caseId, "document", sourceId);
     }
   } else if (contentType === "transcript") {
     const { rows } = await pool.query(
@@ -224,6 +230,8 @@ async function processEmbeddingItem(item) {
     const text = `Transcript: ${rows[0].filename}\n${transcriptText}`;
     if (text.trim().length > 20) {
       await upsertCaseEmbedding(caseId, "transcript", text, sourceId);
+    } else {
+      await removeCaseEmbeddings(caseId, "transcript", sourceId);
     }
   }
 }

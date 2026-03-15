@@ -255,6 +255,9 @@ router.post("/:id/re-extract", requireAuth, validateParams(idParamSchema), async
     const newText = await extractText(buffer, doc.content_type, doc.filename);
     const newStatus = (newText && newText.trim().length > 0) ? "complete" : "failed";
     await pool.query("UPDATE case_documents SET extracted_text = $1, ocr_status = $2 WHERE id = $3", [newText || "", newStatus, req.params.id]);
+    if (newStatus === "complete") {
+      queueEmbeddingUpdate(doc.case_id, "document", parseInt(req.params.id));
+    }
     return res.json({ text: newText || "", length: (newText || "").length, ocrStatus: newStatus, hasText: newStatus === "complete" });
   } catch (err) {
     console.error("Re-extract text error:", err);
