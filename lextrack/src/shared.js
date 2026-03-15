@@ -567,8 +567,9 @@ function StaffSearchField({ value, onChange, placeholder, userList, showRole }) 
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const users = userList || USERS;
-  const selectedUser = value ? users.find(u => u.id === Number(value)) : null;
+  const allUsers = userList || USERS;
+  const users = allUsers.filter(u => !u.deletedAt);
+  const selectedUser = value ? allUsers.find(u => u.id === Number(value)) : null;
 
   useEffect(() => {
     const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };

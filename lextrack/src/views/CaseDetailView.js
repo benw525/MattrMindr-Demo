@@ -899,7 +899,7 @@ function CaseDetailOverlay({ c, currentUser, tasks, deadlines, notes, links, act
   const dateFields   = CORE_FIELDS.filter(f => f.section === "dates");
   const teamFields   = CORE_FIELDS.filter(f => f.section === "team");
 
-  const filteredUsersForTeam = USERS;
+  const filteredUsersForTeam = USERS.filter(u => !u.deletedAt);
 
   const addCustomField = () => {
     if (!newFieldLabel.trim()) return;
