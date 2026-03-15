@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { encrypt, decrypt } = require("../utils/encryption");
+const { isR2Configured, uploadToR2 } = require("../r2");
 const router = express.Router();
 
 const pendingOAuthStates = new Map();
@@ -582,11 +583,18 @@ router.post("/onedrive/import-file", requireAuth, async (req, res) => {
     const { extractText } = require("../utils/extract-text");
     const needsAsyncOcr = mimeType === "application/pdf";
     if (needsAsyncOcr) {
+      let r2Key = null;
+      let fileDataForDb = buffer;
+      if (isR2Configured()) {
+        r2Key = `documents/${caseId}/${crypto.randomUUID()}/${filename}`;
+        await uploadToR2(r2Key, buffer, mimeType);
+        fileDataForDb = null;
+      }
       const { rows } = await pool.query(
-        `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id, source)
-         VALUES ($1,$2,$3,$4,'',$5,$6,$7,$8,'processing',$9,$10)
+        `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id, source)
+         VALUES ($1,$2,$3,$4,$5,'',$6,$7,$8,$9,'processing',$10,$11)
          RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
-        [caseId, filename, mimeType, buffer, docType || "Other", uid, userName, buffer.length, folderVal, "OneDrive"]
+        [caseId, filename, mimeType, fileDataForDb, r2Key, docType || "Other", uid, userName, buffer.length, folderVal, "OneDrive"]
       );
       const docId = rows[0].id;
       (async () => {
@@ -608,11 +616,18 @@ router.post("/onedrive/import-file", requireAuth, async (req, res) => {
     let extractedText = "";
     try { extractedText = await extractText(buffer, mimeType, filename); } catch {}
     const ocrStatus = (extractedText && extractedText.trim().length > 0) ? "complete" : "failed";
+    let r2Key2 = null;
+    let fileData2 = buffer;
+    if (isR2Configured()) {
+      r2Key2 = `documents/${caseId}/${crypto.randomUUID()}/${filename}`;
+      await uploadToR2(r2Key2, buffer, mimeType);
+      fileData2 = null;
+    }
     const { rows } = await pool.query(
-      `INSERT INTO case_documents (case_id, filename, content_type, file_data, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id, source)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `INSERT INTO case_documents (case_id, filename, content_type, file_data, r2_file_key, extracted_text, doc_type, uploaded_by, uploaded_by_name, file_size, ocr_status, folder_id, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
-      [caseId, filename, mimeType, buffer, extractedText, docType || "Other", uid, userName, buffer.length, ocrStatus, folderVal, "OneDrive"]
+      [caseId, filename, mimeType, fileData2, r2Key2, extractedText, docType || "Other", uid, userName, buffer.length, ocrStatus, folderVal, "OneDrive"]
     );
     const saved = rows[0];
     res.status(201).json({

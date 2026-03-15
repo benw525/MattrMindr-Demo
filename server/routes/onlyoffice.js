@@ -1,6 +1,8 @@
 const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { isR2Configured, uploadToR2, downloadFromR2 } = require("../r2");
+const { randomUUID } = require("crypto");
 
 const router = express.Router();
 
@@ -43,7 +45,7 @@ router.post("/upload-for-edit", requireAuth, async (req, res) => {
     const token = await getSession();
     if (!token) return res.status(500).json({ error: "ONLYOFFICE not available" });
 
-    const { rows } = await pool.query("SELECT filename, content_type, file_data, case_id FROM case_documents WHERE id = $1", [docId]);
+    const { rows } = await pool.query("SELECT filename, content_type, file_data, r2_file_key, case_id FROM case_documents WHERE id = $1", [docId]);
     if (rows.length) {
       const userId = req.session.userId;
       const userRole = req.session.userRole || "";
@@ -54,10 +56,14 @@ router.post("/upload-for-edit", requireAuth, async (req, res) => {
     }
     if (!rows.length) return res.status(404).json({ error: "Document not found" });
     const doc = rows[0];
-    if (!doc.file_data) return res.status(400).json({ error: "No file data available" });
+    let fileBuffer = doc.file_data;
+    if (!fileBuffer && doc.r2_file_key && isR2Configured()) {
+      fileBuffer = await downloadFromR2(doc.r2_file_key);
+    }
+    if (!fileBuffer) return res.status(400).json({ error: "No file data available" });
 
     const formData = new FormData();
-    formData.append("file", new Blob([doc.file_data], { type: doc.content_type }), doc.filename);
+    formData.append("file", new Blob([fileBuffer], { type: doc.content_type }), doc.filename);
 
     const uploadRes = await fetch(`${OO_URL}/api/2.0/files/${OO_ROOM_ID}/upload`, {
       method: "POST",
@@ -119,7 +125,15 @@ router.post("/sync-back", requireAuth, async (req, res) => {
     if (!dlRes.ok) return res.status(500).json({ error: "Failed to download from DocSpace" });
     const buffer = Buffer.from(await dlRes.arrayBuffer());
 
-    await pool.query("UPDATE case_documents SET file_data = $1, updated_at = NOW() WHERE id = $2", [buffer, docId]);
+    if (isR2Configured()) {
+      const { rows: docInfo } = await pool.query("SELECT r2_file_key, case_id, filename FROM case_documents WHERE id = $1", [docId]);
+      const di = docInfo[0] || {};
+      const r2Key = di.r2_file_key || `documents/${di.case_id}/${randomUUID()}/${di.filename || "file"}`;
+      await uploadToR2(r2Key, buffer, "application/octet-stream");
+      await pool.query("UPDATE case_documents SET file_data = NULL, r2_file_key = $1, updated_at = NOW() WHERE id = $2", [r2Key, docId]);
+    } else {
+      await pool.query("UPDATE case_documents SET file_data = $1, updated_at = NOW() WHERE id = $2", [buffer, docId]);
+    }
     res.json({ ok: true, size: buffer.length });
   } catch (err) {
     console.error("ONLYOFFICE sync-back error:", err.message);

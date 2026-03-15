@@ -4,6 +4,7 @@ const { requireAuth } = require("../middleware/auth");
 const multer = require("multer");
 const openai = require("../utils/openai");
 const { extractTextWithPages } = require("../utils/extract-text");
+const { isR2Configured, downloadFromR2 } = require("../r2");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const router = express.Router();
@@ -167,7 +168,7 @@ router.post("/:caseId/from-document", requireAuth, async (req, res) => {
     if (!documentId) return res.status(400).json({ error: "documentId is required" });
 
     const { rows: docRows } = await pool.query(
-      "SELECT file_data, content_type, filename, extracted_text FROM case_documents WHERE id = $1 AND case_id = $2 AND deleted_at IS NULL",
+      "SELECT file_data, r2_file_key, content_type, filename, extracted_text FROM case_documents WHERE id = $1 AND case_id = $2 AND deleted_at IS NULL",
       [documentId, caseId]
     );
     if (!docRows.length) return res.status(404).json({ error: "Document not found" });
@@ -178,8 +179,14 @@ router.post("/:caseId/from-document", requireAuth, async (req, res) => {
       text = doc.extracted_text;
     }
     if (!text) {
-      const result = await extractTextWithPages(doc.file_data, doc.content_type, doc.filename);
-      text = result.text;
+      let fileBuffer = doc.file_data;
+      if (!fileBuffer && doc.r2_file_key && isR2Configured()) {
+        fileBuffer = await downloadFromR2(doc.r2_file_key);
+      }
+      if (fileBuffer) {
+        const result = await extractTextWithPages(fileBuffer, doc.content_type, doc.filename);
+        text = result.text;
+      }
     }
     if (!text || text.trim().length < 10) {
       return res.status(400).json({ error: "Could not extract text from document. Try again in a moment." });

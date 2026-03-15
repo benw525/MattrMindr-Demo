@@ -345,7 +345,6 @@ router.post("/upload/chunk", requireAuth, upload.single("chunk"), async (req, re
     }
 
     if (pending.chunks[idx] !== null && pending.chunks[idx] !== undefined) {
-      const wasNull = pending.received < pending.totalChunks;
       pending.received = pending.chunks.filter(c => c !== null).length;
     }
 

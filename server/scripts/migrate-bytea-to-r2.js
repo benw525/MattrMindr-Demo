@@ -3,7 +3,7 @@ const pool = require("../db");
 const { isR2Configured, uploadToR2 } = require("../r2");
 const { randomUUID } = require("crypto");
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 100;
 const TABLES = [
   {
     table: "case_documents",
@@ -59,6 +59,24 @@ const TABLES = [
     sessionIdCol: "trial_session_id",
     filenameCol: "file_name",
     contentTypeCol: "file_type",
+  },
+  {
+    table: "case_transcripts",
+    dataCol: "audio_data",
+    r2Col: "r2_audio_key",
+    keyPrefix: "transcripts",
+    caseIdCol: "case_id",
+    filenameCol: "filename",
+    contentTypeCol: "content_type",
+  },
+  {
+    table: "case_transcripts",
+    dataCol: "video_data",
+    r2Col: "r2_video_key",
+    keyPrefix: "transcripts-video",
+    caseIdCol: "case_id",
+    filenameCol: "filename",
+    contentTypeCol: "video_content_type",
   },
   {
     table: "users",
