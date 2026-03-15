@@ -377,12 +377,16 @@ router.get("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
     const buffer = await getFileBuffer(rows[0]);
     if (!buffer) return res.status(400).json({ error: "No file data" });
-    const XLSX = require("xlsx");
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheets = workbook.SheetNames.map(name => {
-      const sheet = workbook.Sheets[name];
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-      return { name, rows: jsonData };
+    const ExcelJS = require("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheets = [];
+    workbook.eachSheet((worksheet) => {
+      const rows = [];
+      worksheet.eachRow({ includeEmpty: true }, (row) => {
+        rows.push(row.values.slice(1).map(v => v == null ? "" : v));
+      });
+      sheets.push({ name: worksheet.name, rows });
     });
     res.json({ sheets });
   } catch (err) {
@@ -396,14 +400,16 @@ router.put("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (
     const { rows: check } = await pool.query("SELECT case_id, r2_file_key FROM case_documents WHERE id = $1", [req.validatedParams.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, check[0].case_id))) return res.status(403).json({ error: "Access denied" });
-    const XLSX = require("xlsx");
+    const ExcelJS = require("exceljs");
     const { sheets } = req.body;
-    const workbook = XLSX.utils.book_new();
+    const workbook = new ExcelJS.Workbook();
     for (const sheet of sheets) {
-      const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
-      XLSX.utils.book_append_sheet(workbook, ws, sheet.name);
+      const ws = workbook.addWorksheet(sheet.name);
+      for (const row of sheet.rows) {
+        ws.addRow(row);
+      }
     }
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const buffer = await workbook.xlsx.writeBuffer();
     if (check[0].r2_file_key && isR2Configured()) {
       await uploadToR2(check[0].r2_file_key, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       await pool.query("UPDATE case_documents SET file_data = NULL, file_size = $1 WHERE id = $2", [buffer.length, req.params.id]);

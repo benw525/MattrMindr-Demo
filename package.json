@@ -16,6 +16,7 @@
     "docx": "^9.6.0",
     "docxtemplater": "^3.68.2",
     "drizzle-zod": "^0.8.3",
+    "exceljs": "^4.4.0",
     "express-rate-limit": "^8.3.1",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.575.0",
@@ -34,7 +35,6 @@
     "tailwindcss": "^3.4.19",
     "tesseract.js": "^7.0.0",
     "twilio": "^5.12.2",
-    "xlsx": "^0.18.5",
     "zod": "^4.3.6",
     "zod-validation-error": "^5.0.0"
   }
