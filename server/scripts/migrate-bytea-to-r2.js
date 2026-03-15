@@ -180,6 +180,60 @@ async function migrateTable(cfg) {
   return { table, migrated, errors };
 }
 
+async function migrateCorrespondenceAttachments() {
+  const tables = ["case_correspondence", "unmatched_filings_emails"];
+  let totalMigrated = 0;
+  let totalErrors = 0;
+
+  for (const table of tables) {
+    const { rows: candidates } = await pool.query(
+      `SELECT id, attachments, ${table === "case_correspondence" ? "case_id" : "NULL AS case_id"} FROM ${table}
+       WHERE attachments IS NOT NULL AND attachments::text LIKE '%"data"%' AND attachments::text NOT LIKE '%"r2Key"%'
+       ORDER BY id LIMIT ${BATCH_SIZE}`
+    );
+
+    if (candidates.length === 0) {
+      console.log(`  ${table} attachments: 0 rows to migrate — skipping`);
+      continue;
+    }
+    console.log(`  ${table} attachments: ${candidates.length} rows to process`);
+
+    for (const row of candidates) {
+      try {
+        let atts = row.attachments;
+        if (typeof atts === "string") atts = JSON.parse(atts);
+        if (!Array.isArray(atts) || atts.length === 0) continue;
+
+        let changed = false;
+        for (const att of atts) {
+          if (att.r2Key || !att.data) continue;
+          const buffer = Buffer.from(att.data, "base64");
+          const r2Key = `correspondence/${row.case_id || "unmatched"}/${randomUUID()}/${att.filename || "attachment"}`;
+          await uploadToR2(r2Key, buffer, att.contentType || "application/octet-stream");
+          const head = await headObject(r2Key);
+          if (!head || head.contentLength !== buffer.length) {
+            throw new Error(`HEAD verification failed for ${r2Key}`);
+          }
+          att.r2Key = r2Key;
+          delete att.data;
+          changed = true;
+        }
+
+        if (changed) {
+          await pool.query(`UPDATE ${table} SET attachments = $1 WHERE id = $2`, [JSON.stringify(atts), row.id]);
+          totalMigrated++;
+        }
+      } catch (err) {
+        totalErrors++;
+        console.error(`    ${table} id=${row.id}: correspondence attachment migration failed — ${err.message}`);
+      }
+    }
+    console.log(`  ${table} attachments: done`);
+  }
+
+  return { table: "correspondence_attachments", migrated: totalMigrated, errors: totalErrors };
+}
+
 async function main() {
   if (!isR2Configured()) {
     console.error("R2 is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME.");
@@ -197,6 +251,14 @@ async function main() {
       console.error(`  ${cfg.table}: FATAL — ${err.message}`);
       results.push({ table: cfg.table, migrated: 0, errors: -1 });
     }
+  }
+
+  try {
+    const corrResult = await migrateCorrespondenceAttachments();
+    results.push(corrResult);
+  } catch (err) {
+    console.error(`  correspondence_attachments: FATAL — ${err.message}`);
+    results.push({ table: "correspondence_attachments", migrated: 0, errors: -1 });
   }
 
   console.log("\n=== Summary ===");

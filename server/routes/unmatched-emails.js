@@ -3,7 +3,7 @@ const { randomUUID } = require("crypto");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
-const { isR2Configured, uploadToR2 } = require("../r2");
+const { isR2Configured, uploadToR2, downloadFromR2 } = require("../r2");
 
 const router = express.Router();
 
@@ -60,7 +60,15 @@ router.put("/assign/:id", requireAuth, async (req, res) => {
     const pdfAttachments = attachments.filter(a => a.contentType === "application/pdf");
     for (const pdfAtt of pdfAttachments) {
       try {
-        const fileBuffer = Buffer.from(pdfAtt.data, "base64");
+        let fileBuffer;
+        if (pdfAtt.data) {
+          fileBuffer = Buffer.from(pdfAtt.data, "base64");
+        } else if (pdfAtt.r2Key && isR2Configured()) {
+          fileBuffer = await downloadFromR2(pdfAtt.r2Key);
+        } else {
+          console.error("Unmatched assign: no data or r2Key for attachment", pdfAtt.filename);
+          continue;
+        }
         let extractedText = "";
         try {
           extractedText = await extractText(fileBuffer, "application/pdf", pdfAtt.filename);
@@ -243,7 +251,15 @@ router.post("/reprocess", requireAuth, async (req, res) => {
           const pdfAttachments = attachments.filter(a => a.contentType === "application/pdf");
           for (const pdfAtt of pdfAttachments) {
             try {
-              const fileBuffer = Buffer.from(pdfAtt.data, "base64");
+              let fileBuffer;
+              if (pdfAtt.data) {
+                fileBuffer = Buffer.from(pdfAtt.data, "base64");
+              } else if (pdfAtt.r2Key && isR2Configured()) {
+                fileBuffer = await downloadFromR2(pdfAtt.r2Key);
+              } else {
+                console.error("Reprocess: no data or r2Key for attachment", pdfAtt.filename);
+                continue;
+              }
               let extractedText = "";
               try {
                 extractedText = await extractText(fileBuffer, "application/pdf", pdfAtt.filename);

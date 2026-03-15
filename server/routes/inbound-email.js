@@ -9,6 +9,18 @@ const { isR2Configured, uploadToR2 } = require("../r2");
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, fieldSize: 50 * 1024 * 1024 } });
 
+async function offloadAttachmentsToR2(attachments, caseId) {
+  if (!isR2Configured() || !attachments.length) return attachments;
+  const result = [];
+  for (const att of attachments) {
+    const buffer = Buffer.from(att.data, "base64");
+    const r2Key = `correspondence/${caseId || "unmatched"}/${randomUUID()}/${att.filename}`;
+    await uploadToR2(r2Key, buffer, att.contentType || "application/octet-stream");
+    result.push({ filename: att.filename, contentType: att.contentType, size: att.size, r2Key });
+  }
+  return result;
+}
+
 router.post("/", upload.any(), async (req, res) => {
   try {
     console.log("=== INBOUND EMAIL DEBUG ===");
@@ -117,10 +129,11 @@ router.post("/", upload.any(), async (req, res) => {
       }
 
       if (!caseId) {
+        const offloadedAtts = await offloadAttachmentsToR2(attachments, null);
         await pool.query(
           `INSERT INTO unmatched_filings_emails (from_email, from_name, to_emails, cc_emails, subject, body_text, body_html, attachments, court_case_number, attachment_count)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [fromEmail, fromName, to, cc, subject, text, html, JSON.stringify(attachments), courtCaseNumber, attachments.length]
+          [fromEmail, fromName, to, cc, subject, text, html, JSON.stringify(offloadedAtts), courtCaseNumber, attachments.length]
         );
         console.log(`Filings email: stored as unmatched (court_case_number="${courtCaseNumber}")`);
         return res.status(200).send("OK");
@@ -255,10 +268,11 @@ router.post("/", upload.any(), async (req, res) => {
 
     const isVoicemail = /voice\s*message/i.test(subject);
 
+    const offloadedCaseAtts = await offloadAttachmentsToR2(attachments, caseId);
     await pool.query(
       `INSERT INTO case_correspondence (case_id, from_email, from_name, to_emails, cc_emails, subject, body_text, body_html, attachments, is_voicemail)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [caseId, fromEmail, fromName, to, cc, subject, text, html, JSON.stringify(attachments), isVoicemail]
+      [caseId, fromEmail, fromName, to, cc, subject, text, html, JSON.stringify(offloadedCaseAtts), isVoicemail]
     );
 
     if (isVoicemail) {

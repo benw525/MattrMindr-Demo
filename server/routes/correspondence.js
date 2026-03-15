@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { isR2Configured, getPresignedUrl, downloadFromR2 } = require("../r2");
 
 const router = express.Router();
 
@@ -67,8 +68,17 @@ router.get("/attachment/:id/:index", requireAuth, async (req, res) => {
     const idx = parseInt(req.params.index);
     if (idx < 0 || idx >= attachments.length) return res.status(404).json({ error: "Attachment not found" });
     const att = attachments[idx];
-    const buffer = Buffer.from(att.data, "base64");
     const disposition = req.query.inline === "true" ? "inline" : "attachment";
+
+    if (att.r2Key && isR2Configured()) {
+      try {
+        const url = await getPresignedUrl(att.r2Key, 300, att.contentType || "application/octet-stream", `${disposition}; filename="${att.filename}"`);
+        return res.redirect(url);
+      } catch {}
+    }
+
+    if (!att.data) return res.status(404).json({ error: "Attachment data not available" });
+    const buffer = Buffer.from(att.data, "base64");
     res.setHeader("Content-Type", att.contentType || "application/octet-stream");
     res.setHeader("Content-Disposition", `${disposition}; filename="${att.filename}"`);
     res.setHeader("Content-Length", buffer.length);
