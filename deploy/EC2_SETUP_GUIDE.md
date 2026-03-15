@@ -105,11 +105,11 @@ mkdir -p ~/MattrMindr-Demo/logs
 
 ## 9. Initialize the Database
 
-Migrations run automatically at startup, but you can also run them manually:
+Migrations run automatically at startup, so in most cases you can skip this step. To run them manually:
 
 ```bash
 cd ~/MattrMindr-Demo/server
-node -e "require('dotenv').config({path:'../.env'})" && npm run migrate:up
+npm run migrate:up
 ```
 
 Or run the legacy schema.js for a fresh database:
@@ -118,6 +118,8 @@ Or run the legacy schema.js for a fresh database:
 cd ~/MattrMindr-Demo
 node server/schema.js
 ```
+
+> **Note:** These commands require `npm install` in the server directory (step 6) to have completed first.
 
 ## 10. Configure Nginx
 
