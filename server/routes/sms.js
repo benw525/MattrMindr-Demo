@@ -3,7 +3,7 @@ const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { sendSMS, formatPhoneNumber, isConfigured } = require("../sms");
 const openai = require("../utils/openai");
-const { validate, smsSchema } = require("../middleware/validate");
+const { validate, validateParams, smsSchema, smsConfigCreateSchema, smsDraftSchema, idParamSchema, caseIdParamSchema, batchDeleteSchema } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -11,7 +11,7 @@ router.get("/status", requireAuth, async (req, res) => {
   res.json({ configured: await isConfigured() });
 });
 
-router.get("/configs/:caseId", requireAuth, async (req, res) => {
+router.get("/configs/:caseId", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT sc.*, u.name as created_by_name FROM sms_configs sc
@@ -43,11 +43,9 @@ router.get("/configs/:caseId", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/configs", requireAuth, async (req, res) => {
+router.post("/configs", requireAuth, validate(smsConfigCreateSchema), async (req, res) => {
   try {
-    const { caseId, phoneNumbers, contactName, contactType, notifyHearings, notifyDeadlines, notifyCourtDates, notifyMeetings, reminderDays, customMessage } = req.body;
-    if (!caseId) return res.status(400).json({ error: "caseId required" });
-    if (!phoneNumbers || phoneNumbers.length === 0) return res.status(400).json({ error: "At least one phone number required" });
+    const { caseId, phoneNumbers, contactName, contactType, notifyHearings, notifyDeadlines, notifyCourtDates, notifyMeetings, reminderDays, customMessage } = req.validatedBody;
 
     const formatted = phoneNumbers.map(p => formatPhoneNumber(p)).filter(Boolean);
     if (formatted.length === 0) return res.status(400).json({ error: "No valid phone numbers provided" });
@@ -78,7 +76,7 @@ router.post("/configs", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/configs/:id", requireAuth, async (req, res) => {
+router.put("/configs/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { phoneNumbers, contactName, contactType, notifyHearings, notifyDeadlines, notifyCourtDates, notifyMeetings, reminderDays, customMessage, enabled } = req.body;
     const sets = [];
@@ -120,7 +118,7 @@ router.put("/configs/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/configs/:id", requireAuth, async (req, res) => {
+router.delete("/configs/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     await pool.query(`UPDATE sms_scheduled SET status = 'cancelled' WHERE sms_config_id = $1 AND status = 'pending'`, [req.params.id]);
     const { rows } = await pool.query("DELETE FROM sms_configs WHERE id = $1 RETURNING *", [req.params.id]);
@@ -132,10 +130,9 @@ router.delete("/configs/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/messages/batch-delete", requireAuth, async (req, res) => {
+router.post("/messages/batch-delete", requireAuth, validate(batchDeleteSchema), async (req, res) => {
   try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    const ids = req.validatedBody.documentIds;
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
     await pool.query(`UPDATE sms_messages SET deleted_at = NOW() WHERE id IN (${placeholders}) AND deleted_at IS NULL`, ids);
     res.json({ ok: true, deleted: ids.length });
@@ -145,7 +142,7 @@ router.post("/messages/batch-delete", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/messages/:caseId", requireAuth, async (req, res) => {
+router.get("/messages/:caseId", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT sm.*, u.name as sent_by_name FROM sms_messages sm
@@ -166,7 +163,7 @@ router.get("/messages/:caseId", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/scheduled/:caseId", requireAuth, async (req, res) => {
+router.get("/scheduled/:caseId", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM sms_scheduled WHERE case_id = $1 AND status = 'pending' ORDER BY send_at ASC`,
@@ -216,10 +213,9 @@ router.post("/send", requireAuth, validate(smsSchema), async (req, res) => {
   }
 });
 
-router.post("/draft", requireAuth, async (req, res) => {
+router.post("/draft", requireAuth, validate(smsDraftSchema), async (req, res) => {
   try {
-    const { caseId, eventType, eventTitle, eventDate, contactName, contactType, customInstructions } = req.body;
-    if (!caseId) return res.status(400).json({ error: "caseId required" });
+    const { caseId, eventType, eventTitle, eventDate, contactName, contactType, customInstructions } = req.validatedBody;
 
     const caseRes = await pool.query("SELECT * FROM cases WHERE id = $1", [caseId]);
     const c = caseRes.rows[0];
@@ -260,7 +256,7 @@ Write ONLY the text message, nothing else. Keep it under 160 characters.`;
   }
 });
 
-router.get("/suggest-numbers/:caseId", requireAuth, async (req, res) => {
+router.get("/suggest-numbers/:caseId", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const caseId = req.params.caseId;
     const suggestions = [];
@@ -324,7 +320,7 @@ router.get("/suggest-numbers/:caseId", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/watch/:caseId", requireAuth, async (req, res) => {
+router.get("/watch/:caseId", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT w.*, u.name as added_by_name FROM sms_watch_numbers w
@@ -343,7 +339,7 @@ router.get("/watch/:caseId", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/watch/:caseId", requireAuth, async (req, res) => {
+router.post("/watch/:caseId", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { phoneNumber, contactName } = req.body;
     if (!phoneNumber) return res.status(400).json({ error: "phoneNumber required" });

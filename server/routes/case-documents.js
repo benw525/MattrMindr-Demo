@@ -3,7 +3,7 @@ const multer = require("multer");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
-const { validate, validateParams, docFolderSchema, batchDeleteSchema, idParamSchema } = require("../middleware/validate");
+const { validate, validateParams, docFolderSchema, batchDeleteSchema, idParamSchema, caseIdParamSchema } = require("../middleware/validate");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -48,7 +48,7 @@ async function verifyCaseAccess(req, caseId) {
   return rows.length > 0;
 }
 
-router.get("/:caseId/folders", requireAuth, async (req, res) => {
+router.get("/:caseId/folders", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     if (!(await verifyCaseAccess(req, req.params.caseId))) return res.status(403).json({ error: "Access denied" });
     const { rows } = await pool.query(
@@ -62,7 +62,7 @@ router.get("/:caseId/folders", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:caseId/reorder-folders", requireAuth, async (req, res) => {
+router.put("/:caseId/reorder-folders", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     const { folders } = req.body;
     if (!Array.isArray(folders)) return res.status(400).json({ error: "folders array required" });
@@ -76,7 +76,7 @@ router.put("/:caseId/reorder-folders", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:caseId", requireAuth, async (req, res) => {
+router.get("/:caseId", requireAuth, validateParams(caseIdParamSchema), async (req, res) => {
   try {
     if (!(await verifyCaseAccess(req, req.params.caseId))) return res.status(403).json({ error: "Access denied" });
     const { rows } = await pool.query(
@@ -162,7 +162,7 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
   }
 });
 
-router.get("/:id/text", requireAuth, async (req, res) => {
+router.get("/:id/text", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT cd.extracted_text, cd.case_id, cd.file_data, cd.content_type, cd.filename FROM case_documents cd WHERE cd.id = $1", [req.params.id]
@@ -191,7 +191,7 @@ router.get("/:id/text", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id/ocr-status", requireAuth, async (req, res) => {
+router.get("/:id/ocr-status", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT case_id, ocr_status, CASE WHEN extracted_text IS NOT NULL AND LENGTH(TRIM(extracted_text)) > 0 THEN true ELSE false END as has_text FROM case_documents WHERE id = $1",
@@ -271,7 +271,7 @@ Be concise but thorough. Flag anything that could help the plaintiff's case.`;
   }
 });
 
-router.get("/:id/download", requireAuth, async (req, res) => {
+router.get("/:id/download", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT filename, content_type, file_data, case_id, source FROM case_documents WHERE id = $1", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
@@ -289,7 +289,7 @@ router.get("/:id/download", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id/html", requireAuth, async (req, res) => {
+router.get("/:id/html", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT file_data, content_type, case_id, filename, content_html FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
@@ -321,7 +321,7 @@ router.put("/:id/content", requireAuth, validateParams(idParamSchema), async (re
   }
 });
 
-router.get("/:id/xlsx-data", requireAuth, async (req, res) => {
+router.get("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
@@ -340,7 +340,7 @@ router.get("/:id/xlsx-data", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id/xlsx-data", requireAuth, async (req, res) => {
+router.put("/:id/xlsx-data", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
@@ -361,7 +361,7 @@ router.put("/:id/xlsx-data", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id/pptx-slides", requireAuth, async (req, res) => {
+router.get("/:id/pptx-slides", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
@@ -387,7 +387,7 @@ router.get("/:id/pptx-slides", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id/pptx-slides", requireAuth, async (req, res) => {
+router.put("/:id/pptx-slides", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
@@ -399,7 +399,7 @@ router.put("/:id/pptx-slides", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/:id/annotations", requireAuth, async (req, res) => {
+router.put("/:id/annotations", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows: check } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!check.length) return res.status(404).json({ error: "Not found" });
@@ -413,7 +413,7 @@ router.put("/:id/annotations", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id/annotations", requireAuth, async (req, res) => {
+router.get("/:id/annotations", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT annotations, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
@@ -425,7 +425,7 @@ router.get("/:id/annotations", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/:id/view", requireAuth, async (req, res) => {
+router.get("/:id/view", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT filename, content_type, file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });
@@ -468,7 +468,7 @@ router.put("/:id", requireAuth, validateParams(idParamSchema), async (req, res) 
   }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
@@ -502,7 +502,7 @@ router.post("/folders", requireAuth, validate(docFolderSchema), async (req, res)
   }
 });
 
-router.put("/folders/:id", requireAuth, async (req, res) => {
+router.put("/folders/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { name, collapsed } = req.body;
     const sets = [];
@@ -523,7 +523,7 @@ router.put("/folders/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.delete("/folders/:id", requireAuth, async (req, res) => {
+router.delete("/folders/:id", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     await pool.query("UPDATE case_documents SET folder_id = NULL WHERE folder_id = $1", [req.params.id]);
     const { rowCount } = await pool.query("DELETE FROM document_folders WHERE id = $1", [req.params.id]);
@@ -685,7 +685,7 @@ router.post("/upload/complete", requireAuth, express.json(), async (req, res) =>
 
 const officeViewTokens = new Map();
 
-router.get("/:id/office-view-url", requireAuth, async (req, res) => {
+router.get("/:id/office-view-url", requireAuth, validateParams(idParamSchema), async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT id, filename, content_type, file_data, case_id FROM case_documents WHERE id = $1", [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: "Not found" });

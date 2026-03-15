@@ -48,8 +48,10 @@ const loginSchema = z.object({
 });
 
 const mfaVerifySchema = z.object({
-  code: z.union([z.string().min(4).max(10, "Code is too long"), z.number()]),
+  code: z.union([z.string().min(4).max(10, "Code is too long"), z.number()]).optional(),
   token: z.union([z.string().min(4).max(10), z.number()]).optional(),
+}).refine((data) => data.code || data.token, {
+  message: "Either code or token is required",
 });
 
 const forgotPasswordSchema = z.object({
@@ -167,8 +169,35 @@ const advocateSchema = z.object({
   screenContext: z.string().max(50000).optional(),
 });
 
+const smsConfigCreateSchema = z.object({
+  caseId: coerceInt,
+  phoneNumbers: z.array(z.string().max(20)).min(1, "At least one phone number required"),
+  contactName: z.string().max(200).optional(),
+  contactType: z.string().max(100).optional(),
+  notifyHearings: z.boolean().optional(),
+  notifyDeadlines: z.boolean().optional(),
+  notifyCourtDates: z.boolean().optional(),
+  notifyMeetings: z.boolean().optional(),
+  reminderDays: z.number().int().min(0).max(365).optional(),
+  customMessage: z.string().max(1600).optional(),
+});
+
+const smsDraftSchema = z.object({
+  caseId: coerceInt,
+  eventType: z.string().max(100).optional(),
+  eventTitle: z.string().max(500).optional(),
+  eventDate: z.string().max(30).optional(),
+  contactName: z.string().max(200).optional(),
+  contactType: z.string().max(100).optional(),
+  customInstructions: z.string().max(5000).optional(),
+});
+
 const idParamSchema = z.object({
   id: z.string().regex(/^\d+$/, "ID must be a number"),
+});
+
+const caseIdParamSchema = z.object({
+  caseId: z.string().regex(/^\d+$/, "Case ID must be a number"),
 });
 
 const paginationSchema = z.object({
@@ -198,6 +227,9 @@ module.exports = {
   classifyFilingSchema,
   docSummarySchema,
   advocateSchema,
+  smsConfigCreateSchema,
+  smsDraftSchema,
   idParamSchema,
+  caseIdParamSchema,
   paginationSchema,
 };
