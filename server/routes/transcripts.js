@@ -8,7 +8,7 @@ const path = require("path");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const openai = require("../utils/openai");
-const { isR2Configured, uploadToR2, downloadFromR2, streamFromR2, deleteFromR2, createMultipartUpload, uploadPart, completeMultipartUpload, abortMultipartUpload } = require("../r2");
+const { isR2Configured, uploadToR2, downloadFromR2, streamFromR2, deleteFromR2, getPresignedUrl, createMultipartUpload, uploadPart, completeMultipartUpload, abortMultipartUpload } = require("../r2");
 
 const router = express.Router();
 router.use(express.json({ limit: "10mb" }));
@@ -602,14 +602,14 @@ router.get("/:id/download-audio", requireAuth, async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: "Transcript not found" });
     const { filename, content_type, audio_data, r2_audio_key } = rows[0];
-    res.set("Content-Type", content_type || "application/octet-stream");
-    res.set("Content-Disposition", `attachment; filename="${filename}"`);
     if (r2_audio_key && isR2Configured()) {
       try {
-        const data = await downloadFromR2(r2_audio_key);
-        return res.send(data);
+        const url = await getPresignedUrl(r2_audio_key, 300, content_type || "application/octet-stream", `attachment; filename="${filename}"`);
+        return res.redirect(url);
       } catch {}
     }
+    res.set("Content-Type", content_type || "application/octet-stream");
+    res.set("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(audio_data);
   } catch (err) {
     console.error("Download audio error:", err.message);
@@ -634,21 +634,8 @@ router.get("/:id/video", requireAuth, async (req, res) => {
 
     if (r2_video_key && isR2Configured()) {
       try {
-        if (rangeHeader) {
-          const r2Resp = await streamFromR2(r2_video_key, rangeHeader);
-          res.status(206);
-          res.set("Content-Type", contentType);
-          res.set("Accept-Ranges", "bytes");
-          if (r2Resp.contentRange) res.set("Content-Range", r2Resp.contentRange);
-          if (r2Resp.contentLength) res.set("Content-Length", r2Resp.contentLength);
-          return r2Resp.stream.pipe(res);
-        } else {
-          const data = await downloadFromR2(r2_video_key);
-          res.set("Content-Type", contentType);
-          res.set("Content-Length", data.length);
-          res.set("Accept-Ranges", "bytes");
-          return res.send(data);
-        }
+        const url = await getPresignedUrl(r2_video_key, 300, contentType);
+        return res.redirect(url);
       } catch {}
     }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const pool = require("../db");
-const { isR2Configured, uploadToR2 } = require("../r2");
+const { isR2Configured, uploadToR2, headObject } = require("../r2");
 const { randomUUID } = require("crypto");
 
 const BATCH_SIZE = 100;
@@ -145,6 +145,11 @@ async function migrateTable(cfg) {
         }
 
         await uploadToR2(key, buffer, contentType);
+
+        const head = await headObject(key);
+        if (!head || head.contentLength !== buffer.length) {
+          throw new Error(`HEAD verification failed: expected ${buffer.length} bytes, got ${head ? head.contentLength : "null"}`);
+        }
 
         await pool.query(
           `UPDATE ${table} SET ${r2Col} = $1, ${dataCol} = NULL WHERE id = $2`,
