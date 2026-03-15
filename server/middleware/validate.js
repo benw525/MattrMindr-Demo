@@ -96,12 +96,12 @@ const CASE_STAGES = ["Intake", "Investigation", "Treatment", "Pre-Litigation", "
 const caseCreateSchema = z.object({
   title: z.string().min(1, "Case title is required").max(500),
   clientName: z.string().max(300).optional().default(""),
-  caseType: z.string().max(100).optional().default("Auto Accident"),
-  type: z.string().max(100).optional().default("Auto Accident"),
+  caseType: z.enum(CASE_TYPES).optional().default("Auto Accident"),
+  type: z.enum(CASE_TYPES).optional().default("Auto Accident"),
   status: z.enum(CASE_STATUSES).optional().default("Active"),
   stage: z.enum(CASE_STAGES).optional().default("Intake"),
-  accidentDate: z.string().max(30).optional().nullable(),
-  statuteOfLimitationsDate: z.string().max(30).optional().nullable(),
+  accidentDate: z.string().max(30).regex(/^\d{4}-\d{2}-\d{2}/, "Date must be in ISO format (YYYY-MM-DD)").optional().nullable().or(z.literal("")),
+  statuteOfLimitationsDate: z.string().max(30).regex(/^\d{4}-\d{2}-\d{2}/, "Date must be in ISO format (YYYY-MM-DD)").optional().nullable().or(z.literal("")),
   clientEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   clientPhone: z.string().max(20).optional().nullable().or(z.literal("")),
   clientSsn: z.string().max(20).optional().nullable().or(z.literal("")),
@@ -200,6 +200,12 @@ const caseIdParamSchema = z.object({
   caseId: z.string().regex(/^\d+$/, "Case ID must be a number"),
 });
 
+const casesListQuerySchema = z.object({
+  deleted: z.enum(["true", "false"]).optional(),
+  includeDeleted: z.enum(["true", "false"]).optional(),
+  name: z.string().max(200).optional(),
+});
+
 const paginationSchema = z.object({
   page: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(1000)).optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(200)).optional(),
@@ -231,5 +237,6 @@ module.exports = {
   smsDraftSchema,
   idParamSchema,
   caseIdParamSchema,
+  casesListQuerySchema,
   paginationSchema,
 };

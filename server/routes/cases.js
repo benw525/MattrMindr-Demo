@@ -5,7 +5,7 @@ const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
 const { evaluateFlowsForCase } = require("./task-flows");
 const { encrypt, decrypt } = require("../utils/encryption");
-const { validate, validateParams, caseCreateSchema, idParamSchema } = require("../middleware/validate");
+const { validate, validateParams, validateQuery, caseCreateSchema, idParamSchema, casesListQuerySchema } = require("../middleware/validate");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -97,7 +97,7 @@ const requireManagement = (req, res, next) => {
   next();
 };
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", requireAuth, validateQuery(casesListQuerySchema), async (req, res) => {
   try {
     if (req.query.deleted === "true") {
       const { rows } = await pool.query(
