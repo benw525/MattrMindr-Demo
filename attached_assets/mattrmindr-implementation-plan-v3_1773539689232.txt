@@ -1,0 +1,1185 @@
+================================================================================
+MATTRMINDR — TECHNICAL REMEDIATION & HARDENING PLAN (REV 3)
+================================================================================
+Audience: Lead developer / development team
+Priority: Ordered by risk and dependency. Do not skip ahead.
+Estimated total effort: 16–20 weeks for one senior dev.
+                        12 weeks if two devs split backend (Phases 1–2) and
+                        frontend (Phase 3) in parallel.
+================================================================================
+
+REVISION NOTES (v3 — full incorporation of developer review):
+
+  SCOPE REDUCTIONS:
+  - 1.1d (temp_password): Reduced scope. Startup migration already hashes
+    legacy plaintext values. Auth routes already use bcrypt.compare(). Remaining
+    work is column rename + audit for any new plaintext writes.
+  - 1.2 (PostgreSQL SSL): Marked COMPLETE. db.js now supports DB_SSL env var
+    with require/verify/false modes. No further work needed unless infra changes.
+  - 1.3 (External API CORS): Downgraded from Phase 1 security to Phase 8
+    cleanup. Current behavior (null if unset) is not actively dangerous.
+
+  ADDITIONS:
+  - 1.5: Rate limiting on auth endpoints (was missing entirely)
+  - 1.6: Server-side input validation audit (was missing entirely)
+  - 1.7: Session invalidation on password/role change (was missing entirely)
+  - Phase 2: Backup & disaster recovery (was missing entirely; required before
+    any destructive migration in Phase 1 or Phase 5)
+
+  REORDERING:
+  - Phase 2 is now Backup/DR — must exist before 1.1c encryption migration
+  - pgvector moved from Phase 5 to Phase 7 (after test coverage exists)
+  - Phase ordering adjusted: Security > Backup > Migrations > Decomposition >
+    BYTEA-to-R2 > Testing > Vector Search > Chat SSE > Cleanup
+
+  INFRASTRUCTURE:
+  - All Replit-specific references removed. Plan assumes EC2 deployment.
+  - Replit connector dependencies (REPLIT_CONNECTORS_HOSTNAME for SendGrid,
+    AI_INTEGRATIONS_OPENAI_* env vars) are assumed already decoupled.
+
+  TIMELINE:
+  - Revised from 12–16 weeks to 16–20 weeks per developer feedback. Phase 3
+    alone (21K-line decomposition) is 4–6 weeks of careful work.
+
+================================================================================
+PHASE OVERVIEW
+================================================================================
+
+  PHASE   SCOPE                              WEEKS    DEPENDENCY
+  ─────   ──────────────────────────────     ──────   ─────────────────────
+  1       Security Hardening                 1.5      None (start here)
+  2       Backup & Disaster Recovery         0.5      Before 1.1c migration
+  3       Migration System                   1        None
+  4       App.js Decomposition               4–6      None (can parallel)
+  5       BYTEA to R2                        2        Phase 2, Phase 3
+  6       Automated Testing                  2        Phase 3 (routes stable)
+  7       Vector Search (pgvector)           1.5      Phase 6 (tests exist)
+  8       Cleanup & Optional Work            1–2      Everything else done
+
+  NOTE: Phases 1–3 are sequential (security, then backup, then migrations).
+  Phase 4 can run in parallel with Phases 1–3 if a second developer is
+  available — it touches only frontend code. Phases 5+ are sequential.
+
+
+================================================================================
+PHASE 1: SECURITY HARDENING (Weeks 1–1.5)
+================================================================================
+Do this first. Everything else is a feature improvement. This is liability.
+
+NOTE: Step 1.1c (the encryption migration script) is a destructive operation.
+Do NOT execute 1.1c until Phase 2 (Backup/DR) is in place. You can build and
+test the encryption utilities (1.1a) and update read/write paths (1.1b, 1.1e)
+before backups are ready. Just don't run the migration script on production
+data without a verified backup.
+
+--------------------------------------------------------------------------------
+1.1  ENCRYPT SENSITIVE FIELDS AT REST
+--------------------------------------------------------------------------------
+
+Problem:
+  - client_ssn in cases table is plain text. Compliance violation. One leaked
+    backup = every client's SSN exposed.
+  - ms_access_token, ms_refresh_token in users table are plain text. DB
+    compromise = full Microsoft 365 access for every connected user.
+  - scribe_token, voirdire_token — same class of problem, lower blast radius.
+  - mfa_secret — plain text TOTP secret. Compromised DB = MFA bypass.
+
+Implementation:
+
+  a) Create server/utils/encryption.js:
+
+     - Use Node.js built-in crypto module. AES-256-GCM.
+     - Two functions: encrypt(plaintext) and decrypt(ciphertext).
+     - Encryption key from env var: FIELD_ENCRYPTION_KEY (32-byte hex string).
+     - Output format: iv:authTag:ciphertext (all base64). Store as TEXT column.
+     - Generate the key once:
+         node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+     - Add FIELD_ENCRYPTION_KEY to EC2 environment / secrets manager.
+     - Add a helper: isEncrypted(value) that checks if a string matches the
+       iv:authTag:ciphertext base64 pattern. Used by migration script (1.1c)
+       and as a safety guard against double-encryption.
+
+  b) Encrypted fields (update all reads and writes):
+
+     TABLE           COLUMN               NOTES
+     ─────────────   ───────────────────   ──────────────────────────────
+     cases           client_ssn            Encrypt on write, decrypt on read
+     users           ms_access_token       Encrypt on write, decrypt on read
+     users           ms_refresh_token      Encrypt on write, decrypt on read
+     users           ms_account_email      Encrypt (PII linked to tokens)
+     users           scribe_token          Encrypt on write, decrypt on read
+     users           voirdire_token        Encrypt on write, decrypt on read
+     users           mfa_secret            Encrypt on write, decrypt on read
+
+  c) Migration for existing data:
+
+     *** DO NOT RUN UNTIL PHASE 2 (BACKUP/DR) IS COMPLETE ***
+     *** TAKE A VERIFIED pg_dump IMMEDIATELY BEFORE RUNNING ***
+
+     Write server/scripts/encrypt-existing-fields.js:
+     - Wrap each table in a transaction. If any row in a table fails, the
+       entire table rolls back. Do not use a single transaction across all
+       tables — a failure in users shouldn't roll back cases.
+     - For each row: check isEncrypted(value) first. Skip if already
+       encrypted. This makes the script idempotent and safe to re-run after
+       partial failure.
+     - Log: table name, total rows, rows encrypted, rows skipped.
+     - After completion: spot-check decryption on 5+ rows per table.
+     - Compare row counts before/after. They must be identical.
+     - Archive the script after use (do not delete).
+
+  d) Fix temp_password (REDUCED SCOPE):
+
+     The startup migration that bcrypt-hashes legacy plaintext values is
+     already in place. Auth routes already use bcrypt.compare(). Remaining:
+     - Rename column: temp_password → temp_password_hash (migration file).
+     - Audit all code paths that write to this column. Confirm none store
+       plaintext. Grep:
+         grep -rn "temp_password" server/
+     - Verify the "send temp password" admin flow hashes before INSERT/UPDATE.
+     - Estimated effort: 1–2 hours, not 1–2 days.
+
+  e) Grep the entire codebase for every read/write of encrypted columns.
+     Missing one decrypt call = garbled data in the UI.
+     Missing one encrypt call = plaintext next to encrypted data.
+
+     Audit commands:
+       grep -rn "client_ssn" server/
+       grep -rn "ms_access_token\|ms_refresh_token" server/
+       grep -rn "mfa_secret" server/
+       grep -rn "scribe_token\|voirdire_token" server/
+
+--------------------------------------------------------------------------------
+1.2  POSTGRESQL SSL — COMPLETE, NO ACTION NEEDED
+--------------------------------------------------------------------------------
+
+  Status: Already resolved. server/db.js supports DB_SSL env var with
+  require/verify/false modes. For EC2/RDS deployment, set DB_SSL=verify
+  and provide the RDS CA bundle path. No further work.
+
+  If infrastructure changes (new DB provider, self-managed Postgres), revisit
+  and ensure certificate verification is enabled.
+
+--------------------------------------------------------------------------------
+1.3  EXTERNAL API CORS — DEFERRED TO PHASE 8
+--------------------------------------------------------------------------------
+
+  Status: Current behavior is acceptable. EXTERNAL_CORS_ORIGINS is null if
+  unset (not permissive). Moved to Phase 8 as a cleanup item: add origin
+  format validation and a startup warning if the var is missing.
+
+--------------------------------------------------------------------------------
+1.4  MAKE store:false A GLOBAL DEFAULT
+--------------------------------------------------------------------------------
+
+Problem:
+  25+ separate new OpenAI(...) instantiations across the codebase. The
+  store: false flag is inconsistent — some calls have it, some don't. One
+  missed call leaks privileged attorney-client data to OpenAI's training
+  pipeline. This is not a theoretical risk; it's a compliance issue.
+
+Fix:
+  Create server/utils/openai.js:
+
+    const OpenAI = require('openai');
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: process.env.OPENAI_BASE_URL  // if still needed post-Replit
+    });
+
+    const originalCreate = client.chat.completions.create.bind(
+      client.chat.completions
+    );
+    client.chat.completions.create = function(params) {
+      return originalCreate({ ...params, store: false });
+    };
+
+    module.exports = client;
+
+  Then:
+  - Replace every new OpenAI(...) import with:
+      const openai = require('../utils/openai');  // adjust path as needed
+  - Grep to verify zero remaining direct instantiations:
+      grep -rn "new OpenAI" server/
+    Must return zero results outside of utils/openai.js.
+  - Estimated effort: 2–3 hours for 25+ call sites. Tedious but mechanical.
+
+--------------------------------------------------------------------------------
+1.5  RATE LIMITING ON AUTH ENDPOINTS (NEW)
+--------------------------------------------------------------------------------
+
+Problem:
+  The login endpoint (POST /api/auth/login) has no rate limiting. An attacker
+  can brute-force passwords at network speed. Same applies to:
+  - POST /api/auth/forgot-password (password reset flood)
+  - POST /api/auth/mfa/verify (MFA code brute-force — 6-digit TOTP has only
+    1,000,000 possible values)
+  - POST /api/portal/auth/login (client portal login)
+
+Implementation:
+
+  a) Install express-rate-limit:
+       npm install express-rate-limit --save (in server/)
+
+  b) Create server/middleware/rate-limit.js:
+
+     const rateLimit = require('express-rate-limit');
+
+     // Strict limit for auth endpoints
+     const authLimiter = rateLimit({
+       windowMs: 15 * 60 * 1000,   // 15-minute window
+       max: 10,                      // 10 attempts per window per IP
+       message: { error: 'Too many attempts. Try again in 15 minutes.' },
+       standardHeaders: true,        // Return rate limit info in headers
+       legacyHeaders: false,
+       keyGenerator: (req) => {
+         // Key on IP + email (if present) to prevent distributed attacks
+         // against a single account
+         const email = req.body?.email?.toLowerCase() || '';
+         return `${req.ip}:${email}`;
+       }
+     });
+
+     // Tighter limit for MFA verification (6-digit code = small keyspace)
+     const mfaLimiter = rateLimit({
+       windowMs: 15 * 60 * 1000,
+       max: 5,                       // 5 attempts per window
+       message: { error: 'Too many MFA attempts. Try again in 15 minutes.' },
+       keyGenerator: (req) => req.ip
+     });
+
+     // Limit password reset requests to prevent email flooding
+     const resetLimiter = rateLimit({
+       windowMs: 60 * 60 * 1000,    // 1-hour window
+       max: 3,                       // 3 reset requests per hour per IP
+       message: { error: 'Too many reset requests. Try again later.' },
+       keyGenerator: (req) => req.ip
+     });
+
+     module.exports = { authLimiter, mfaLimiter, resetLimiter };
+
+  c) Apply in server/routes/auth.js:
+
+     const { authLimiter, mfaLimiter, resetLimiter } = require('../middleware/rate-limit');
+
+     router.post('/login', authLimiter, async (req, res) => { ... });
+     router.post('/mfa/verify', mfaLimiter, async (req, res) => { ... });
+     router.post('/mfa/verify-setup', mfaLimiter, async (req, res) => { ... });
+     router.post('/forgot-password', resetLimiter, async (req, res) => { ... });
+
+  d) Apply to portal login in server/routes/portal-auth.js (or wherever
+     the portal login route lives):
+
+     router.post('/login', authLimiter, async (req, res) => { ... });
+
+  e) Apply to external API JWT endpoint if one exists for token issuance.
+
+  f) If running behind a reverse proxy (nginx, ALB), ensure trust proxy is
+     set correctly so req.ip reflects the real client IP, not the proxy:
+
+     app.set('trust proxy', 1);  // or the specific proxy hop count
+
+     Without this, all requests share the proxy's IP and rate limiting is
+     either useless (one blocked user blocks everyone) or trivially bypassed.
+
+  g) Consider adding account lockout for repeated failures against the same
+     email. After 10 failed attempts for a given email (regardless of IP),
+     lock the account for 30 minutes. Store failed attempt counts in a
+     login_attempts table or in-memory Map. This catches distributed
+     brute-force attacks that rotate IPs.
+
+     TABLE: login_attempts (optional, for persistent lockout tracking)
+       email TEXT PRIMARY KEY,
+       failed_count INT DEFAULT 0,
+       locked_until TIMESTAMPTZ,
+       last_attempt TIMESTAMPTZ
+
+--------------------------------------------------------------------------------
+1.6  SERVER-SIDE INPUT VALIDATION AUDIT (NEW)
+--------------------------------------------------------------------------------
+
+Problem:
+  The blueprint states "All database queries use pg's parameterized queries
+  ($1, $2, ...). No string interpolation of user input into SQL." This is
+  good — parameterized queries prevent SQL injection. But parameterized
+  queries don't validate that inputs are the right TYPE or within expected
+  RANGES. Passing a string where an integer is expected, or a 50,000-char
+  string where a name is expected, can cause unexpected behavior, crashes,
+  or denial of service.
+
+  This is not about SQL injection (which parameterized queries handle).
+  This is about input correctness and application-level abuse prevention.
+
+Implementation:
+
+  a) Install a validation library:
+       npm install express-validator --save (in server/)
+
+     Or use Joi/Zod if preferred. express-validator integrates cleanly with
+     Express middleware chains.
+
+  b) Priority audit — validate inputs on these routes first:
+
+     ROUTE FILE              VALIDATE
+     ───────────────────     ──────────────────────────────────────────
+     auth.js                 email format, password length (8–128 chars)
+     cases.js                caseId is integer, case_type is from allowed
+                             enum, date fields are valid ISO dates
+     case-documents.js       caseId is integer, file size within limits
+     ai-agents.js            agentType is from allowed enum, caseId is
+                             integer, prompt length capped (prevent token
+                             stuffing attacks on OpenAI calls)
+     sms.js                  phone number is E.164 format, message length
+                             capped
+     inbound-email.js        Validate webhook signature (SendGrid signs
+                             inbound parse webhooks — verify it)
+     external.js             Validate all params from external API callers
+                             (these are third parties, lowest trust level)
+     collaborate.js          Message length capped, channel_id is integer
+     portal routes            All portal inputs (lowest trust — public users)
+
+  c) General rules to enforce across all routes:
+
+     - Integer IDs: parseInt + isNaN check. Reject non-numeric case_id,
+       user_id, document_id values before they hit SQL.
+     - String length limits: name fields ≤ 255 chars, description/notes
+       ≤ 10,000 chars, free text ≤ 50,000 chars. Prevents memory abuse.
+     - Enum fields: Validate against allowed values (case_type, status,
+       stage, role). Do not trust the frontend to enforce this.
+     - Date fields: Validate ISO 8601 format. Reject nonsense dates.
+     - Email fields: Basic format validation (contains @, reasonable length).
+     - Pagination: Default + max limits on all list endpoints. If someone
+       sends ?limit=999999, cap it to 100 or 200.
+
+  d) Do NOT try to validate everything in one pass. Start with the routes
+     listed above (highest risk / highest exposure), then add validation to
+     remaining routes incrementally as you touch them for other work.
+
+  e) Create a shared validation helper if patterns repeat:
+
+     server/middleware/validate.js:
+       - validateIntParam(paramName) — middleware that checks req.params[name]
+       - validatePagination() — enforces default/max on limit and offset
+       - validateEnum(field, allowedValues) — checks req.body[field]
+
+     These stack as middleware: router.get('/:id', validateIntParam('id'), ...)
+
+--------------------------------------------------------------------------------
+1.7  SESSION INVALIDATION ON PASSWORD/ROLE CHANGE (NEW)
+--------------------------------------------------------------------------------
+
+Problem:
+  When a user changes their password (or an admin changes their role / deactivates
+  their account), existing sessions for that user may remain active. This means:
+  - A compromised password can remain exploitable even after the user resets it.
+  - A deactivated employee retains access until their session expires (8 hours
+    or 30 days with rememberMe).
+  - A role downgrade doesn't take effect until the next login.
+
+Implementation:
+
+  a) When password is changed (in auth.js reset-password and change-password):
+
+     DELETE FROM user_sessions
+     WHERE sess::jsonb->>'userId' = $1::text
+       AND sid != $2;
+
+     $1 = the user's ID (invalidate all sessions for this user)
+     $2 = the current session's sid (keep the session that just changed
+          the password, so the user isn't logged out of their own session)
+
+  b) When a user is deactivated (deleted_at is set):
+
+     DELETE FROM user_sessions
+     WHERE sess::jsonb->>'userId' = $1::text;
+
+     All sessions. No exceptions. The user is gone.
+
+  c) When an admin changes a user's role:
+
+     Option A (aggressive): Invalidate all sessions, force re-login.
+     Option B (soft): Update the session data in-place:
+       UPDATE user_sessions
+       SET sess = jsonb_set(sess::jsonb, '{userRole}', $2::jsonb)
+       WHERE sess::jsonb->>'userId' = $1::text;
+
+     Option A is safer. Option B avoids disrupting the user. Pick based on
+     how frequently role changes happen. For a law firm, roles change rarely
+     — go with Option A.
+
+  d) When admin sends a new temp password (forced password reset):
+
+     Invalidate all existing sessions for that user. The old password should
+     not remain usable anywhere.
+
+  e) Test all four scenarios manually after implementation. The user_sessions
+     table uses connect-pg-simple with sid as the primary key and sess as
+     a JSON column — verify the JSON path queries work with your session
+     serialization format.
+
+
+================================================================================
+PHASE 2: BACKUP & DISASTER RECOVERY (Week 2, partial)
+================================================================================
+This must be in place before running the encryption migration (1.1c) or the
+BYTEA-to-R2 migration (Phase 5). Both are destructive in-place operations.
+
+--------------------------------------------------------------------------------
+2.1  AUTOMATED DATABASE BACKUPS
+--------------------------------------------------------------------------------
+
+  a) Daily automated pg_dump:
+
+     On EC2, set up a cron job or use AWS Backup (if on RDS):
+
+     CRON APPROACH (self-managed Postgres):
+       0 3 * * * pg_dump $DATABASE_URL | gzip > /backups/mattrmindr-$(date +\%Y\%m\%d-\%H\%M).sql.gz
+
+     RDS APPROACH:
+       Enable automated snapshots with 7-day retention (RDS default).
+       Additionally, set up a daily pg_dump to S3 for portability:
+         pg_dump $DATABASE_URL | gzip | aws s3 cp - s3://mattrmindr-backups/daily/$(date +%Y%m%d).sql.gz
+
+  b) Retention policy:
+     - Daily backups: keep 7 days
+     - Weekly backups: keep 4 weeks
+     - Monthly backups: keep 6 months
+     - Pre-migration snapshots: keep indefinitely (labeled)
+
+  c) Verify restores work:
+     At least once before running any destructive migration, restore a backup
+     to a scratch database and confirm:
+     - Row counts match production
+     - Application connects and functions correctly against the restored DB
+     - Encrypted fields (after 1.1c) decrypt correctly
+
+     A backup you've never tested restoring is not a backup.
+
+  d) Pre-migration protocol (use before 1.1c and Phase 5):
+     1. Take a labeled snapshot: mattrmindr-pre-encryption-YYYYMMDD
+     2. Verify the snapshot restores (see 2.1c)
+     3. Run the migration
+     4. Verify the migration succeeded
+     5. Keep the pre-migration snapshot for 30 days minimum
+
+--------------------------------------------------------------------------------
+2.2  R2 / FILE STORAGE BACKUPS
+--------------------------------------------------------------------------------
+
+  Once BYTEA data is migrated to R2 (Phase 5), R2 becomes the sole copy of
+  every uploaded file. If the R2 bucket is deleted or corrupted, all files
+  are gone.
+
+  - Enable Cloudflare R2 versioning on the bucket.
+  - Set up a cross-region replication rule or a periodic sync to a second
+    storage provider (S3, Backblaze B2) as a cold backup.
+  - This can wait until Phase 5 is underway, but must be done before the
+    BYTEA NULL-out step (5.2) makes R2 the only copy.
+
+--------------------------------------------------------------------------------
+2.3  DOCUMENT THE RECOVERY PROCEDURE
+--------------------------------------------------------------------------------
+
+  Write a RECOVERY.md in the repo root:
+  - How to restore from pg_dump
+  - How to restore from RDS snapshot
+  - How to restore R2 files from versioned backup
+  - Expected recovery time for each scenario
+  - Who has access to run these procedures
+  - Contact info for infrastructure access (AWS account, Cloudflare dashboard)
+
+  This document should exist before any destructive migration runs.
+
+
+================================================================================
+PHASE 3: MIGRATION SYSTEM (Week 2–3)
+================================================================================
+This unblocks every future schema change and makes deployments predictable.
+
+--------------------------------------------------------------------------------
+3.1  INSTALL node-pg-migrate
+--------------------------------------------------------------------------------
+
+  npm install node-pg-migrate --save (in server/)
+
+  Why node-pg-migrate specifically:
+  - Uses raw SQL files. No ORM. Matches the existing style.
+  - Supports up/down migrations.
+  - Tracks applied migrations in a pgmigrations table.
+  - Zero learning curve for someone already writing raw SQL.
+
+--------------------------------------------------------------------------------
+3.2  CREATE INITIAL BASELINE MIGRATION
+--------------------------------------------------------------------------------
+
+  a) Create server/migrations/ directory.
+
+  b) Generate baseline:
+     npx node-pg-migrate create initial-schema --migration-file-language sql
+
+  c) In the UP migration, paste the contents of schema.js — every CREATE TABLE
+     IF NOT EXISTS statement. This becomes migration 0001.
+
+  d) The DOWN migration is empty (you are not going to roll back the baseline).
+
+  e) Run against the production database:
+     DATABASE_URL=... npx node-pg-migrate up
+
+     Since all tables already exist (IF NOT EXISTS), this is a no-op on the DB
+     but registers the migration as "applied" in pgmigrations.
+
+--------------------------------------------------------------------------------
+3.3  MIGRATE ensureColumns() INTO NUMBERED MIGRATIONS
+--------------------------------------------------------------------------------
+
+  Every ALTER TABLE ADD COLUMN IF NOT EXISTS currently in ensureColumns() becomes
+  its own migration file (or group logically — one migration per feature area).
+
+  Example — migration 0002_add_ocr_columns.sql:
+
+    -- UP
+    ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS ocr_status TEXT;
+    ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS ocr_text TEXT;
+
+    -- DOWN
+    ALTER TABLE case_documents DROP COLUMN IF EXISTS ocr_status;
+    ALTER TABLE case_documents DROP COLUMN IF EXISTS ocr_text;
+
+  Repeat for every group of columns in ensureColumns(). This will take a few
+  hours. There are approximately 40+ column additions to catalog.
+
+  After all ensureColumns() statements are captured in migration files, run them
+  all against production (again, no-ops since columns exist, but registers them).
+
+--------------------------------------------------------------------------------
+3.4  REMOVE ensureColumns() FROM STARTUP
+--------------------------------------------------------------------------------
+
+  Once all existing DDL is captured in migrations:
+  - Delete the ensureColumns() function from server/index.js.
+  - Replace it with a single call at startup:
+      npx node-pg-migrate up (or invoke programmatically via the node API)
+  - This runs any pending migrations, then proceeds to app.listen().
+
+  From this point forward, ALL schema changes go through migration files.
+  No more ALTER TABLE in index.js. No more .catch(() => {}).
+
+--------------------------------------------------------------------------------
+3.5  ADD MIGRATION COMMANDS TO package.json
+--------------------------------------------------------------------------------
+
+  In server/package.json scripts:
+
+    "migrate:up": "node-pg-migrate up",
+    "migrate:down": "node-pg-migrate down",
+    "migrate:create": "node-pg-migrate create --migration-file-language sql"
+
+  Workflow for any future schema change:
+    1. npm run migrate:create -- add-some-column
+    2. Edit the generated SQL file
+    3. npm run migrate:up
+    4. Commit the migration file to git
+
+
+================================================================================
+PHASE 4: App.js DECOMPOSITION (Weeks 3–8)
+================================================================================
+This is the largest effort. It is also the highest-leverage change for enabling
+a second developer to contribute without breaking things.
+
+CAN RUN IN PARALLEL with Phases 1–3 if a second developer is available.
+This phase touches only frontend code. Phases 1–3 are backend only.
+
+Realistic estimate: 4–6 weeks. The 21,014-line file requires careful, view-by-
+view extraction with manual testing after each extraction. Do not rush this.
+
+--------------------------------------------------------------------------------
+4.1  RULES OF ENGAGEMENT
+--------------------------------------------------------------------------------
+
+  - One view at a time. Never refactor two views in parallel.
+  - Each extraction is a single PR/commit. Verify the app works after each one.
+  - Do NOT rewrite logic during extraction. Move code exactly as-is, then clean
+    up later. Mixing refactoring with extraction guarantees bugs.
+  - Do NOT introduce a state management library yet. Continue using useState.
+    Introducing Redux/Zustand during decomposition adds a second axis of change.
+
+--------------------------------------------------------------------------------
+4.2  EXTRACT THE STATE MACHINE FIRST
+--------------------------------------------------------------------------------
+
+  Before touching views, extract the navigation logic.
+
+  Create lextrack/src/navigation.js:
+
+    export const VIEWS = {
+      DASHBOARD: 'dashboard',
+      CASE_DETAIL: 'caseDetail',
+      CONTACTS: 'contacts',
+      // ... every value that currentView can be
+    };
+
+  This gives you a single source of truth for view names instead of string
+  literals scattered across 21,000 lines.
+
+  Find every setCurrentView("...") call in App.js and replace the string with
+  the constant. This is low-risk and immediately makes the codebase searchable.
+
+--------------------------------------------------------------------------------
+4.3  EXTRACT VIEWS IN ORDER OF SIZE AND ISOLATION
+--------------------------------------------------------------------------------
+
+  Extraction priority (largest and most self-contained first):
+
+  ORDER   VIEW                     EST. LINES   NOTES
+  ─────   ───────────────────────  ──────────   ────────────────────────────
+  1       CaseDetailView           ~4,000+      Biggest win. Has clear data
+                                                boundaries (single case context)
+  2       ContactsView             ~1,500       Relatively self-contained
+  3       DashboardView            ~2,000       Lots of summary queries
+  4       TasksListView            ~1,000       Cross-case task management
+  5       DeadlinesView            ~1,000       Similar pattern to tasks
+  6       SettingsView             ~1,500       Admin settings, permissions
+  7       DeletedDataView          ~800         Recovery interface
+  8       CalendarView             ~800         Calendar display
+  9       ReportsView              ~600         Custom reports
+  10      Remaining small views    ~varies      Mop up
+
+  Extraction procedure for EACH view:
+
+  a) Identify the render block:
+     In App.js, find the section: if (currentView === 'caseDetail') { ... }
+     Trace every piece of state it reads and every function it calls.
+
+  b) Create the file:
+     lextrack/src/views/CaseDetailView.js (or whatever the view is)
+
+  c) Move the JSX into a functional component. Pass dependencies as props:
+     - State values it reads
+     - Setter functions it calls
+     - Navigation functions (setCurrentView)
+     - API functions it invokes
+     - Shared state like currentUser, firmSettings
+
+  d) In App.js, replace the render block with:
+     <CaseDetailView
+       caseId={selectedCaseId}
+       currentUser={currentUser}
+       onNavigate={setCurrentView}
+       ... />
+
+  e) Test every feature of that view manually. Run through all tabs, all CRUD
+     operations, all edge cases.
+
+  f) Commit. Move to the next view.
+
+  After all views are extracted, App.js should be roughly 2,000–3,000 lines:
+  state declarations, data fetching, the view routing switch, and shared
+  modals/overlays. That's manageable.
+
+--------------------------------------------------------------------------------
+4.4  INTRODUCE REACT ROUTER (After all views are extracted)
+--------------------------------------------------------------------------------
+
+  Do NOT do this during extraction. Do it after.
+
+  npm install react-router-dom (in lextrack/)
+
+  a) Replace the currentView switch statement with <Routes>:
+
+     <Routes>
+       <Route path="/" element={<DashboardView ... />} />
+       <Route path="/cases/:id" element={<CaseDetailView ... />} />
+       <Route path="/contacts" element={<ContactsView ... />} />
+       ...
+     </Routes>
+
+  b) Replace every setCurrentView('caseDetail') call with:
+     navigate(`/cases/${caseId}`)
+
+  c) This gives you: bookmarkable URLs, browser back/forward, and future
+     code-splitting capability (React.lazy + Suspense per route).
+
+  d) Update the portal SPA the same way (lower priority, it's smaller).
+
+
+================================================================================
+PHASE 5: FILE STORAGE MIGRATION — BYTEA TO R2 (Weeks 9–10)
+================================================================================
+
+*** PHASE 2 (BACKUP/DR) MUST BE COMPLETE BEFORE STEP 5.2 ***
+Step 5.2 nulls out BYTEA data after uploading to R2. If R2 upload succeeds but
+the data is corrupted, and you have no backup, the file is gone permanently.
+
+--------------------------------------------------------------------------------
+5.1  MAKE R2 THE DEFAULT FOR ALL NEW UPLOADS
+--------------------------------------------------------------------------------
+
+  Currently R2 is gated behind isR2Configured() and only used for transcripts.
+
+  Changes:
+
+  a) In case-documents.js upload handler:
+     - If R2 is configured: upload to R2, store the key in a new column
+       r2_file_key (TEXT). Set file_data = NULL.
+     - If R2 is NOT configured: fall back to BYTEA (existing behavior).
+
+  b) In case-documents.js download/view handler:
+     - If r2_file_key is not null: stream from R2.
+     - Else: serve from file_data BYTEA (existing behavior).
+
+  c) Apply the same pattern to all tables with BYTEA file storage:
+     - case_filings (file_data column)
+     - case_correspondence attachments
+     - case_voicemails (audio_data)
+     - chat_messages attachments
+     - Any other table with BYTEA file storage
+
+     The blueprint mentions file_data BYTEA appears in at least 6 tables with
+     26+ references in case-documents.js alone. Audit all of them:
+       grep -rn "file_data\|audio_data\|video_data\|profile_picture" server/
+
+  d) Add r2_file_key columns via migration (Phase 3 system):
+     ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS r2_file_key TEXT;
+     ALTER TABLE case_filings ADD COLUMN IF NOT EXISTS r2_file_key TEXT;
+     (etc. for every affected table)
+
+--------------------------------------------------------------------------------
+5.2  BACKFILL EXISTING FILES TO R2
+--------------------------------------------------------------------------------
+
+  *** TAKE A LABELED BACKUP BEFORE THIS STEP ***
+  *** VERIFY R2 BUCKET VERSIONING IS ENABLED (Phase 2.2) ***
+
+  Create server/scripts/migrate-bytea-to-r2.js:
+
+  - Process one table at a time.
+  - SELECT id, file_name, file_type, file_data FROM case_documents
+    WHERE file_data IS NOT NULL AND r2_file_key IS NULL
+    LIMIT 100
+  - For each row:
+    1. Upload file_data to R2
+    2. Verify the upload by doing a HEAD request to R2 (confirm key exists
+       and content-length matches)
+    3. Only then: UPDATE SET r2_file_key = key, file_data = NULL
+  - If R2 upload fails or verification fails: log the error, skip the row,
+    continue. Do NOT null out file_data on failure.
+  - Run in batches of 100 with a delay between batches to avoid spiking
+    DB I/O and R2 request costs.
+  - Log progress: "Migrated 1,200 / 8,450 documents"
+  - Make it resumable (only processes rows where r2_file_key IS NULL).
+  - Run during off-hours or low-traffic periods.
+
+  After migration is complete and verified:
+  - Spot-check: download 20+ files through the application UI. Compare file
+    sizes. Open documents and verify they render correctly.
+  - The file_data columns will be NULL for all migrated rows.
+  - Run VACUUM FULL on affected tables to reclaim disk space.
+    (WARNING: VACUUM FULL locks the table. Schedule during maintenance window.
+    For large tables, consider pg_repack as a non-locking alternative.)
+
+--------------------------------------------------------------------------------
+5.3  PRESIGNED URLS FOR LARGE FILES
+--------------------------------------------------------------------------------
+
+  Currently the Express server proxies every file download through Node.js
+  memory. For large files (audio, video, PDFs), this ties up a request handler
+  and consumes RAM.
+
+  Better: generate R2 presigned URLs and redirect the client.
+
+  In the download endpoint:
+    const url = await getSignedUrl(s3Client, new GetObjectCommand({
+      Bucket: bucket,
+      Key: r2FileKey,
+    }), { expiresIn: 300 }); // 5 minutes
+    res.redirect(url);
+
+  The client downloads directly from R2. Express does zero work.
+  Only use this for file downloads, not for inline document viewing where
+  you need to control headers.
+
+
+================================================================================
+PHASE 6: AUTOMATED TESTING (Weeks 11–12)
+================================================================================
+
+--------------------------------------------------------------------------------
+6.1  SETUP
+--------------------------------------------------------------------------------
+
+  In server/:
+    npm install --save-dev jest supertest
+
+  In server/package.json:
+    "scripts": {
+      "test": "jest --runInBand --forceExit"
+    }
+
+  Create server/tests/ directory.
+
+  Create server/tests/setup.js:
+    - Connects to a TEST database (separate from production/dev).
+    - Runs migrations (Phase 3 system) to build schema from scratch.
+    - Exports a configured supertest agent with the Express app.
+    - Tears down after all tests (truncate all tables, close pool).
+
+  Environment:
+    - TEST_DATABASE_URL pointing to a separate Postgres database.
+    - On EC2: spin up a second RDS instance (micro tier) or use a local
+      Postgres container for test runs.
+
+--------------------------------------------------------------------------------
+6.2  PRIORITY TEST SUITES (ordered by risk)
+--------------------------------------------------------------------------------
+
+  FILE                              COVERS
+  ──────────────────────────────    ──────────────────────────────────────
+  auth.test.js                      Login, MFA, session, temp password,
+                                    password reset, deactivated user block,
+                                    rate limiting (1.5), session invalidation
+                                    on password change (1.7)
+  client-auth.test.js               Portal login, session isolation (client
+                                    cannot access firm routes)
+  external-auth.test.js             JWT validation, expired token, bad sig
+  cases.test.js                     CRUD, conflict check, soft delete,
+                                    confidential case visibility, input
+                                    validation (1.6)
+  inbound-email.test.js             Filing branch routing, case-ID branch
+                                    routing, unmatched email storage,
+                                    attachment classification
+  task-flows.test.js                Trigger evaluation, condition matching,
+                                    duplicate prevention, step dependencies
+  ocr-pipeline.test.js              PDF text extraction, Gemini fallback,
+                                    Tesseract fallback, page markers
+  permissions.test.js               Role-based access, user-based access,
+                                    expiration, admin-only operations
+
+  Each test file should cover:
+  - Happy path (expected input, expected output)
+  - Auth failure (missing session, wrong role)
+  - Validation failure (missing required fields, bad data types, exceeding
+    length limits — validates Phase 1.6 work)
+  - Rate limit behavior (for auth tests — validates Phase 1.5 work)
+  - Edge cases specific to the route
+
+  Target: 80% coverage on the above routes. Do not aim for 100% coverage
+  across the whole app — diminishing returns.
+
+--------------------------------------------------------------------------------
+6.3  CI INTEGRATION
+--------------------------------------------------------------------------------
+
+  Set up GitHub Actions (or equivalent) to run tests on every push:
+
+  .github/workflows/test.yml:
+    - Spin up Postgres service container
+    - npm install in server/
+    - Run migrations
+    - npm test
+    - Block merge on failure
+
+  Block deployments on test failure. Non-negotiable once tests exist.
+
+
+================================================================================
+PHASE 7: AI SEARCH — VECTOR MIGRATION (Weeks 13–14)
+================================================================================
+
+Moved from original Phase 5 position. This now runs AFTER test coverage is in
+place (Phase 6). Shipping vector search without tests is risky — embedding
+pipelines are async, have multiple failure modes (API rate limits, model
+changes, dimension mismatches), and silently degrade search quality if broken.
+
+PREREQUISITE CHECK: Before starting, verify that your PostgreSQL instance (RDS
+or self-managed on EC2) supports the pgvector extension. If using RDS, pgvector
+is supported on PostgreSQL 15.2+ and 16.1+ with the vector extension available.
+If your Postgres version doesn't support it, this phase requires a Postgres
+version upgrade first — scope that separately.
+
+--------------------------------------------------------------------------------
+7.1  ADD pgvector TO POSTGRESQL
+--------------------------------------------------------------------------------
+
+  CREATE EXTENSION IF NOT EXISTS vector;
+
+  Add as a migration file. Run against production.
+  If the extension is not available, stop here and plan the Postgres upgrade.
+
+--------------------------------------------------------------------------------
+7.2  CREATE EMBEDDINGS TABLE
+--------------------------------------------------------------------------------
+
+  Migration:
+
+  CREATE TABLE case_embeddings (
+    id SERIAL PRIMARY KEY,
+    case_id INT REFERENCES cases(id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL,       -- 'summary', 'document', 'note', 'transcript'
+    content_id INT,                   -- FK to source record (nullable for summaries)
+    content_preview TEXT,             -- First 200 chars for display
+    embedding vector(1536) NOT NULL,  -- OpenAI text-embedding-3-small dimension
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(case_id, content_type, content_id)
+  );
+
+  CREATE INDEX idx_case_embeddings_vector ON case_embeddings
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+  CREATE INDEX idx_case_embeddings_case ON case_embeddings(case_id);
+
+--------------------------------------------------------------------------------
+7.3  BUILD EMBEDDING PIPELINE
+--------------------------------------------------------------------------------
+
+  Create server/utils/embeddings.js:
+
+  - Function: embedText(text) — calls OpenAI text-embedding-3-small via the
+    centralized wrapper (Phase 1.4), returns 1536-dimension vector.
+
+  - Function: upsertCaseEmbedding(caseId, contentType, contentId, text)
+    - Truncate text to 8,000 tokens (model limit).
+    - Call embedText().
+    - UPSERT into case_embeddings (ON CONFLICT case_id, content_type, content_id
+      DO UPDATE SET embedding = $x, content_preview = $y, updated_at = NOW()).
+
+  - Function: buildCaseSummaryText(caseId) — queries all relevant tables for
+    a case (same data currently assembled in AI search), concatenates into a
+    single text blob.
+
+  Trigger embedding updates:
+  - After case create/update in cases.js: queue re-embed of case summary.
+  - After document OCR completes: embed the document text.
+  - After note create/update: embed the note.
+  - After transcript import: embed the transcript text.
+  - Use a simple in-memory queue with a worker that processes one at a time
+    to avoid hammering the OpenAI API. setTimeout-based debouncing per case
+    to coalesce rapid edits (e.g., 5-second delay after last change).
+
+  Write tests for the embedding pipeline (Phase 6 infrastructure):
+  - embedText returns correct dimension vector
+  - upsertCaseEmbedding creates and updates correctly
+  - Queue processes items and handles API failures gracefully
+
+--------------------------------------------------------------------------------
+7.4  REPLACE AI SEARCH WITH VECTOR SEARCH
+--------------------------------------------------------------------------------
+
+  In server/routes/ai-search.js:
+
+  OLD FLOW:
+    1. Query EVERY table for EVERY case → build text blobs
+    2. Send ALL text to GPT-4o → ask which cases match
+    3. Return matched case IDs
+
+  NEW FLOW:
+    1. Embed the user's search query: embedText(userQuery)
+    2. Vector similarity search:
+       SELECT DISTINCT case_id, content_type, content_preview,
+              1 - (embedding <=> $1) AS similarity
+       FROM case_embeddings
+       WHERE 1 - (embedding <=> $1) > 0.3
+       ORDER BY similarity DESC
+       LIMIT 20
+    3. Fetch full case data ONLY for those 20 cases.
+    4. Send those 20 cases + user query to GPT-4o for ranking and explanation.
+    5. Return results.
+
+  Performance difference:
+    - Old: O(all_cases * all_tables) SQL queries + massive LLM context
+    - New: O(1) vector query + O(20) case lookups + small LLM context
+    - Latency drops from 10–30s to 1–3s. Cost drops 90%+.
+
+  Keep the old search as a fallback (feature flag) for 2 weeks after deploying
+  the new system. If vector search produces worse results, you can switch back
+  while debugging.
+
+--------------------------------------------------------------------------------
+7.5  BACKFILL EXISTING DATA
+--------------------------------------------------------------------------------
+
+  Create server/scripts/backfill-embeddings.js:
+  - Iterate all cases. For each: build summary text, embed, insert.
+  - Iterate all documents with extracted text. Embed each.
+  - Rate limit: ~3,000 embeddings/min with OpenAI's default tier.
+  - For a firm with 500 cases and 5,000 documents, this takes ~2 minutes.
+  - Run once after deploying the new system.
+
+
+================================================================================
+PHASE 8: CLEANUP & OPTIONAL WORK (Weeks 15–16+)
+================================================================================
+
+These items are real but not urgent. Do them after everything above is stable.
+
+--------------------------------------------------------------------------------
+8.1  EXTERNAL API CORS HARDENING (moved from Phase 1.3)
+--------------------------------------------------------------------------------
+
+  Current state is acceptable (null if unset = not permissive). Improvements:
+
+  - Validate each origin in EXTERNAL_CORS_ORIGINS is a full URL
+    (https://domain.com), not a wildcard or bare domain.
+  - Reject * as an origin in production.
+  - Log a startup warning if the env var is missing.
+  - Estimated effort: 30 minutes.
+
+--------------------------------------------------------------------------------
+8.2  CHAT — POLLING TO SSE (optional)
+--------------------------------------------------------------------------------
+
+  Lower priority. Only matters if you have 20+ concurrent chat users or are
+  selling to multiple firms and seeing actual performance issues.
+
+  In server/routes/collaborate.js, add:
+
+    GET /api/collaborate/stream
+
+  Implementation:
+  - Set headers: Content-Type: text/event-stream, Connection: keep-alive,
+    Cache-Control: no-cache.
+  - On connection: register the user's response object in a Map keyed by
+    userId.
+  - On new message insert (in POST /api/collaborate/messages): look up all
+    channel members in the Map, call res.write(`data: ${JSON.stringify(msg)}\n\n`)
+    for each connected member.
+  - On client disconnect: remove from Map.
+
+  Frontend (CollaborateView.js):
+    const es = new EventSource('/api/collaborate/stream', { withCredentials: true });
+    es.onmessage = (e) => { const msg = JSON.parse(e.data); /* update state */ };
+
+  Keep the polling endpoint alive as a fallback for environments where SSE
+  doesn't work (some corporate proxies kill long-lived connections).
+
+
+================================================================================
+ONGOING MAINTENANCE PRACTICES
+================================================================================
+
+These are not one-time tasks. These are permanent process changes.
+
+--------------------------------------------------------------------------------
+M.1  SCHEMA CHANGES
+--------------------------------------------------------------------------------
+  Every schema change goes through a migration file. No exceptions.
+  No ALTER TABLE in application code. Ever again.
+
+--------------------------------------------------------------------------------
+M.2  NEW AI ENDPOINTS
+--------------------------------------------------------------------------------
+  Import OpenAI client from utils/openai.js only.
+  Never instantiate OpenAI directly. store:false is enforced at the wrapper.
+
+--------------------------------------------------------------------------------
+M.3  NEW FILE STORAGE
+--------------------------------------------------------------------------------
+  All new file uploads go to R2 when configured. BYTEA is the fallback, not
+  the default. Any new table with file storage must include r2_file_key.
+
+--------------------------------------------------------------------------------
+M.4  NEW VIEWS
+--------------------------------------------------------------------------------
+  Every new UI view is its own component file in lextrack/src/views/.
+  Nothing gets added to App.js except a route entry.
+
+--------------------------------------------------------------------------------
+M.5  SENSITIVE FIELDS
+--------------------------------------------------------------------------------
+  Any new column containing tokens, secrets, SSNs, or credentials must use
+  the encrypt/decrypt utilities. Review in code review. No plain text secrets
+  in the database. Period.
+
+--------------------------------------------------------------------------------
+M.6  TEST COVERAGE
+--------------------------------------------------------------------------------
+  Every new API route gets at least: one happy-path test, one auth-failure
+  test, one validation-failure test. Write the tests before or alongside the
+  route, not "later."
+
+--------------------------------------------------------------------------------
+M.7  INPUT VALIDATION
+--------------------------------------------------------------------------------
+  Every new route validates its inputs using the shared middleware (1.6e).
+  Integer IDs, string length limits, enum values, date formats. Do not trust
+  the frontend to enforce constraints.
+
+--------------------------------------------------------------------------------
+M.8  BACKUPS
+--------------------------------------------------------------------------------
+  Verify backup restore works at least once per quarter. A backup you've
+  never tested restoring is not a backup. Log the verification date.
+
+--------------------------------------------------------------------------------
+M.9  DEPENDENCY UPDATES
+--------------------------------------------------------------------------------
+  Run npm audit monthly. Update dependencies with known vulnerabilities.
+  Pin major versions in package.json to avoid surprise breaking changes.
+
+
+================================================================================
+APPENDIX A: ENVIRONMENT VARIABLES TO ADD
+================================================================================
+
+  FIELD_ENCRYPTION_KEY    — 32-byte hex string for AES-256-GCM field encryption
+  TEST_DATABASE_URL       — Connection string for test database
+  DB_SSL                  — Already exists (verify/require/false)
+
+================================================================================
+APPENDIX B: NEW FILES CREATED BY THIS PLAN
+================================================================================
+
+  server/utils/encryption.js              — AES-256-GCM encrypt/decrypt
+  server/utils/openai.js                  — OpenAI client wrapper (store:false)
+  server/utils/embeddings.js              — Vector embedding pipeline
+  server/middleware/rate-limit.js          — Auth endpoint rate limiters
+  server/middleware/validate.js            — Shared input validation helpers
+  server/migrations/                      — Migration files directory
+  server/scripts/encrypt-existing-fields.js
+  server/scripts/migrate-bytea-to-r2.js
+  server/scripts/backfill-embeddings.js
+  server/tests/setup.js
+  server/tests/auth.test.js
+  server/tests/client-auth.test.js
+  server/tests/external-auth.test.js
+  server/tests/cases.test.js
+  server/tests/inbound-email.test.js
+  server/tests/task-flows.test.js
+  server/tests/ocr-pipeline.test.js
+  server/tests/permissions.test.js
+  lextrack/src/navigation.js              — View constants
+  lextrack/src/views/                     — Extracted view components
+  RECOVERY.md                             — Disaster recovery procedures
+
+================================================================================
+APPENDIX C: DEPENDENCIES TO ADD
+================================================================================
+
+  Production:
+    node-pg-migrate          — SQL migration runner
+    pgvector (npm: pgvector) — pg driver support for vector type
+    express-rate-limit       — Auth endpoint rate limiting
+    express-validator        — Server-side input validation
+                               (or Joi/Zod — pick one, use it everywhere)
+
+  Dev only:
+    jest                     — Test runner
+    supertest                — HTTP assertion library for Express
+
+  PostgreSQL extension:
+    vector (pgvector)        — Must be enabled in database (verify support first)
+
+================================================================================
+APPENDIX D: ITEMS MARKED COMPLETE (no action needed)
+================================================================================
+
+  - PostgreSQL SSL (1.2): DB_SSL env var with require/verify/false modes
+    already implemented in server/db.js.
+  - Replit decoupling: REPLIT_CONNECTORS_HOSTNAME and other Replit-specific
+    dependencies already removed during EC2 migration.
+  - temp_password hashing: Startup migration hashes legacy plaintext values.
+    Auth routes use bcrypt.compare(). Only column rename remains (1.1d).
+
+================================================================================
+END OF PLAN (REV 3)
+================================================================================

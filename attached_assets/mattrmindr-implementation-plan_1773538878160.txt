@@ -1,0 +1,735 @@
+================================================================================
+MATTRMINDR — TECHNICAL REMEDIATION & HARDENING PLAN
+================================================================================
+Audience: Lead developer / development team
+Priority: Ordered by risk and dependency. Do not skip ahead.
+Estimated total effort: 12–16 weeks at full-time pace for one senior dev.
+================================================================================
+
+
+================================================================================
+PHASE 1: SECURITY HARDENING (Weeks 1–2)
+================================================================================
+Do this first. Everything else is a feature improvement. This is liability.
+
+--------------------------------------------------------------------------------
+1.1  ENCRYPT SENSITIVE FIELDS AT REST
+--------------------------------------------------------------------------------
+
+Problem:
+  - client_ssn in cases table is plain text. This is a compliance violation
+    for any firm handling PI cases. One SQL injection, one leaked backup,
+    one misconfigured permission = every client's SSN exposed.
+  - ms_access_token, ms_refresh_token in users table are plain text. A DB
+    compromise gives attackers full Microsoft 365 access for every connected
+    user — email, calendar, files.
+  - scribe_token, voirdire_token — same problem, lower blast radius.
+  - temp_password — stored plain text alongside the hash. Defeats the purpose
+    of hashing.
+
+Implementation:
+
+  a) Create server/utils/encryption.js:
+
+     - Use Node.js built-in crypto module. AES-256-GCM.
+     - Two functions: encrypt(plaintext) and decrypt(ciphertext).
+     - Encryption key from env var: FIELD_ENCRYPTION_KEY (32-byte hex string).
+     - Output format: iv:authTag:ciphertext (all base64). Store as TEXT column.
+     - Generate the key once: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+     - Add FIELD_ENCRYPTION_KEY to Replit secrets immediately.
+
+  b) Encrypted fields (update all reads and writes):
+
+     TABLE           COLUMN               NOTES
+     ─────────────   ───────────────────   ──────────────────────────────
+     cases           client_ssn            Encrypt on write, decrypt on read
+     users           ms_access_token       Encrypt on write, decrypt on read
+     users           ms_refresh_token      Encrypt on write, decrypt on read
+     users           ms_account_email      Encrypt (contains PII linked to tokens)
+     users           scribe_token          Encrypt on write, decrypt on read
+     users           voirdire_token        Encrypt on write, decrypt on read
+     users           temp_password         SEE BELOW — different fix
+     users           mfa_secret            Encrypt on write, decrypt on read
+
+  c) Migration for existing data:
+
+     Write a one-time script (server/scripts/encrypt-existing-fields.js):
+     - SELECT id, client_ssn FROM cases WHERE client_ssn IS NOT NULL
+     - For each row: UPDATE cases SET client_ssn = encrypt(client_ssn) WHERE id = $1
+     - Same pattern for every field above.
+     - Run once in production. Log row counts. Verify by spot-checking decryption.
+     - After confirming, delete the script or archive it.
+
+  d) Fix temp_password specifically:
+
+     Do NOT encrypt it. Change the flow:
+     - On user creation: generate temp password, hash it with bcrypt, store
+       ONLY the hash in temp_password_hash (rename the column).
+     - Send the plain text password to the user via SendGrid (already happening).
+     - On login: compare against temp_password_hash the same way you compare
+       password_hash. If match, set must_change_password = true, null out
+       temp_password_hash.
+     - This means you can never "resend" a temp password — you regenerate one.
+       That's correct behavior.
+
+  e) Grep the entire codebase for every read/write of these columns. Every one.
+     Missing even one decrypt call will produce garbled data in the UI.
+     Missing one encrypt call will store plain text next to encrypted data.
+
+     Commands to audit:
+       grep -rn "client_ssn" server/
+       grep -rn "ms_access_token\|ms_refresh_token" server/
+       grep -rn "temp_password" server/
+       grep -rn "mfa_secret" server/
+       grep -rn "scribe_token\|voirdire_token" server/
+
+--------------------------------------------------------------------------------
+1.2  FIX POSTGRESQL SSL
+--------------------------------------------------------------------------------
+
+Problem:
+  rejectUnauthorized: false means TLS is active but certificate validation is
+  disabled. Any MITM between the app and the database succeeds silently.
+
+Fix:
+  - If Replit provides a CA certificate for their managed Postgres, use it:
+      ssl: { ca: fs.readFileSync('/path/to/ca-cert.pem') }
+  - If Replit does not expose the CA cert (common with managed DBs behind
+    their internal network), this may be acceptable given the deployment model.
+    Document the decision explicitly in db.js with a comment explaining why.
+  - If you ever move off Replit to any other host (Railway, Render, AWS, etc.),
+    this MUST be fixed immediately with proper CA pinning.
+
+--------------------------------------------------------------------------------
+1.3  HARDEN EXTERNAL API CORS
+--------------------------------------------------------------------------------
+
+Problem:
+  EXTERNAL_CORS_ORIGINS is parsed from an env var. If misconfigured (wildcard,
+  empty, overly broad), the external API is open to cross-origin abuse.
+
+Fix in server/routes/external.js:
+  - Parse EXTERNAL_CORS_ORIGINS as a comma-separated allowlist.
+  - Validate each origin is a full URL (https://domain.com), not a wildcard.
+  - If the env var is missing or empty, DENY all cross-origin requests (do not
+    default to permissive).
+  - Log a startup warning if the var is unset.
+
+--------------------------------------------------------------------------------
+1.4  MAKE store:false A GLOBAL DEFAULT
+--------------------------------------------------------------------------------
+
+Problem:
+  Every OpenAI call must include store: false for attorney-client privilege
+  compliance. If a developer adds a new endpoint and forgets, privileged data
+  leaks to OpenAI's training pipeline.
+
+Fix:
+  Create a wrapper (server/utils/openai.js):
+
+    const OpenAI = require('openai');
+    const client = new OpenAI({ apiKey: ..., baseURL: ... });
+
+    const originalCreate = client.chat.completions.create.bind(client.chat.completions);
+    client.chat.completions.create = function(params) {
+      return originalCreate({ ...params, store: false });
+    };
+
+    module.exports = client;
+
+  Replace every `new OpenAI(...)` import in the codebase with:
+    const openai = require('../utils/openai');
+
+  Grep to verify:
+    grep -rn "new OpenAI" server/
+  After migration, this should return zero results outside of utils/openai.js.
+
+
+================================================================================
+PHASE 2: MIGRATION SYSTEM (Week 3)
+================================================================================
+This unblocks every future schema change and makes deployments predictable.
+
+--------------------------------------------------------------------------------
+2.1  INSTALL node-pg-migrate
+--------------------------------------------------------------------------------
+
+  npm install node-pg-migrate --save (in server/)
+
+  Why node-pg-migrate specifically:
+  - Uses raw SQL files. No ORM. Matches your existing style.
+  - Supports up/down migrations.
+  - Tracks applied migrations in a pgmigrations table.
+  - Zero learning curve for someone already writing raw SQL.
+
+--------------------------------------------------------------------------------
+2.2  CREATE INITIAL BASELINE MIGRATION
+--------------------------------------------------------------------------------
+
+  a) Create server/migrations/ directory.
+
+  b) Generate baseline:
+     npx node-pg-migrate create initial-schema --migration-file-language sql
+
+  c) In the UP migration, paste the contents of schema.js — every CREATE TABLE
+     IF NOT EXISTS statement. This becomes migration 0001.
+
+  d) The DOWN migration is empty (you are not going to roll back the baseline).
+
+  e) Run against your production database:
+     DATABASE_URL=... npx node-pg-migrate up
+
+     Since all tables already exist (IF NOT EXISTS), this is a no-op on the DB
+     but registers the migration as "applied" in pgmigrations.
+
+--------------------------------------------------------------------------------
+2.3  MIGRATE ensureColumns() INTO NUMBERED MIGRATIONS
+--------------------------------------------------------------------------------
+
+  Every ALTER TABLE ADD COLUMN IF NOT EXISTS currently in ensureColumns() becomes
+  its own migration file (or group logically — one migration per feature area).
+
+  Example — migration 0002_add_ocr_columns.sql:
+
+    -- UP
+    ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS ocr_status TEXT;
+    ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS ocr_text TEXT;
+
+    -- DOWN
+    ALTER TABLE case_documents DROP COLUMN IF EXISTS ocr_status;
+    ALTER TABLE case_documents DROP COLUMN IF EXISTS ocr_text;
+
+  Repeat for every group of columns in ensureColumns(). This will take a few
+  hours. There are approximately 40+ column additions to catalog.
+
+  After all ensureColumns() statements are captured in migration files, run them
+  all against production (again, no-ops since columns exist, but registers them).
+
+--------------------------------------------------------------------------------
+2.4  REMOVE ensureColumns() FROM STARTUP
+--------------------------------------------------------------------------------
+
+  Once all existing DDL is captured in migrations:
+  - Delete the ensureColumns() function from server/index.js.
+  - Replace it with a single call at startup:
+      npx node-pg-migrate up (or invoke programmatically)
+  - This runs any pending migrations, then proceeds to app.listen().
+
+  From this point forward, ALL schema changes go through migration files.
+  No more ALTER TABLE in index.js. No more .catch(() => {}).
+
+--------------------------------------------------------------------------------
+2.5  ADD MIGRATION COMMANDS TO package.json
+--------------------------------------------------------------------------------
+
+  In server/package.json scripts:
+
+    "migrate:up": "node-pg-migrate up",
+    "migrate:down": "node-pg-migrate down",
+    "migrate:create": "node-pg-migrate create --migration-file-language sql"
+
+  Workflow for any future schema change:
+    1. npm run migrate:create -- add-some-column
+    2. Edit the generated SQL file
+    3. npm run migrate:up
+    4. Commit the migration file to git
+
+
+================================================================================
+PHASE 3: App.js DECOMPOSITION (Weeks 4–7)
+================================================================================
+This is the largest effort. It is also the highest-leverage change for enabling
+a second developer to contribute without breaking things.
+
+--------------------------------------------------------------------------------
+3.1  RULES OF ENGAGEMENT
+--------------------------------------------------------------------------------
+
+  - One view at a time. Never refactor two views in parallel.
+  - Each extraction is a single PR/commit. Verify the app works after each one.
+  - Do NOT rewrite logic during extraction. Move code exactly as-is, then clean
+    up later. Mixing refactoring with extraction guarantees bugs.
+  - Do NOT introduce a state management library yet. Continue using useState.
+    Introducing Redux/Zustand during decomposition adds a second axis of change.
+
+--------------------------------------------------------------------------------
+3.2  EXTRACT THE STATE MACHINE FIRST
+--------------------------------------------------------------------------------
+
+  Before touching views, extract the navigation logic.
+
+  Create lextrack/src/navigation.js:
+
+    export const VIEWS = {
+      DASHBOARD: 'dashboard',
+      CASE_DETAIL: 'caseDetail',
+      CONTACTS: 'contacts',
+      // ... every value that currentView can be
+    };
+
+  This gives you a single source of truth for view names instead of string
+  literals scattered across 21,000 lines.
+
+  Find every setCurrentView("...") call in App.js and replace the string with
+  the constant. This is low-risk and immediately makes the codebase searchable.
+
+--------------------------------------------------------------------------------
+3.3  EXTRACT VIEWS IN ORDER OF SIZE AND ISOLATION
+--------------------------------------------------------------------------------
+
+  Extraction priority (largest and most self-contained first):
+
+  ORDER   VIEW                     EST. LINES   NOTES
+  ─────   ───────────────────────  ──────────   ────────────────────────────
+  1       CaseDetailView           ~4,000+      Biggest win. Has clear data
+                                                boundaries (single case context)
+  2       ContactsView             ~1,500       Relatively self-contained
+  3       DashboardView            ~2,000       Lots of summary queries
+  4       TasksListView            ~1,000       Cross-case task management
+  5       DeadlinesView            ~1,000       Similar pattern to tasks
+  6       SettingsView             ~1,500       Admin settings, permissions
+  7       DeletedDataView          ~800         Recovery interface
+  8       CalendarView             ~800         Calendar display
+  9       ReportsView              ~600         Custom reports
+  10      Remaining small views    ~varies      Mop up
+
+  Extraction procedure for EACH view:
+
+  a) Identify the render block:
+     In App.js, find the section: if (currentView === 'caseDetail') { ... }
+     Trace every piece of state it reads and every function it calls.
+
+  b) Create the file:
+     lextrack/src/views/CaseDetailView.js (or whatever the view is)
+
+  c) Move the JSX into a functional component. Pass dependencies as props:
+     - State values it reads
+     - Setter functions it calls
+     - Navigation functions (setCurrentView)
+     - API functions it invokes
+     - Shared state like currentUser, firmSettings
+
+  d) In App.js, replace the render block with:
+     <CaseDetailView
+       caseId={selectedCaseId}
+       currentUser={currentUser}
+       onNavigate={setCurrentView}
+       ... />
+
+  e) Test every feature of that view manually. Run through all tabs, all CRUD
+     operations, all edge cases.
+
+  f) Commit. Move to the next view.
+
+  After all views are extracted, App.js should be roughly 2,000–3,000 lines:
+  state declarations, data fetching, the view routing switch, and shared
+  modals/overlays. That's manageable.
+
+--------------------------------------------------------------------------------
+3.4  INTRODUCE REACT ROUTER (After all views are extracted)
+--------------------------------------------------------------------------------
+
+  Do NOT do this during extraction. Do it after.
+
+  npm install react-router-dom (in lextrack/)
+
+  a) Replace the currentView switch statement with <Routes>:
+
+     <Routes>
+       <Route path="/" element={<DashboardView ... />} />
+       <Route path="/cases/:id" element={<CaseDetailView ... />} />
+       <Route path="/contacts" element={<ContactsView ... />} />
+       ...
+     </Routes>
+
+  b) Replace every setCurrentView('caseDetail') call with:
+     navigate(`/cases/${caseId}`)
+
+  c) This gives you: bookmarkable URLs, browser back/forward, and future
+     code-splitting capability (React.lazy + Suspense per route).
+
+  d) Update the portal SPA the same way (lower priority, it's smaller).
+
+
+================================================================================
+PHASE 4: FILE STORAGE MIGRATION — BYTEA TO R2 (Weeks 8–9)
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1  MAKE R2 THE DEFAULT FOR ALL NEW UPLOADS
+--------------------------------------------------------------------------------
+
+  Currently R2 is gated behind isR2Configured() and only used for transcripts.
+
+  Changes:
+
+  a) In case-documents.js upload handler:
+     - If R2 is configured: upload to R2, store the key in a new column
+       r2_file_key (TEXT). Set file_data = NULL.
+     - If R2 is NOT configured: fall back to BYTEA (existing behavior).
+
+  b) In case-documents.js download/view handler:
+     - If r2_file_key is not null: stream from R2.
+     - Else: serve from file_data BYTEA (existing behavior).
+
+  c) Apply the same pattern to:
+     - case_filings (file_data column)
+     - case_correspondence attachments
+     - case_voicemails (audio_data)
+     - chat_messages attachments
+     - Any other table with BYTEA file storage
+
+  d) Add r2_file_key columns via migration (Phase 2 system):
+     ALTER TABLE case_documents ADD COLUMN IF NOT EXISTS r2_file_key TEXT;
+     ALTER TABLE case_filings ADD COLUMN IF NOT EXISTS r2_file_key TEXT;
+     (etc.)
+
+--------------------------------------------------------------------------------
+4.2  BACKFILL EXISTING FILES TO R2
+--------------------------------------------------------------------------------
+
+  Create server/scripts/migrate-bytea-to-r2.js:
+
+  - Process one table at a time.
+  - SELECT id, file_name, file_type, file_data FROM case_documents
+    WHERE file_data IS NOT NULL AND r2_file_key IS NULL
+    LIMIT 100
+  - For each row: upload to R2, UPDATE SET r2_file_key = key, file_data = NULL.
+  - Run in batches of 100 with a delay between batches to avoid spiking DB load.
+  - Log progress: "Migrated 1,200 / 8,450 documents"
+  - Make it resumable (it only processes rows where r2_file_key IS NULL).
+  - Run during off-hours or low-traffic periods.
+
+  After migration is complete and verified (spot-check file downloads):
+  - The file_data columns will be NULL for all migrated rows.
+  - Run VACUUM FULL on affected tables to reclaim disk space.
+    (WARNING: VACUUM FULL locks the table. Schedule during maintenance window.)
+
+--------------------------------------------------------------------------------
+4.3  PRESIGNED URLS FOR LARGE FILES
+--------------------------------------------------------------------------------
+
+  Currently the Express server proxies every file download through Node.js
+  memory. For large files (audio, video, PDFs), this ties up a request handler
+  and consumes RAM.
+
+  Better: generate R2 presigned URLs and redirect the client.
+
+  In the download endpoint:
+    const url = await getSignedUrl(s3Client, new GetObjectCommand({
+      Bucket: bucket,
+      Key: r2FileKey,
+    }), { expiresIn: 300 }); // 5 minutes
+    res.redirect(url);
+
+  The client downloads directly from R2. Express does zero work.
+  Only use this for file downloads, not for inline document viewing where
+  you need to control headers.
+
+
+================================================================================
+PHASE 5: AI SEARCH — VECTOR MIGRATION (Week 10)
+================================================================================
+
+--------------------------------------------------------------------------------
+5.1  ADD pgvector TO POSTGRESQL
+--------------------------------------------------------------------------------
+
+  CREATE EXTENSION IF NOT EXISTS vector;
+
+  This is a single SQL statement. Add it as a migration. Verify your PostgreSQL
+  version supports it (Replit's managed Postgres should — check with support
+  if not).
+
+--------------------------------------------------------------------------------
+5.2  CREATE EMBEDDINGS TABLE
+--------------------------------------------------------------------------------
+
+  Migration:
+
+  CREATE TABLE case_embeddings (
+    id SERIAL PRIMARY KEY,
+    case_id INT REFERENCES cases(id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL,       -- 'summary', 'document', 'note', 'transcript'
+    content_id INT,                   -- FK to source record (nullable for summaries)
+    content_preview TEXT,             -- First 200 chars for display
+    embedding vector(1536) NOT NULL,  -- OpenAI text-embedding-3-small dimension
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE INDEX idx_case_embeddings_vector ON case_embeddings
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+  CREATE INDEX idx_case_embeddings_case ON case_embeddings(case_id);
+
+--------------------------------------------------------------------------------
+5.3  BUILD EMBEDDING PIPELINE
+--------------------------------------------------------------------------------
+
+  Create server/utils/embeddings.js:
+
+  - Function: embedText(text) — calls OpenAI text-embedding-3-small, returns
+    1536-dimension vector. Include store: false.
+
+  - Function: upsertCaseEmbedding(caseId, contentType, contentId, text)
+    - Truncate text to 8,000 tokens (model limit).
+    - Call embedText().
+    - UPSERT into case_embeddings (ON CONFLICT case_id, content_type, content_id).
+
+  - Function: buildCaseSummaryText(caseId) — queries all relevant tables for
+    a case (same data you currently build in AI search), concatenates into a
+    single text blob. This replaces the per-query full-scan approach.
+
+  Trigger embedding updates:
+  - After case create/update in cases.js: queue re-embed of case summary.
+  - After document OCR completes: embed the document text.
+  - After note create/update: embed the note.
+  - After transcript import: embed the transcript text.
+  - Use a simple in-memory queue with a worker that processes one at a time
+    to avoid hammering the OpenAI API. Or use setTimeout-based debouncing
+    per case (coalesce rapid edits).
+
+--------------------------------------------------------------------------------
+5.4  REPLACE AI SEARCH WITH VECTOR SEARCH
+--------------------------------------------------------------------------------
+
+  In server/routes/ai-search.js:
+
+  OLD FLOW:
+    1. Query EVERY table for EVERY case → build text blobs
+    2. Send ALL text to GPT-4o → ask which cases match
+    3. Return matched case IDs
+
+  NEW FLOW:
+    1. Embed the user's search query: embedText(userQuery)
+    2. Vector similarity search:
+       SELECT DISTINCT case_id, content_type, content_preview,
+              1 - (embedding <=> $1) AS similarity
+       FROM case_embeddings
+       WHERE 1 - (embedding <=> $1) > 0.3
+       ORDER BY similarity DESC
+       LIMIT 20
+    3. Fetch full case data ONLY for those 20 cases.
+    4. Send those 20 cases + user query to GPT-4o for ranking and explanation.
+    5. Return results.
+
+  Performance difference:
+    - Old: O(all_cases * all_tables) SQL queries + massive LLM context
+    - New: O(1) vector query + O(20) case lookups + small LLM context
+    - Latency drops from 10-30s to 1-3s. Cost drops 90%+.
+
+--------------------------------------------------------------------------------
+5.5  BACKFILL EXISTING DATA
+--------------------------------------------------------------------------------
+
+  Create server/scripts/backfill-embeddings.js:
+  - Iterate all cases. For each: build summary text, embed, insert.
+  - Iterate all documents with extracted text. Embed each.
+  - Rate limit: ~3,000 embeddings/min with OpenAI's default tier.
+  - For a firm with 500 cases and 5,000 documents, this takes ~2 minutes.
+  - Run once after deploying the new system.
+
+
+================================================================================
+PHASE 6: AUTOMATED TESTING (Weeks 11–12)
+================================================================================
+
+--------------------------------------------------------------------------------
+6.1  SETUP
+--------------------------------------------------------------------------------
+
+  In server/:
+    npm install --save-dev jest supertest
+
+  In server/package.json:
+    "scripts": {
+      "test": "jest --runInBand --forceExit"
+    }
+
+  Create server/tests/ directory.
+
+  Create server/tests/setup.js:
+    - Connects to a TEST database (separate from production/dev).
+    - Runs migrations to build schema.
+    - Exports a configured supertest agent with the Express app.
+    - Tears down after all tests.
+
+  Environment:
+    - TEST_DATABASE_URL pointing to a separate Postgres database.
+    - On Replit, create a second database or use a schema-based isolation.
+
+--------------------------------------------------------------------------------
+6.2  PRIORITY TEST SUITES (ordered by risk)
+--------------------------------------------------------------------------------
+
+  FILE                              COVERS
+  ──────────────────────────────    ──────────────────────────────────────
+  auth.test.js                      Login, MFA, session, temp password,
+                                    password reset, deactivated user block
+  client-auth.test.js               Portal login, session isolation (client
+                                    cannot access firm routes)
+  external-auth.test.js             JWT validation, expired token, bad sig
+  cases.test.js                     CRUD, conflict check, soft delete,
+                                    confidential case visibility
+  inbound-email.test.js             Filing branch routing, case-ID branch
+                                    routing, unmatched email storage,
+                                    attachment classification
+  task-flows.test.js                Trigger evaluation, condition matching,
+                                    duplicate prevention, step dependencies
+  ocr-pipeline.test.js              PDF text extraction, Gemini fallback,
+                                    Tesseract fallback, page markers
+  permissions.test.js               Role-based access, user-based access,
+                                    expiration, admin-only operations
+
+  Each test file should cover:
+  - Happy path (expected input, expected output)
+  - Auth failure (missing session, wrong role)
+  - Validation failure (missing required fields, bad data types)
+  - Edge cases specific to the route (e.g., inbound email with no matching
+    court case number)
+
+  Target: 80% coverage on the above routes. Do not aim for 100% coverage
+  across the whole app — diminishing returns.
+
+--------------------------------------------------------------------------------
+6.3  CI INTEGRATION
+--------------------------------------------------------------------------------
+
+  If using GitHub: add a GitHub Actions workflow that runs tests on every push.
+  If staying on Replit: add a pre-deploy hook that runs npm test.
+
+  Block deployments on test failure. Non-negotiable once tests exist.
+
+
+================================================================================
+PHASE 7: CHAT — POLLING TO SSE (Week 13, optional)
+================================================================================
+Lower priority. Only matters if you have 20+ concurrent chat users or are
+selling to multiple firms.
+
+--------------------------------------------------------------------------------
+7.1  ADD SERVER-SENT EVENTS ENDPOINT
+--------------------------------------------------------------------------------
+
+  In server/routes/collaborate.js, add:
+
+    GET /api/collaborate/stream
+
+  Implementation:
+    - Set headers: Content-Type: text/event-stream, Connection: keep-alive,
+      Cache-Control: no-cache.
+    - On connection: register the user's response object in a Map keyed by
+      userId.
+    - On new message insert (in POST /api/collaborate/messages): look up all
+      channel members in the Map, call res.write(`data: ${JSON.stringify(msg)}\n\n`)
+      for each connected member.
+    - On client disconnect: remove from Map.
+
+  Frontend:
+    - In CollaborateView.js, replace the setInterval polling with:
+      const es = new EventSource('/api/collaborate/stream', { withCredentials: true });
+      es.onmessage = (e) => { const msg = JSON.parse(e.data); /* update state */ };
+
+  Benefits:
+    - Messages appear instantly (no polling delay).
+    - Zero database queries for "any new messages?" checks.
+    - SSE works through CRA proxy and Express serves it natively. No WebSocket
+      library needed.
+
+  Keep the polling endpoint alive as a fallback for environments where SSE
+  doesn't work (some corporate proxies kill long-lived connections).
+
+
+================================================================================
+PHASE 8: ONGOING MAINTENANCE PRACTICES
+================================================================================
+
+These are not one-time tasks. These are permanent process changes.
+
+--------------------------------------------------------------------------------
+8.1  SCHEMA CHANGES
+--------------------------------------------------------------------------------
+  Every schema change goes through a migration file. No exceptions.
+  No ALTER TABLE in application code. Ever again.
+
+--------------------------------------------------------------------------------
+8.2  NEW AI ENDPOINTS
+--------------------------------------------------------------------------------
+  Import OpenAI client from utils/openai.js only.
+  Never instantiate OpenAI directly. store:false is enforced at the wrapper.
+
+--------------------------------------------------------------------------------
+8.3  NEW FILE STORAGE
+--------------------------------------------------------------------------------
+  All new file uploads go to R2 when configured. BYTEA is the fallback, not
+  the default. Any new table with file storage must include r2_file_key.
+
+--------------------------------------------------------------------------------
+8.4  NEW VIEWS
+--------------------------------------------------------------------------------
+  Every new UI view is its own component file in lextrack/src/views/.
+  Nothing gets added to App.js except a route entry.
+
+--------------------------------------------------------------------------------
+8.5  SENSITIVE FIELDS
+--------------------------------------------------------------------------------
+  Any new column containing tokens, secrets, SSNs, or credentials must use
+  the encrypt/decrypt utilities. Review in code review. No plain text secrets
+  in the database. Period.
+
+--------------------------------------------------------------------------------
+8.6  TEST COVERAGE
+--------------------------------------------------------------------------------
+  Every new API route gets at least: one happy-path test, one auth-failure
+  test, one validation-failure test. Write the tests before or alongside the
+  route, not "later." Later never comes.
+
+
+================================================================================
+APPENDIX A: ENVIRONMENT VARIABLES TO ADD
+================================================================================
+
+  FIELD_ENCRYPTION_KEY    — 32-byte hex string for AES-256-GCM field encryption
+  TEST_DATABASE_URL       — Connection string for test database
+
+================================================================================
+APPENDIX B: NEW FILES CREATED BY THIS PLAN
+================================================================================
+
+  server/utils/encryption.js          — AES-256-GCM encrypt/decrypt
+  server/utils/openai.js              — OpenAI client wrapper (store:false)
+  server/utils/embeddings.js          — Vector embedding pipeline
+  server/migrations/                  — Migration files directory
+  server/scripts/encrypt-existing-fields.js
+  server/scripts/migrate-bytea-to-r2.js
+  server/scripts/backfill-embeddings.js
+  server/tests/setup.js
+  server/tests/auth.test.js
+  server/tests/client-auth.test.js
+  server/tests/external-auth.test.js
+  server/tests/cases.test.js
+  server/tests/inbound-email.test.js
+  server/tests/task-flows.test.js
+  server/tests/ocr-pipeline.test.js
+  server/tests/permissions.test.js
+  lextrack/src/navigation.js          — View constants
+  lextrack/src/views/                 — Extracted view components
+
+================================================================================
+APPENDIX C: DEPENDENCIES TO ADD
+================================================================================
+
+  Production:
+    node-pg-migrate          — SQL migration runner
+    pgvector (npm: pgvector)  — pg driver support for vector type
+
+  Dev only:
+    jest                     — Test runner
+    supertest                — HTTP assertion library for Express
+
+  PostgreSQL extension:
+    vector (pgvector)        — Must be enabled in database
+
+================================================================================
+END OF PLAN
+================================================================================
