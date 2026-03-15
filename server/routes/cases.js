@@ -5,6 +5,7 @@ const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
 const { evaluateFlowsForCase } = require("./task-flows");
 const { encrypt, decrypt } = require("../utils/encryption");
+const { validate, validateParams, caseCreateSchema, idParamSchema } = require("../middleware/validate");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -176,8 +177,8 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, async (req, res) => {
-  const d = req.body;
+router.post("/", requireAuth, validate(caseCreateSchema), async (req, res) => {
+  const d = req.validatedBody;
   try {
     const { rows } = await pool.query(
       `INSERT INTO cases

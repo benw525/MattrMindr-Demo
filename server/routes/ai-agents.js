@@ -2,6 +2,7 @@ const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const openai = require("../utils/openai");
+const { validate, aiAgentSchema, classifyFilingSchema, docSummarySchema, advocateSchema } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -66,9 +67,9 @@ async function aiCall(systemPrompt, userPrompt, jsonMode = false, userId = null,
   return resp.choices[0].message.content;
 }
 
-router.post("/liability-analysis", requireAuth, async (req, res) => {
+router.post("/liability-analysis", requireAuth, validate(aiAgentSchema), async (req, res) => {
   try {
-    let { caseId, incidentDescription, incidentLocation, injuryType, liabilityAssessment, comparativeFaultPct, stateJurisdiction, caseType } = req.body;
+    let { caseId, incidentDescription, incidentLocation, injuryType, liabilityAssessment, comparativeFaultPct, stateJurisdiction, caseType } = req.validatedBody;
     if (caseId && !incidentDescription) {
       const { rows } = await pool.query("SELECT * FROM cases WHERE id = $1", [caseId]);
       if (rows.length) {
@@ -111,9 +112,9 @@ Provide:
   }
 });
 
-router.post("/deadline-generator", requireAuth, async (req, res) => {
+router.post("/deadline-generator", requireAuth, validate(aiAgentSchema), async (req, res) => {
   try {
-    let { caseId, stage, caseType, stateJurisdiction, accidentDate, statuteOfLimitationsDate, trialDate, mediationDate, nextCourtDate, existingDeadlines } = req.body;
+    let { caseId, stage, caseType, stateJurisdiction, accidentDate, statuteOfLimitationsDate, trialDate, mediationDate, nextCourtDate, existingDeadlines } = req.validatedBody;
     if (caseId) {
       const [caseRes, dlRes] = await Promise.all([
         pool.query("SELECT * FROM cases WHERE id = $1", [caseId]),
@@ -158,9 +159,9 @@ Generate 4-8 upcoming procedural deadlines that this personal injury case likely
   }
 });
 
-router.post("/case-strategy", requireAuth, async (req, res) => {
+router.post("/case-strategy", requireAuth, validate(aiAgentSchema), async (req, res) => {
   try {
-    const { caseId } = req.body;
+    const { caseId } = req.validatedBody;
     if (!caseId) return res.status(400).json({ error: "caseId required" });
 
     const [caseRes, notesRes, tasksRes, deadlinesRes, insuranceRes, medicalRes, damagesRes, liensRes, negotiationsRes] = await Promise.all([
@@ -260,9 +261,9 @@ Provide:
   }
 });
 
-router.post("/draft-document", requireAuth, async (req, res) => {
+router.post("/draft-document", requireAuth, validate(aiAgentSchema), async (req, res) => {
   try {
-    const { caseId, documentType, customInstructions } = req.body;
+    const { caseId, documentType, customInstructions } = req.validatedBody;
     if (!caseId || !documentType) return res.status(400).json({ error: "caseId and documentType required" });
 
     const [caseRes, insuranceRes, medicalRes, damagesRes] = await Promise.all([
@@ -467,9 +468,9 @@ Priority factors (highest to lowest):
   }
 });
 
-router.post("/client-summary", requireAuth, async (req, res) => {
+router.post("/client-summary", requireAuth, validate(aiAgentSchema), async (req, res) => {
   try {
-    const { caseId } = req.body;
+    const { caseId } = req.validatedBody;
     if (!caseId) return res.status(400).json({ error: "caseId required" });
 
     const [caseRes, activityRes, deadlinesRes, usersRes, medicalRes, negotiationsRes] = await Promise.all([
@@ -533,9 +534,9 @@ ${deadlines}`;
   }
 });
 
-router.post("/task-suggestions", requireAuth, async (req, res) => {
+router.post("/task-suggestions", requireAuth, validate(aiAgentSchema), async (req, res) => {
   try {
-    const { caseId } = req.body;
+    const { caseId } = req.validatedBody;
     if (!caseId) return res.status(400).json({ error: "caseId required" });
 
     const [caseRes, tasksRes, notesRes, deadlinesRes, partiesRes, medicalRes, insuranceRes] = await Promise.all([
@@ -633,9 +634,9 @@ Suggest 5-8 specific, actionable tasks the legal team should prioritize next.`;
   }
 });
 
-router.post("/classify-filing", requireAuth, async (req, res) => {
+router.post("/classify-filing", requireAuth, validate(classifyFilingSchema), async (req, res) => {
   try {
-    const { filingId } = req.body;
+    const { filingId } = req.validatedBody;
     if (!filingId) return res.status(400).json({ error: "filingId required" });
 
     const { rows } = await pool.query(
@@ -718,10 +719,9 @@ Be precise about who filed the document. Look for signatures, captions, and head
   }
 });
 
-router.post("/doc-summary", requireAuth, async (req, res) => {
+router.post("/doc-summary", requireAuth, validate(docSummarySchema), async (req, res) => {
   try {
-    const { text, docType, caseTitle, clientName } = req.body;
-    if (!text || !text.trim()) return res.status(400).json({ error: "Document text is required" });
+    const { text, docType, caseTitle, clientName } = req.validatedBody;
 
     const isMedicalRecord = (docType || "").toLowerCase().includes("medical") || (docType || "").toLowerCase().includes("record");
 
@@ -932,10 +932,9 @@ KEYBOARD & TIPS:
 - Multiple document/transcript viewers can be open simultaneously — minimize them to manage screen space
 `;
 
-router.post("/advocate", requireAuth, async (req, res) => {
+router.post("/advocate", requireAuth, validate(advocateSchema), async (req, res) => {
   try {
-    const { caseId, messages, screenContext } = req.body;
-    if (!messages || !Array.isArray(messages) || messages.length === 0) return res.status(400).json({ error: "messages required" });
+    const { caseId, messages, screenContext } = req.validatedBody;
 
     let contextBlock = "";
     let contextStats = null;

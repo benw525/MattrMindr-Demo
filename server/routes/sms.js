@@ -185,10 +185,9 @@ router.get("/scheduled/:caseId", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/send", requireAuth, async (req, res) => {
+router.post("/send", requireAuth, validate(smsSchema), async (req, res) => {
   try {
-    const { caseId, phoneNumber, body, contactName } = req.body;
-    if (!phoneNumber || !body) return res.status(400).json({ error: "Phone number and message body are required" });
+    const { caseId, phoneNumber, body, contactName } = req.validatedBody;
 
     const formatted = formatPhoneNumber(phoneNumber);
     if (!formatted) return res.status(400).json({ error: "Invalid phone number" });

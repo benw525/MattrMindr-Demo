@@ -3,6 +3,7 @@ const multer = require("multer");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
+const { validate, docFolderSchema, batchDeleteSchema } = require("../middleware/validate");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -481,10 +482,9 @@ router.delete("/:id", requireAuth, async (req, res) => {
 });
 
 
-router.post("/folders", requireAuth, async (req, res) => {
+router.post("/folders", requireAuth, validate(docFolderSchema), async (req, res) => {
   try {
-    const { caseId, name, parentId } = req.body;
-    if (!caseId || !name) return res.status(400).json({ error: "caseId and name are required" });
+    const { caseId, name, parentId } = req.validatedBody;
     if (!(await verifyCaseAccess(req, caseId))) return res.status(403).json({ error: "Access denied" });
     if (parentId) {
       const { rows: parentRows } = await pool.query("SELECT id FROM document_folders WHERE id = $1 AND case_id = $2", [parentId, caseId]);
@@ -553,7 +553,8 @@ router.put("/:docId/move", requireAuth, async (req, res) => {
 
 router.put("/batch-move", requireAuth, async (req, res) => {
   try {
-    const { ids, folderId } = req.body;
+    const ids = req.body.ids;
+    const folderId = req.body.folderId;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
     const { rows: docRows } = await pool.query(
       "SELECT DISTINCT case_id FROM case_documents WHERE id = ANY($1) AND deleted_at IS NULL", [ids]
@@ -578,14 +579,13 @@ router.put("/batch-move", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/batch-delete", requireAuth, async (req, res) => {
+router.post("/batch-delete", requireAuth, validate(batchDeleteSchema), async (req, res) => {
   try {
     const userRoles = req.session.userRoles || [req.session.userRole];
     if (!userRoles.some(r => ATTORNEY_ROLES.includes(r))) {
       return res.status(403).json({ error: "Only attorneys may batch delete documents" });
     }
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids array required" });
+    const ids = req.validatedBody.documentIds;
     const { rowCount } = await pool.query("UPDATE case_documents SET deleted_at = NOW() WHERE id = ANY($1) AND deleted_at IS NULL", [ids]);
     return res.json({ ok: true, deleted: rowCount });
   } catch (err) {
