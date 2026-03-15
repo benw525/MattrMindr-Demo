@@ -271,7 +271,8 @@ const listenPort = process.env.PORT || (isProd ? 5000 : PORT);
     await runMigrations();
     console.log("Database migrations applied.");
   } catch (err) {
-    console.error("Migration error (non-fatal):", err.message);
+    console.error("FATAL: Database migration failed:", err.message);
+    process.exit(1);
   }
 
   await seedAdminUser();

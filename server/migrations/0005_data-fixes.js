@@ -7,4 +7,6 @@ exports.up = async (pgm) => {
   `);
 };
 
-exports.down = false;
+exports.down = (pgm) => {
+  pgm.sql(`UPDATE cases SET stage = 'Litigation Filed' WHERE stage = 'Suit Filed'`);
+};

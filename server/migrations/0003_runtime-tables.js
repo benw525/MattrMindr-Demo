@@ -148,4 +148,16 @@ exports.up = (pgm) => {
   pgm.sql(`ALTER TABLE custom_task_flow_steps ADD COLUMN IF NOT EXISTS conditions JSONB DEFAULT '[]'`);
 };
 
-exports.down = false;
+exports.down = (pgm) => {
+  pgm.sql(`ALTER TABLE custom_task_flow_steps DROP COLUMN IF EXISTS conditions`);
+  pgm.sql(`DROP TABLE IF EXISTS integration_configs CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS custom_dashboard_widgets CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS task_flow_executions CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS custom_task_flow_steps CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS custom_task_flows CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS unmatched_filings_emails CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS permissions CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS custom_agents CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS custom_reports CASCADE`);
+  pgm.sql(`DROP TABLE IF EXISTS transcript_history CASCADE`);
+};

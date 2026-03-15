@@ -102,4 +102,106 @@ exports.up = (pgm) => {
   }
 };
 
-exports.down = false;
+exports.down = (pgm) => {
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS source`);
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS firm_viewed_at`);
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS folder_id`);
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS sort_order`);
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS annotations`);
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS content_html`);
+  pgm.sql(`ALTER TABLE case_documents DROP COLUMN IF EXISTS ocr_status`);
+
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS mfa_secret`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS mfa_enabled`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS profile_picture`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS profile_picture_type`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS ms_access_token`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS ms_refresh_token`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS ms_token_expiry`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS ms_account_email`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS ms_calendar_sync`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS ms_sync_deadline_types`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS scribe_url`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS scribe_token`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS scribe_user_email`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS voirdire_url`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS voirdire_token`);
+  pgm.sql(`ALTER TABLE users DROP COLUMN IF EXISTS voirdire_user_email`);
+
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS in_litigation`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS demand_response_due`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS client_dob`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS client_ssn`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS client_address`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS client_phones`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS client_emergency_contact`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS client_email`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS client_bankruptcy`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS court_case_number`);
+  pgm.sql(`ALTER TABLE cases DROP COLUMN IF EXISTS fee_is_flat`);
+
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS is_video`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS video_data`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS video_content_type`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS r2_audio_key`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS r2_video_key`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS folder_id`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS sort_order`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS description`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS scribe_transcript_id`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS scribe_status`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS transcript_versions`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS summaries`);
+  pgm.sql(`ALTER TABLE case_transcripts DROP COLUMN IF EXISTS pipeline_log`);
+
+  pgm.sql(`ALTER TABLE case_correspondence DROP COLUMN IF EXISTS is_voicemail`);
+
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS billed`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS owed`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS reduction_value`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS reduction_is_percent`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS client_paid`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS firm_paid`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS insurance_paid`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS write_off`);
+  pgm.sql(`ALTER TABLE case_damages DROP COLUMN IF EXISTS name`);
+
+  pgm.sql(`ALTER TABLE case_liens DROP COLUMN IF EXISTS reduction_value`);
+  pgm.sql(`ALTER TABLE case_liens DROP COLUMN IF EXISTS reduction_is_percent`);
+
+  pgm.sql(`ALTER TABLE case_negotiations DROP COLUMN IF EXISTS policy_id`);
+  pgm.sql(`ALTER TABLE case_negotiations DROP COLUMN IF EXISTS deleted_at`);
+
+  pgm.sql(`ALTER TABLE jury_analyses DROP COLUMN IF EXISTS daubert_challenge`);
+
+  pgm.sql(`ALTER TABLE sms_messages DROP COLUMN IF EXISTS deleted_at`);
+
+  pgm.sql(`ALTER TABLE trial_jurors DROP COLUMN IF EXISTS voirdire_juror_id`);
+
+  pgm.sql(`ALTER TABLE trial_timeline_events DROP COLUMN IF EXISTS file_data`);
+  pgm.sql(`ALTER TABLE trial_timeline_events DROP COLUMN IF EXISTS file_name`);
+  pgm.sql(`ALTER TABLE trial_timeline_events DROP COLUMN IF EXISTS file_type`);
+  pgm.sql(`ALTER TABLE trial_timeline_events DROP COLUMN IF EXISTS file_size`);
+  pgm.sql(`ALTER TABLE trial_timeline_events DROP COLUMN IF EXISTS association`);
+
+  pgm.sql(`ALTER TABLE trial_pinned_docs DROP COLUMN IF EXISTS transcript_id`);
+
+  pgm.sql(`ALTER TABLE deadlines DROP COLUMN IF EXISTS outlook_event_id`);
+
+  pgm.sql(`ALTER TABLE tasks DROP COLUMN IF EXISTS source_flow_id`);
+
+  pgm.sql(`ALTER TABLE medical_records DROP COLUMN IF EXISTS source_document_id`);
+  pgm.sql(`ALTER TABLE medical_records DROP COLUMN IF EXISTS body_part`);
+
+  pgm.sql(`ALTER TABLE document_folders DROP COLUMN IF EXISTS parent_id`);
+
+  const softDeleteTables = [
+    'case_documents', 'case_transcripts', 'case_filings', 'case_correspondence',
+    'deadlines', 'case_notes', 'time_entries',
+    'case_insurance_policies', 'case_medical_treatments', 'case_liens',
+    'case_damages', 'case_negotiations', 'case_parties', 'case_experts', 'case_misc_contacts'
+  ];
+  for (const tbl of softDeleteTables) {
+    pgm.sql(`ALTER TABLE ${tbl} DROP COLUMN IF EXISTS deleted_at`);
+  }
+};
