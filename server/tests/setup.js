@@ -66,6 +66,10 @@ async function setupTestDB() {
       env,
     });
   } catch (e) {
+    const msg = e.stderr ? e.stderr.toString() : e.message;
+    if (!msg.includes("already exists") && !msg.includes("No migrations")) {
+      throw new Error(`Migration failed: ${msg}`);
+    }
   }
 }
 
