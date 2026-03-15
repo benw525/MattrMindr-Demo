@@ -4,5 +4,6 @@ node_modules/
 .env.production
 server/seed-data.json
 lextrack/build/
+logs/
 *.log
 .DS_Store

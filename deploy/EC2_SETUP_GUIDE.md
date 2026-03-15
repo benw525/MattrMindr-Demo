@@ -20,12 +20,19 @@ ssh -i your-key.pem ubuntu@YOUR_EC2_IP
 sudo apt update && sudo apt upgrade -y
 ```
 
-## 2. Install Node.js 20
+## 2. Install System Dependencies
 
 ```bash
+# Node.js 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
-node -v  # should show v20.x
+
+# ffmpeg (required for audio transcription)
+sudo apt install -y ffmpeg
+
+# Verify
+node -v   # should show v20.x
+ffmpeg -version
 ```
 
 ## 3. Install Nginx
@@ -42,75 +49,85 @@ sudo npm install -g pm2
 pm2 startup  # follow the output to enable auto-start on reboot
 ```
 
-## 5. Create Application User
+## 5. Deploy the Code
+
+Clone the repository to your preferred location (e.g. your home directory):
 
 ```bash
-sudo useradd -r -m -s /bin/bash mattrmindr
-sudo mkdir -p /opt/mattrmindr /var/log/mattrmindr
-sudo chown mattrmindr:mattrmindr /opt/mattrmindr /var/log/mattrmindr
+cd ~
+git clone YOUR_REPO_URL MattrMindr-Demo
+cd ~/MattrMindr-Demo
 ```
 
-## 6. Deploy the Code
+## 6. Install Dependencies & Build
 
 ```bash
-# As ubuntu user, clone/copy your repo
-sudo -u mattrmindr bash -c 'cd /opt/mattrmindr && git clone YOUR_REPO_URL .'
-
-# Or upload via scp:
-# scp -r -i your-key.pem ./mattrmindr ubuntu@YOUR_EC2_IP:/tmp/mattrmindr
-# sudo cp -r /tmp/mattrmindr/* /opt/mattrmindr/
-# sudo chown -R mattrmindr:mattrmindr /opt/mattrmindr
+cd ~/MattrMindr-Demo
+npm install
+cd server && npm install && cd ..
+cd lextrack && npm install && CI=false npm run build && cd ..
 ```
 
-## 7. Install Dependencies & Build
+> **Note:** `CI=false` is required because `react-scripts build` treats warnings as errors when `CI=true`.
+
+## 7. Configure Environment Variables
 
 ```bash
-sudo -u mattrmindr bash -c '
-  cd /opt/mattrmindr
-  npm install
-  cd server && npm install && cd ..
-  cd lextrack && npm install && CI=false npm run build && cd ..
-'
+cp deploy/.env.example .env
+nano .env
 ```
 
-## 8. Configure Environment Variables
+Fill in all values. See `.env.example` for the full list with descriptions.
 
-```bash
-sudo -u mattrmindr cp /opt/mattrmindr/deploy/.env.example /opt/mattrmindr/.env
-sudo -u mattrmindr nano /opt/mattrmindr/.env
-```
+> **Important:** If a value contains special characters (`&`, `!`, `$`, `#`, spaces), wrap it in **single quotes**:
+> ```
+> ONLYOFFICE_PASSWORD='Kizzie&Ben6615'
+> DATABASE_URL='postgresql://user:p@ss&word@host:5432/db'
+> ```
 
-Fill in all values. At minimum you need:
+At minimum you need:
 
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SESSION_SECRET` | Random 64-char hex string (`openssl rand -hex 32`) |
-| `APP_URL` | Your full domain URL, e.g. `https://mattrmindr.com` |
+| `APP_URL` | Your full domain URL, e.g. `https://demo.mattrmindr.com` |
 | `SENDGRID_API_KEY` | SendGrid API key |
 | `SENDGRID_FROM_EMAIL` | Verified sender email |
 | `ADMIN_DEFAULT_PASSWORD` | Initial admin password |
 
-## 9. Initialize the Database
+The server loads `.env` automatically via dotenv — **no need to `source` the file**.
 
-The app uses `node-pg-migrate` for schema management. Migrations run automatically at startup, but you can also run them manually:
+## 8. Create Log Directory
 
 ```bash
-# Run all pending migrations
-sudo -u mattrmindr bash -c 'cd /opt/mattrmindr/server && set -a && source ../.env && set +a && npm run migrate:up'
+mkdir -p ~/MattrMindr-Demo/logs
+```
 
-# Or run the legacy schema.js for a fresh database
-sudo -u mattrmindr bash -c 'cd /opt/mattrmindr && set -a && source .env && set +a && node server/schema.js'
+## 9. Initialize the Database
+
+Migrations run automatically at startup, but you can also run them manually:
+
+```bash
+cd ~/MattrMindr-Demo/server
+node -e "require('dotenv').config({path:'../.env'})" && npm run migrate:up
+```
+
+Or run the legacy schema.js for a fresh database:
+
+```bash
+cd ~/MattrMindr-Demo
+node server/schema.js
 ```
 
 ## 10. Configure Nginx
 
 ```bash
-sudo cp /opt/mattrmindr/deploy/nginx.conf /etc/nginx/sites-available/mattrmindr
+sudo cp ~/MattrMindr-Demo/deploy/nginx.conf /etc/nginx/sites-available/mattrmindr
 sudo ln -s /etc/nginx/sites-available/mattrmindr /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
-# Edit the config to replace YOUR_DOMAIN.com with your actual domain
+# Edit the config — replace YOUR_DOMAIN.com with your actual domain
 sudo nano /etc/nginx/sites-available/mattrmindr
 
 sudo nginx -t        # test config
@@ -133,29 +150,41 @@ sudo certbot renew --dry-run
 ### Option A: PM2 (Recommended)
 
 ```bash
-sudo -u mattrmindr bash -c '
-  cd /opt/mattrmindr
-  pm2 start deploy/ecosystem.config.js
-  pm2 save
-'
+cd ~/MattrMindr-Demo
+pm2 start deploy/ecosystem.config.js
+pm2 save
 ```
+
+The ecosystem config automatically resolves paths relative to the project root, so it works from any install location.
 
 Useful PM2 commands:
 ```bash
-sudo -u mattrmindr pm2 status
-sudo -u mattrmindr pm2 logs mattrmindr
-sudo -u mattrmindr pm2 restart mattrmindr
-sudo -u mattrmindr pm2 stop mattrmindr
+pm2 status
+pm2 logs mattrmindr
+pm2 restart mattrmindr
+pm2 stop mattrmindr
 ```
 
 ### Option B: systemd
 
+First update the paths in the service file to match your install location:
+
 ```bash
-sudo cp /opt/mattrmindr/deploy/mattrmindr.service /etc/systemd/system/
+# Edit the service file if your install path differs from ~/MattrMindr-Demo
+nano ~/MattrMindr-Demo/deploy/mattrmindr.service
+
+sudo cp ~/MattrMindr-Demo/deploy/mattrmindr.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable mattrmindr
 sudo systemctl start mattrmindr
 sudo systemctl status mattrmindr
+```
+
+### Option C: Direct (for testing)
+
+```bash
+cd ~/MattrMindr-Demo
+NODE_ENV=production node server/index.js
 ```
 
 ## 13. Verify
@@ -191,40 +220,34 @@ MattrMindr includes a backup script at `deploy/backup.sh` that manages pg_dump b
 ### Setup
 
 ```bash
-# Create backup directories
-sudo -u mattrmindr mkdir -p /opt/mattrmindr/backups/{daily,weekly,monthly}
+mkdir -p ~/MattrMindr-Demo/backups/{daily,weekly,monthly}
 
 # Test the backup script manually
-sudo -u mattrmindr bash -c '
-  cd /opt/mattrmindr
-  set -a && source .env && set +a
-  bash deploy/backup.sh
-'
+cd ~/MattrMindr-Demo
+node -e "require('dotenv').config()" && bash deploy/backup.sh
 
 # Add to cron (runs daily at 2:00 AM)
-sudo -u mattrmindr crontab -e
+crontab -e
 ```
 
 Add this line to the crontab:
 ```
-0 2 * * * cd /opt/mattrmindr && set -a && source .env && set +a && bash deploy/backup.sh >> /var/log/mattrmindr/backup.log 2>&1
+0 2 * * * cd ~/MattrMindr-Demo && node -e "const d=require('dotenv');d.config();" && bash deploy/backup.sh >> logs/backup.log 2>&1
 ```
 
 ### Optional: S3 off-site backup
 
-Set the `S3_BUCKET` environment variable to enable automatic S3 sync:
+Set the `S3_BUCKET` environment variable in `.env` to enable automatic S3 sync:
 
-```bash
-# In .env or crontab
+```
 S3_BUCKET=mattrmindr-backups
 ```
 
 ### Monitoring
 
 ```bash
-# Check backup status
-ls -lh /opt/mattrmindr/backups/daily/
-tail -20 /var/log/mattrmindr/backup.log
+ls -lh ~/MattrMindr-Demo/backups/daily/
+tail -20 ~/MattrMindr-Demo/logs/backup.log
 ```
 
 ---
@@ -232,16 +255,14 @@ tail -20 /var/log/mattrmindr/backup.log
 ## Updating the Application
 
 ```bash
-sudo -u mattrmindr bash -c '
-  cd /opt/mattrmindr
-  git pull origin main
-  npm install
-  cd server && npm install && cd ..
-  cd lextrack && npm install && CI=false npm run build && cd ..
-'
+cd ~/MattrMindr-Demo
+git pull origin main
+npm install
+cd server && npm install && cd ..
+cd lextrack && npm install && CI=false npm run build && cd ..
 
 # Restart
-sudo -u mattrmindr pm2 restart mattrmindr
+pm2 restart mattrmindr
 # or: sudo systemctl restart mattrmindr
 ```
 
@@ -256,7 +277,8 @@ sudo -u mattrmindr pm2 restart mattrmindr
 - [ ] PostgreSQL not publicly accessible (use private subnet or security group)
 - [ ] Firewall configured (`sudo ufw allow 22,80,443/tcp && sudo ufw enable`)
 - [ ] SSL certificate installed and auto-renewing
-- [ ] Log rotation configured for `/var/log/mattrmindr/`
+- [ ] Log rotation configured for `~/MattrMindr-Demo/logs/`
+- [ ] `.env` file permissions restricted (`chmod 600 .env`)
 
 ---
 
@@ -264,7 +286,7 @@ sudo -u mattrmindr pm2 restart mattrmindr
 
 **App won't start:**
 ```bash
-sudo -u mattrmindr pm2 logs mattrmindr --lines 50
+pm2 logs mattrmindr --lines 50
 # Check for missing env vars or DB connection issues
 ```
 
@@ -274,10 +296,19 @@ sudo -u mattrmindr pm2 logs mattrmindr --lines 50
 curl http://127.0.0.1:5000/api/auth/me
 ```
 
+**DATABASE_URL not set:**
+```bash
+# The server loads .env automatically. Verify your .env file exists and has DATABASE_URL:
+cat .env | grep DATABASE_URL
+
+# If using special characters in the connection string, wrap in single quotes:
+# DATABASE_URL='postgresql://user:p@ss&word@host:5432/mattrmindr'
+```
+
 **Database connection errors:**
 ```bash
-# Test the connection string
-sudo -u mattrmindr bash -c 'source /opt/mattrmindr/.env && psql "$DATABASE_URL" -c "SELECT 1"'
+# Test the connection string directly
+psql "YOUR_DATABASE_URL" -c "SELECT 1"
 ```
 
 **SSL issues:**
@@ -285,3 +316,6 @@ sudo -u mattrmindr bash -c 'source /opt/mattrmindr/.env && psql "$DATABASE_URL" 
 sudo certbot certificates
 sudo nginx -t
 ```
+
+**`npm start` vs production:**
+`npm start` (root) runs both dev servers (Express + React dev server) — this is for development only. In production, build the React app first (`cd lextrack && CI=false npm run build`) and then run `node server/index.js` or use PM2. The Express server serves the built React files as static assets.

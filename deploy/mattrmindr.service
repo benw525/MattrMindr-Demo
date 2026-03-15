@@ -1,3 +1,9 @@
+# MattrMindr Case Management System — systemd service
+#
+# Update WorkingDirectory and EnvironmentFile to match your install path.
+# The server also loads ../.env via dotenv automatically, so EnvironmentFile
+# is a safety net — either one is sufficient.
+
 [Unit]
 Description=MattrMindr Case Management System
 After=network.target postgresql.service
@@ -6,13 +12,13 @@ After=network.target postgresql.service
 Type=simple
 User=mattrmindr
 Group=mattrmindr
-WorkingDirectory=/opt/mattrmindr
-EnvironmentFile=/opt/mattrmindr/.env
+WorkingDirectory=/home/ubuntu/MattrMindr-Demo
+EnvironmentFile=/home/ubuntu/MattrMindr-Demo/.env
 ExecStart=/usr/bin/node server/index.js
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/var/log/mattrmindr/out.log
-StandardError=append:/var/log/mattrmindr/error.log
+StandardOutput=append:/home/ubuntu/MattrMindr-Demo/logs/out.log
+StandardError=append:/home/ubuntu/MattrMindr-Demo/logs/error.log
 
 [Install]
 WantedBy=multi-user.target
