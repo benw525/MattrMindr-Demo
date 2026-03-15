@@ -101,14 +101,31 @@ server/
 
 lextrack/
   src/
-    App.js          — All UI components and business logic (~15,800 lines)
+    App.js          — App shell, FirmApp, login/settings/modals, React Router setup (~3,500 lines)
+    shared.js       — Shared constants, utility functions, reusable components (~1,000 lines)
+    navigation.js   — VIEWS constants for view name mappings
+    api.js          — Thin fetch wrapper for all API calls
+    firmData.js     — Static reference data: PI firm staff (avatars, names, roles)
+    CollaborateView.js — Internal chat feature
+    TrialCenterView.js — Trial Center (civil PI trial context)
     portal/
       PortalApp.js  — Client portal UI (login, dashboard, messages, documents)
       portalApi.js  — Portal API fetch wrapper
-    CollaborateView.js — Internal chat feature
-    TrialCenterView.js — Trial Center (civil PI trial context)
-    api.js          — Thin fetch wrapper for all API calls
-    firmData.js     — Static reference data: PI firm staff (avatars, names, roles)
+    views/
+      DashboardView.js     — Dashboard with customizable widgets
+      CasesView.js         — Case list, detail overlay, case file management
+      DeadlinesView.js     — Calendar, deadline list, court rule calculator
+      TasksView.js         — Task list and management
+      DocumentsView.js     — Document templates, generation, management
+      TimeLogView.js       — Time entry tracking
+      ReportsView.js       — Built-in and custom reports
+      AiCenterView.js      — AI agents center, training, batch operations
+      ContactsView.js      — Contact management with merge capability
+      UnmatchedView.js     — Unmatched SMS/email assignment
+      StaffView.js         — Staff management
+      CustomizationView.js — Task flows, permissions, custom agents, custom reports
+      DeletedDataView.js   — Deleted data recovery
+  - **Routing**: react-router-dom v7; BrowserRouter wraps App; FirmApp uses Routes/Route for view switching; URLs are /dashboard, /cases, /deadlines, etc.
 ```
 
 ## Key Features

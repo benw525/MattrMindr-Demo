@@ -1,0 +1,17 @@
+export const VIEWS = {
+  DASHBOARD: "dashboard",
+  CASES: "cases",
+  DEADLINES: "deadlines",
+  TASKS: "tasks",
+  DOCUMENTS: "documents",
+  TIMELOG: "timelog",
+  REPORTS: "reports",
+  AI_CENTER: "aicenter",
+  TRIAL_CENTER: "trialcenter",
+  COLLABORATE: "collaborate",
+  CONTACTS: "contacts",
+  UNMATCHED: "unmatched",
+  STAFF: "staff",
+  CUSTOMIZATION: "customization",
+  DELETED: "deleted",
+};
