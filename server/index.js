@@ -65,7 +65,11 @@ const PORT = process.env.API_PORT || 3001;
 
 const isProd = process.env.NODE_ENV === "production";
 
-if (isProd || process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
+if (isProd || process.env.TRUST_PROXY) {
+  const trustLevel = Number(process.env.TRUST_PROXY) || 1;
+  app.set("trust proxy", trustLevel);
+  console.log(`trust proxy: ${trustLevel}`);
+}
 
 if (isProd) {
   app.use((req, res, next) => {
