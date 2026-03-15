@@ -28,6 +28,13 @@ A case management system for personal injury law firms. Tracks PI cases, manages
 Workflow: `npm start` (root) — runs both Express API and React app via `concurrently`
 Login: email + password (existing users default: `1234`, new users get temp password via email)
 
+## Testing
+- **Framework**: Jest + Supertest (server/tests/)
+- **Run**: `cd server && npm test` — runs all 86 tests across 7 suites in ~60s
+- **Config**: `server/jest.config.js` — runs in-band, mocks rate limiters/otplib/qrcode
+- **DB Cleanup**: Each test uses TRUNCATE CASCADE for isolation; tests share the app DB
+- **CI**: `.github/workflows/test.yml` — GitHub Actions with PostgreSQL 15 service container
+
 ## Deployment
 - **Replit Target**: autoscale
 - **Build**: `npm install && cd server && npm install && cd ../lextrack && npm install && CI=false npm run build`
@@ -56,6 +63,17 @@ server/
   middleware/
     rate-limit.js   — express-rate-limit configs for auth, MFA, forgot-password, portal
     validate.js     — Zod validation middleware and schemas
+  tests/
+    setup.js        — Test app factory, DB cleanup (TRUNCATE CASCADE), user helpers
+    jest.setup.js   — Mocks rate limiters, otplib, qrcode for test environment
+    globalTeardown.js — Closes DB pool after all tests
+    auth.test.js    — Auth routes: login, MFA, password change/reset, logout, temp password
+    cases.test.js   — Cases CRUD, soft-delete/restore, conflict-check, confidential access
+    permissions.test.js — Permission CRUD, role/user overrides, bulk operations
+    inbound-email.test.js — Inbound email routing, voicemail detection, filing matching
+    portal-auth.test.js   — Client portal auth, session isolation, password change
+    external-auth.test.js — External JWT auth, token verification, case listing
+    task-flows.test.js    — Task flow CRUD, trigger evaluation on case create
   scripts/
     encrypt-existing-fields.js — Encrypt existing plaintext sensitive fields
     migrate-bytea-to-r2.js     — Backfill BYTEA data → R2 for all tables (batch, resumable)

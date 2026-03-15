@@ -11,7 +11,8 @@
     "schema": "node schema.js",
     "migrate:up": "node-pg-migrate up --migrations-dir migrations --migration-file-language js",
     "migrate:down": "node-pg-migrate down --migrations-dir migrations --migration-file-language js",
-    "migrate:create": "node-pg-migrate create --migrations-dir migrations --migration-file-language js"
+    "migrate:create": "node-pg-migrate create --migrations-dir migrations --migration-file-language js",
+    "test": "jest --forceExit --detectOpenHandles --runInBand"
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "^3.1009.0",
@@ -31,5 +32,9 @@
     "qrcode": "^1.5.4",
     "sharp": "^0.34.5",
     "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   }
 }
