@@ -199,7 +199,7 @@ router.post("/forgot-password", forgotPasswordLimiter, validate(forgotPasswordSc
     );
 
     const appUrl = process.env.APP_URL
-      || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://mattrmindr.replit.app");
+      || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://demo.mattrmindr.com");
 
     await sendPasswordResetEmail(user.email, user.name, resetToken, appUrl);
     return res.json({ ok: true, message: "If an account exists with that email, a reset code has been sent." });
