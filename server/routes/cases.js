@@ -6,6 +6,7 @@ const { extractText } = require("../utils/extract-text");
 const { evaluateFlowsForCase } = require("./task-flows");
 const { encrypt, decrypt } = require("../utils/encryption");
 const { validate, validateParams, validateQuery, caseCreateSchema, caseUpdateSchema, idParamSchema, casesListQuerySchema } = require("../middleware/validate");
+const { queueEmbeddingUpdate } = require("../utils/embeddings");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -245,6 +246,8 @@ router.post("/", requireAuth, validate(caseCreateSchema), async (req, res) => {
       evaluateFlowsForCase(newCase.id, null, newCaseData, "create").catch(e => console.error("Task flow eval (create) error:", e.message));
     } catch (e) { console.error("Task flow trigger (create) error:", e.message); }
 
+    queueEmbeddingUpdate(newCase.id, "case_summary");
+
     return res.status(201).json(toFrontend(newCase));
   } catch (err) {
     console.error("Case create error:", err);
@@ -331,6 +334,8 @@ router.put("/:id", requireAuth, validateParams(idParamSchema), validate(caseUpda
       newCase._triggeredBy = req.session.userId;
       await evaluateFlowsForCase(req.validatedParams.id, oldCase, newCase);
     } catch (e) { console.error("Task flow eval error:", e.message); }
+
+    queueEmbeddingUpdate(req.validatedParams.id, "case_summary");
 
     return res.json(toFrontend(rows[0]));
   } catch (err) {

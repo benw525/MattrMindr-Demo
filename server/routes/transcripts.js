@@ -9,6 +9,7 @@ const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const openai = require("../utils/openai");
 const { isR2Configured, uploadToR2, downloadFromR2, streamFromR2, deleteFromR2, getPresignedUrl, createMultipartUpload, uploadPart, completeMultipartUpload, abortMultipartUpload } = require("../r2");
+const { queueEmbeddingUpdate } = require("../utils/embeddings");
 
 const router = express.Router();
 router.use(express.json({ limit: "10mb" }));
@@ -256,6 +257,10 @@ async function processTranscription(transcriptId) {
       `UPDATE case_transcripts SET transcript = $1, status = 'completed', duration_seconds = $2, updated_at = NOW() WHERE id = $3`,
       [JSON.stringify(allSegments), duration, transcriptId]
     );
+    const { rows: tRows } = await pool.query("SELECT case_id FROM case_transcripts WHERE id = $1", [transcriptId]);
+    if (tRows.length) {
+      queueEmbeddingUpdate(tRows[0].case_id, "transcript", transcriptId);
+    }
   } catch (err) {
     console.error(`Transcription error for ${transcriptId}:`, err.message);
     await pool.query(

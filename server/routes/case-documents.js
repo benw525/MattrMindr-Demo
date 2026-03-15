@@ -5,6 +5,7 @@ const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
 const { validate, validateParams, docFolderSchema, batchDeleteSchema, idParamSchema, caseIdParamSchema } = require("../middleware/validate");
 const { isR2Configured, uploadToR2, downloadFromR2, getPresignedUrl } = require("../r2");
+const { queueEmbeddingUpdate } = require("../utils/embeddings");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -122,6 +123,12 @@ async function runOcrBackground(docId, buffer, contentType, filename) {
       [extractedText || "", ocrStatus, docId]
     );
     console.log(`Background OCR ${ocrStatus} for doc ${docId}: "${filename}" (${(extractedText || "").length} chars)`);
+    if (ocrStatus === "complete") {
+      const { rows: docRows } = await pool.query("SELECT case_id FROM case_documents WHERE id = $1", [docId]);
+      if (docRows.length) {
+        queueEmbeddingUpdate(docRows[0].case_id, "document", docId);
+      }
+    }
   } catch (err) {
     console.error(`Background OCR error for doc ${docId}:`, err.message);
     await pool.query("UPDATE case_documents SET ocr_status = 'failed' WHERE id = $1", [docId]).catch(() => {});

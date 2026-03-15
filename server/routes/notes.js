@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
+const { queueEmbeddingUpdate } = require("../utils/embeddings");
 
 const router = express.Router();
 
@@ -53,6 +54,9 @@ router.post("/", requireAuth, async (req, res) => {
        d.authorName || "", d.authorRole || "", d.createdAt || new Date().toISOString(),
        d.timeLogged || null, d.timeLogUser || null]
     );
+    if (rows[0].case_id) {
+      queueEmbeddingUpdate(rows[0].case_id, "note", rows[0].id);
+    }
     return res.status(201).json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Note create error:", err);
@@ -76,6 +80,9 @@ router.put("/:id", requireAuth, async (req, res) => {
       `UPDATE case_notes SET ${sets.join(", ")} WHERE id = $${idx} RETURNING *`, vals
     );
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    if (rows[0].case_id) {
+      queueEmbeddingUpdate(rows[0].case_id, "note", rows[0].id);
+    }
     return res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Note update error:", err);
