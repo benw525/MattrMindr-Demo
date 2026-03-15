@@ -89,8 +89,6 @@ exports.up = (pgm) => {
   pgm.sql(`ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS source_document_id INTEGER REFERENCES case_documents(id) ON DELETE SET NULL`);
   pgm.sql(`ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS body_part TEXT DEFAULT ''`);
 
-  pgm.sql(`ALTER TABLE document_folders ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES document_folders(id) ON DELETE CASCADE`);
-
   const softDeleteTables = [
     'case_documents', 'case_transcripts', 'case_filings', 'case_correspondence',
     'deadlines', 'case_notes', 'time_entries',
@@ -192,8 +190,6 @@ exports.down = (pgm) => {
 
   pgm.sql(`ALTER TABLE medical_records DROP COLUMN IF EXISTS source_document_id`);
   pgm.sql(`ALTER TABLE medical_records DROP COLUMN IF EXISTS body_part`);
-
-  pgm.sql(`ALTER TABLE document_folders DROP COLUMN IF EXISTS parent_id`);
 
   const softDeleteTables = [
     'case_documents', 'case_transcripts', 'case_filings', 'case_correspondence',
