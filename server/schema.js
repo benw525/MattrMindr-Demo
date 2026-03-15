@@ -968,6 +968,8 @@ async function createSchema() {
     await client.query(`ALTER TABLE doc_templates ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
     await client.query(`ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
     await client.query(`ALTER TABLE trial_timeline_events ADD COLUMN IF NOT EXISTS r2_file_key TEXT`);
+    await client.query(`ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS r2_audio_key TEXT`);
+    await client.query(`ALTER TABLE case_transcripts ADD COLUMN IF NOT EXISTS r2_video_key TEXT`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS r2_profile_picture_key TEXT`);
     await client.query(`ALTER TABLE custom_agents ADD COLUMN IF NOT EXISTS r2_instruction_key TEXT`);
     await client.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS r2_attachment_key TEXT`);
