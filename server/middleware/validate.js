@@ -65,7 +65,7 @@ const resetPasswordSchema = z.object({
 });
 
 const changePasswordSchema = z.object({
-  currentPassword: z.string().max(500).optional(),
+  currentPassword: z.string().max(500).optional().nullable(),
   newPassword: z.string().min(8, "New password must be at least 8 characters").max(500),
 });
 
