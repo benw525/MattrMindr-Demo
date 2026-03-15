@@ -8,7 +8,7 @@ const { generateSecret, generateURI, verifySync } = require("otplib");
 const QRCode = require("qrcode");
 const { encrypt, decrypt } = require("../utils/encryption");
 const { authLimiter, mfaLimiter, forgotPasswordLimiter } = require("../middleware/rate-limit");
-const { validate, loginSchema, mfaVerifySchema, forgotPasswordSchema } = require("../middleware/validate");
+const { validate, loginSchema, mfaVerifySchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema } = require("../middleware/validate");
 const { invalidateUserSessions } = require("../utils/session-invalidation");
 
 const router = express.Router();
@@ -122,8 +122,8 @@ router.post("/login", authLimiter, validate(loginSchema), async (req, res) => {
   }
 });
 
-router.post("/change-password", requireAuth, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
+router.post("/change-password", requireAuth, validate(changePasswordSchema), async (req, res) => {
+  const { currentPassword, newPassword } = req.validatedBody;
   const pwErr = validatePassword(newPassword);
   if (pwErr) return res.status(400).json({ error: pwErr });
   try {
@@ -209,9 +209,8 @@ router.post("/forgot-password", forgotPasswordLimiter, validate(forgotPasswordSc
   }
 });
 
-router.post("/reset-password", async (req, res) => {
-  const { email, code, newPassword } = req.body;
-  if (!email || !code || !newPassword) return res.status(400).json({ error: "Email, code, and new password are required" });
+router.post("/reset-password", validate(resetPasswordSchema), async (req, res) => {
+  const { email, code, newPassword } = req.validatedBody;
   const rpErr = validatePassword(newPassword);
   if (rpErr) return res.status(400).json({ error: rpErr });
 

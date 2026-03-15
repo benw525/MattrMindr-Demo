@@ -3,10 +3,11 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const pool = require("../db");
 const { requireClientAuth } = require("../middleware/clientAuth");
+const { portalLoginLimiter } = require("../middleware/rate-limit");
+const { validate, portalLoginSchema } = require("../middleware/validate");
 
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
+router.post("/login", portalLoginLimiter, validate(portalLoginSchema), async (req, res) => {
+  const { email, password } = req.validatedBody;
   try {
     const { rows } = await pool.query(
       "SELECT cu.*, c.title as case_title, c.client_name FROM client_users cu JOIN cases c ON cu.case_id = c.id WHERE LOWER(cu.email) = LOWER($1)",

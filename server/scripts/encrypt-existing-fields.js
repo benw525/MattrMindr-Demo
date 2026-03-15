@@ -25,30 +25,42 @@ async function encryptExistingFields() {
 
   for (const { table, column } of COLUMNS) {
     console.log(`Processing ${table}.${column}...`);
-    const { rows } = await pool.query(
-      `SELECT id, ${column} FROM ${table} WHERE ${column} IS NOT NULL AND ${column} != ''`
-    );
 
-    let encrypted = 0;
-    let skipped = 0;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    for (const row of rows) {
-      const value = row[column];
-      if (isEncrypted(value)) {
-        skipped++;
-        continue;
+      const { rows } = await client.query(
+        `SELECT id, ${column} FROM ${table} WHERE ${column} IS NOT NULL AND ${column} != ''`
+      );
+
+      let encrypted = 0;
+      let skipped = 0;
+
+      for (const row of rows) {
+        const value = row[column];
+        if (isEncrypted(value)) {
+          skipped++;
+          continue;
+        }
+
+        const encryptedValue = encrypt(value);
+        await client.query(
+          `UPDATE ${table} SET ${column} = $1 WHERE id = $2`,
+          [encryptedValue, row.id]
+        );
+        encrypted++;
       }
 
-      const encryptedValue = encrypt(value);
-      await pool.query(
-        `UPDATE ${table} SET ${column} = $1 WHERE id = $2`,
-        [encryptedValue, row.id]
-      );
-      encrypted++;
+      await client.query("COMMIT");
+      console.log(`  ${encrypted} rows encrypted, ${skipped} already encrypted, ${rows.length} total`);
+      totalEncrypted += encrypted;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error(`  ERROR on ${table}.${column}: ${err.message} — rolled back`);
+    } finally {
+      client.release();
     }
-
-    console.log(`  ${encrypted} rows encrypted, ${skipped} already encrypted, ${rows.length} total`);
-    totalEncrypted += encrypted;
   }
 
   console.log(`\nDone. ${totalEncrypted} fields encrypted across all tables.`);

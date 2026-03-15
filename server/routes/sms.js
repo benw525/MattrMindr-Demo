@@ -3,6 +3,7 @@ const pool = require("../db");
 const { requireAuth } = require("../middleware/auth");
 const { sendSMS, formatPhoneNumber, isConfigured } = require("../sms");
 const openai = require("../utils/openai");
+const { validate, smsSchema } = require("../middleware/validate");
 
 const router = express.Router();
 
@@ -187,7 +188,7 @@ router.get("/scheduled/:caseId", requireAuth, async (req, res) => {
 router.post("/send", requireAuth, async (req, res) => {
   try {
     const { caseId, phoneNumber, body, contactName } = req.body;
-    if (!phoneNumber || !body) return res.status(400).json({ error: "Phone number and message body required" });
+    if (!phoneNumber || !body) return res.status(400).json({ error: "Phone number and message body are required" });
 
     const formatted = formatPhoneNumber(phoneNumber);
     if (!formatted) return res.status(400).json({ error: "Invalid phone number" });

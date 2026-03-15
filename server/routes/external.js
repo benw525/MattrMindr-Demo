@@ -3,13 +3,13 @@ const bcrypt = require("bcryptjs");
 const pool = require("../db");
 const { generateToken, requireExternalAuth } = require("../middleware/external-auth");
 const { portalLoginLimiter } = require("../middleware/rate-limit");
+const { validate, loginSchema } = require("../middleware/validate");
 
 const router = express.Router();
 
-router.post("/auth/login", portalLoginLimiter, async (req, res) => {
+router.post("/auth/login", portalLoginLimiter, validate(loginSchema), async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
+    const { email, password } = req.validatedBody;
     const { rows } = await pool.query(
       "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL",
       [email.trim()]
@@ -34,10 +34,9 @@ router.post("/auth/login", portalLoginLimiter, async (req, res) => {
   }
 });
 
-router.post("/auth", portalLoginLimiter, async (req, res) => {
+router.post("/auth", portalLoginLimiter, validate(loginSchema), async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password are required" });
+    const { email, password } = req.validatedBody;
     const { rows } = await pool.query(
       "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL",
       [email.trim()]

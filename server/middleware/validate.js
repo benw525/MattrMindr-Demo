@@ -24,6 +24,18 @@ function validateQuery(schema) {
   };
 }
 
+function validateParams(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.params);
+    if (!result.success) {
+      const errors = result.error.issues.map((i) => i.message);
+      return res.status(400).json({ error: errors[0], errors });
+    }
+    req.validatedParams = result.data;
+    next();
+  };
+}
+
 const loginSchema = z.object({
   email: z.string().email("Valid email is required"),
   password: z.string().min(1, "Password is required"),
@@ -40,12 +52,13 @@ const forgotPasswordSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  token: z.string().min(1, "Reset token is required"),
+  email: z.string().email("Valid email is required"),
+  code: z.string().min(1, "Reset code is required"),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
+  currentPassword: z.string().optional(),
   newPassword: z.string().min(8, "New password must be at least 8 characters"),
 });
 
@@ -57,7 +70,7 @@ const createUserSchema = z.object({
 
 const portalLoginSchema = z.object({
   email: z.string().email("Valid email is required"),
-  accessCode: z.string().min(1, "Access code is required"),
+  password: z.string().min(1, "Password is required"),
 });
 
 const smsSchema = z.object({
@@ -66,9 +79,25 @@ const smsSchema = z.object({
   caseId: z.union([z.string(), z.number()]).optional(),
 });
 
+const caseCreateSchema = z.object({
+  title: z.string().min(1, "Case title is required"),
+  clientName: z.string().optional().default(""),
+  caseType: z.string().optional().default("Auto Accident"),
+  status: z.string().optional().default("Active"),
+}).passthrough();
+
+const aiAgentRunSchema = z.object({
+  caseId: z.union([z.string(), z.number()]),
+}).passthrough();
+
+const idParamSchema = z.object({
+  id: z.string().regex(/^\d+$/, "ID must be a number"),
+});
+
 module.exports = {
   validate,
   validateQuery,
+  validateParams,
   loginSchema,
   mfaVerifySchema,
   forgotPasswordSchema,
@@ -77,4 +106,7 @@ module.exports = {
   createUserSchema,
   portalLoginSchema,
   smsSchema,
+  caseCreateSchema,
+  aiAgentRunSchema,
+  idParamSchema,
 };
