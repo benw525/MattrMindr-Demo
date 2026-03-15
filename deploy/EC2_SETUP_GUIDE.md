@@ -1,9 +1,9 @@
-# MattrMindr — AWS EC2 Deployment Guide
+# MattrMindr-Demo — AWS EC2 Deployment Guide
 
 ## Prerequisites
 
 - AWS account with an EC2 instance (Ubuntu 22.04+ recommended, t3.small or larger)
-- A domain name pointed at the EC2 instance's public IP (A record)
+- Domain `demo.mattrmindr.com` pointed at the EC2 instance's public IP (A record)
 - PostgreSQL database (RDS or self-hosted)
 - SendGrid account with API key
 - SSH access to the instance
@@ -51,8 +51,6 @@ pm2 startup  # follow the output to enable auto-start on reboot
 
 ## 5. Deploy the Code
 
-Clone the repository to your preferred location (e.g. your home directory):
-
 ```bash
 cd ~
 git clone YOUR_REPO_URL MattrMindr-Demo
@@ -73,6 +71,7 @@ cd lextrack && npm install && CI=false npm run build && cd ..
 ## 7. Configure Environment Variables
 
 ```bash
+cd ~/MattrMindr-Demo
 cp deploy/.env.example .env
 nano .env
 ```
@@ -91,7 +90,7 @@ At minimum you need:
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SESSION_SECRET` | Random 64-char hex string (`openssl rand -hex 32`) |
-| `APP_URL` | Your full domain URL, e.g. `https://demo.mattrmindr.com` |
+| `APP_URL` | `https://demo.mattrmindr.com` |
 | `SENDGRID_API_KEY` | SendGrid API key |
 | `SENDGRID_FROM_EMAIL` | Verified sender email |
 | `ADMIN_DEFAULT_PASSWORD` | Initial admin password |
@@ -123,12 +122,12 @@ node server/schema.js
 ## 10. Configure Nginx
 
 ```bash
-sudo cp ~/MattrMindr-Demo/deploy/nginx.conf /etc/nginx/sites-available/mattrmindr
-sudo ln -s /etc/nginx/sites-available/mattrmindr /etc/nginx/sites-enabled/
+sudo cp ~/MattrMindr-Demo/deploy/nginx.conf /etc/nginx/sites-available/mattrmindr-demo
+sudo ln -s /etc/nginx/sites-available/mattrmindr-demo /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
-# Edit the config — replace YOUR_DOMAIN.com with your actual domain
-sudo nano /etc/nginx/sites-available/mattrmindr
+# Replace YOUR_DOMAIN.com with demo.mattrmindr.com
+sudo sed -i 's/YOUR_DOMAIN.com/demo.mattrmindr.com/g' /etc/nginx/sites-available/mattrmindr-demo
 
 sudo nginx -t        # test config
 sudo systemctl reload nginx
@@ -138,7 +137,7 @@ sudo systemctl reload nginx
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d YOUR_DOMAIN.com
+sudo certbot --nginx -d demo.mattrmindr.com
 sudo systemctl reload nginx
 
 # Auto-renewal is set up automatically; verify with:
@@ -170,7 +169,6 @@ pm2 stop mattrmindr
 First update the paths in the service file to match your install location:
 
 ```bash
-# Edit the service file if your install path differs from ~/MattrMindr-Demo
 nano ~/MattrMindr-Demo/deploy/mattrmindr.service
 
 sudo cp ~/MattrMindr-Demo/deploy/mattrmindr.service /etc/systemd/system/
@@ -189,7 +187,7 @@ NODE_ENV=production node server/index.js
 
 ## 13. Verify
 
-Open `https://YOUR_DOMAIN.com` in a browser. You should see the MattrMindr login page.
+Open `https://demo.mattrmindr.com` in a browser. You should see the MattrMindr login page.
 
 Default admin login:
 - Email: `admin@mattrmindr.com`
@@ -199,23 +197,23 @@ Default admin login:
 
 ```bash
 # API is responding
-curl -s https://YOUR_DOMAIN.com/api/auth/me | head
+curl -s https://demo.mattrmindr.com/api/auth/me | head
 
 # Login works
-curl -s -X POST https://YOUR_DOMAIN.com/api/auth/login \
+curl -s -X POST https://demo.mattrmindr.com/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@mattrmindr.com","password":"YOUR_ADMIN_PASSWORD"}' \
   -c /tmp/cookies.txt | head
 
 # Authenticated API call
-curl -s -b /tmp/cookies.txt https://YOUR_DOMAIN.com/api/cases | head
+curl -s -b /tmp/cookies.txt https://demo.mattrmindr.com/api/cases | head
 ```
 
 ---
 
 ## 14. Configure Automated Backups
 
-MattrMindr includes a backup script at `deploy/backup.sh` that manages pg_dump backups with a retention policy of 7 daily, 4 weekly, and 6 monthly backups.
+MattrMindr-Demo includes a backup script at `deploy/backup.sh` that manages pg_dump backups with a retention policy of 7 daily, 4 weekly, and 6 monthly backups.
 
 ### Setup
 
@@ -224,7 +222,7 @@ mkdir -p ~/MattrMindr-Demo/backups/{daily,weekly,monthly}
 
 # Test the backup script manually
 cd ~/MattrMindr-Demo
-node -e "require('dotenv').config()" && bash deploy/backup.sh
+bash deploy/backup.sh
 
 # Add to cron (runs daily at 2:00 AM)
 crontab -e
@@ -232,7 +230,7 @@ crontab -e
 
 Add this line to the crontab:
 ```
-0 2 * * * cd ~/MattrMindr-Demo && node -e "const d=require('dotenv');d.config();" && bash deploy/backup.sh >> logs/backup.log 2>&1
+0 2 * * * cd ~/MattrMindr-Demo && bash deploy/backup.sh >> logs/backup.log 2>&1
 ```
 
 ### Optional: S3 off-site backup
@@ -299,6 +297,7 @@ curl http://127.0.0.1:5000/api/auth/me
 **DATABASE_URL not set:**
 ```bash
 # The server loads .env automatically. Verify your .env file exists and has DATABASE_URL:
+cd ~/MattrMindr-Demo
 cat .env | grep DATABASE_URL
 
 # If using special characters in the connection string, wrap in single quotes:
