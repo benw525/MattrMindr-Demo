@@ -79,6 +79,15 @@ const TABLES = [
     contentTypeCol: "video_content_type",
   },
   {
+    table: "custom_agents",
+    dataCol: "instruction_file",
+    r2Col: "r2_instruction_key",
+    keyPrefix: "custom-agents",
+    caseIdCol: null,
+    filenameCol: "instruction_filename",
+    contentTypeCol: null,
+  },
+  {
     table: "users",
     dataCol: "profile_picture",
     r2Col: "r2_profile_picture_key",
@@ -138,8 +147,8 @@ async function migrateTable(cfg) {
         let key;
         if (table === "users") {
           key = `${keyPrefix}/${row.id}/${randomUUID()}`;
-        } else if (table === "doc_templates") {
-          key = `${keyPrefix}/${randomUUID()}/${filename}`;
+        } else if (table === "doc_templates" || table === "custom_agents") {
+          key = `${keyPrefix}/${row.id}/${randomUUID()}/${filename}`;
         } else {
           key = `${keyPrefix}/${caseId}/${randomUUID()}/${filename}`;
         }

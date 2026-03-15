@@ -1,7 +1,9 @@
 const express = require("express");
+const { randomUUID } = require("crypto");
 const router = express.Router();
 const pool = require("../db");
 const multer = require("multer");
+const { isR2Configured, uploadToR2, getPresignedUrl } = require("../r2");
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function requireAuth(req, res, next) {
@@ -130,7 +132,7 @@ router.get("/channels/:id/messages", requireAuth, async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
 
     let query = `
-      SELECT cm.id, cm.channel_id, cm.sender_id, cm.body, cm.mentions, cm.attachment_name, cm.attachment_url, cm.created_at,
+      SELECT cm.id, cm.channel_id, cm.sender_id, cm.body, cm.mentions, cm.attachment_name, cm.attachment_url, cm.r2_attachment_key, cm.created_at,
         u.name AS sender_name, u.avatar AS sender_avatar, u.initials AS sender_initials
       FROM chat_messages cm
       JOIN users u ON u.id = cm.sender_id
@@ -145,11 +147,19 @@ router.get("/channels/:id/messages", requireAuth, async (req, res) => {
     params.push(limit);
 
     const { rows } = await pool.query(query, params);
-    res.json(rows.reverse().map(r => ({
-      id: r.id, channelId: r.channel_id, senderId: r.sender_id, body: r.body,
-      mentions: r.mentions || [], attachmentName: r.attachment_name, attachmentUrl: r.attachment_url,
-      createdAt: r.created_at, senderName: r.sender_name, senderAvatar: r.sender_avatar, senderInitials: r.sender_initials,
-    })));
+    const messages = [];
+    for (const r of rows.reverse()) {
+      let url = r.attachment_url;
+      if (!url && r.r2_attachment_key && isR2Configured()) {
+        try { url = await getPresignedUrl(r.r2_attachment_key, 3600); } catch {}
+      }
+      messages.push({
+        id: r.id, channelId: r.channel_id, senderId: r.sender_id, body: r.body,
+        mentions: r.mentions || [], attachmentName: r.attachment_name, attachmentUrl: url,
+        createdAt: r.created_at, senderName: r.sender_name, senderAvatar: r.sender_avatar, senderInitials: r.sender_initials,
+      });
+    }
+    res.json(messages);
   } catch (err) {
     console.error("Get messages error:", err);
     res.status(500).json({ error: "Failed to get messages" });
@@ -160,7 +170,7 @@ router.post("/channels/:id/messages", requireAuth, async (req, res) => {
   try {
     const userId = req.session.userId;
     const channelId = req.params.id;
-    const { body, attachmentName, attachmentUrl } = req.body;
+    const { body, attachmentName, attachmentUrl, r2AttachmentKey } = req.body;
     if (!body && !attachmentName) return res.status(400).json({ error: "body required" });
 
     const memCheck = await pool.query("SELECT id FROM chat_channel_members WHERE channel_id = $1 AND user_id = $2", [channelId, userId]);
@@ -174,9 +184,9 @@ router.post("/channels/:id/messages", requireAuth, async (req, res) => {
     });
 
     const msgRes = await pool.query(
-      `INSERT INTO chat_messages (channel_id, sender_id, body, mentions, attachment_name, attachment_url)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [channelId, userId, msgBody, mentions, attachmentName || null, attachmentUrl || null]
+      `INSERT INTO chat_messages (channel_id, sender_id, body, mentions, attachment_name, attachment_url, r2_attachment_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [channelId, userId, msgBody, mentions, attachmentName || null, attachmentUrl || null, r2AttachmentKey || null]
     );
 
     await pool.query(
@@ -189,9 +199,14 @@ router.post("/channels/:id/messages", requireAuth, async (req, res) => {
     const userRes = await pool.query("SELECT name, avatar, initials FROM users WHERE id = $1", [userId]);
     const u = userRes.rows[0] || {};
 
+    let resolvedAttachmentUrl = attachmentUrl || null;
+    if (!resolvedAttachmentUrl && r2AttachmentKey && isR2Configured()) {
+      try { resolvedAttachmentUrl = await getPresignedUrl(r2AttachmentKey, 3600); } catch {}
+    }
+
     res.json({
       id: msgRes.rows[0].id, channelId: parseInt(channelId), senderId: userId, body: msgBody,
-      mentions, attachmentName: attachmentName || null, attachmentUrl: attachmentUrl || null,
+      mentions, attachmentName: attachmentName || null, attachmentUrl: resolvedAttachmentUrl,
       createdAt: msgRes.rows[0].created_at, senderName: u.name, senderAvatar: u.avatar, senderInitials: u.initials,
     });
   } catch (err) {
@@ -486,9 +501,14 @@ router.get("/channels/:id/typing", requireAuth, async (req, res) => {
 router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file" });
+    if (isR2Configured()) {
+      const key = `chat-attachments/${randomUUID()}/${req.file.originalname}`;
+      await uploadToR2(key, req.file.buffer, req.file.mimetype);
+      return res.json({ attachmentName: req.file.originalname, attachmentUrl: null, r2AttachmentKey: key });
+    }
     const base64Data = req.file.buffer.toString("base64");
     const dataUrl = `data:${req.file.mimetype};base64,${base64Data}`;
-    res.json({ attachmentName: req.file.originalname, attachmentUrl: dataUrl });
+    res.json({ attachmentName: req.file.originalname, attachmentUrl: dataUrl, r2AttachmentKey: null });
   } catch (err) {
     console.error("Upload error:", err);
     res.status(500).json({ error: "Upload failed" });

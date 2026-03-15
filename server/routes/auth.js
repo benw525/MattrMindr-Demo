@@ -56,7 +56,7 @@ function userPayload(user) {
     mustChangePassword: !!user.must_change_password,
     preferences: user.preferences || {},
     mfaEnabled: !!user.mfa_enabled,
-    hasProfilePicture: !!(user.profile_picture && user.profile_picture_type),
+    hasProfilePicture: !!(user.r2_profile_picture_key || (user.profile_picture && user.profile_picture_type)),
   };
 }
 

@@ -1,9 +1,11 @@
 const express = require("express");
+const { randomUUID } = require("crypto");
 const pool = require("../db");
 const multer = require("multer");
 const { requireAuth } = require("../middleware/auth");
 const { extractText } = require("../utils/extract-text");
 const openai = require("../utils/openai");
+const { isR2Configured, uploadToR2, downloadFromR2, deleteFromR2, getPresignedUrl } = require("../r2");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -31,7 +33,7 @@ const toFrontend = (r) => ({
   visibility: r.visibility,
   sharedWith: r.shared_with || [],
   instructionFilename: r.instruction_filename || null,
-  hasInstructionFile: !!r.instruction_file,
+  hasInstructionFile: !!(r.instruction_file || r.r2_instruction_key),
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -234,9 +236,16 @@ router.post("/:id/upload-instructions", requireAuth, upload.single("file"), asyn
       text = buffer.toString("utf8").substring(0, 50000);
     }
 
+    let r2Key = null;
+    let fileDataForDb = buffer;
+    if (isR2Configured()) {
+      r2Key = `custom-agents/${req.params.id}/${randomUUID()}/${filename}`;
+      await uploadToR2(r2Key, buffer, mimeType);
+      fileDataForDb = null;
+    }
     const { rows } = await pool.query(
-      "UPDATE custom_agents SET instruction_file=$1, instruction_filename=$2, instruction_text=$3, updated_at=NOW() WHERE id=$4 AND user_id=$5 RETURNING *",
-      [buffer, filename, text, req.params.id, req.session.userId]
+      "UPDATE custom_agents SET instruction_file=$1, r2_instruction_key=$2, instruction_filename=$3, instruction_text=$4, updated_at=NOW() WHERE id=$5 AND user_id=$6 RETURNING *",
+      [fileDataForDb, r2Key, filename, text, req.params.id, req.session.userId]
     );
     if (!rows.length) return res.status(404).json({ error: "Not found" });
     res.json(toFrontend(rows[0]));
@@ -248,10 +257,18 @@ router.post("/:id/upload-instructions", requireAuth, upload.single("file"), asyn
 
 router.get("/:id/download-instructions", requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT instruction_file, instruction_filename FROM custom_agents WHERE id=$1", [req.params.id]);
-    if (!rows.length || !rows[0].instruction_file) return res.status(404).json({ error: "Not found" });
-    res.setHeader("Content-Disposition", `attachment; filename="${rows[0].instruction_filename}"`);
-    res.send(rows[0].instruction_file);
+    const { rows } = await pool.query("SELECT instruction_file, instruction_filename, r2_instruction_key FROM custom_agents WHERE id=$1", [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: "Not found" });
+    const { instruction_file, instruction_filename, r2_instruction_key } = rows[0];
+    if (r2_instruction_key && isR2Configured()) {
+      try {
+        const url = await getPresignedUrl(r2_instruction_key, 300, "application/octet-stream", `attachment; filename="${instruction_filename}"`);
+        return res.redirect(url);
+      } catch {}
+    }
+    if (!instruction_file) return res.status(404).json({ error: "Not found" });
+    res.setHeader("Content-Disposition", `attachment; filename="${instruction_filename}"`);
+    res.send(instruction_file);
   } catch (err) {
     console.error("Custom agent download instructions error:", err);
     res.status(500).json({ error: "Download failed" });
@@ -260,8 +277,12 @@ router.get("/:id/download-instructions", requireAuth, async (req, res) => {
 
 router.delete("/:id/clear-instructions", requireAuth, async (req, res) => {
   try {
+    const { rows: existing } = await pool.query("SELECT r2_instruction_key FROM custom_agents WHERE id=$1 AND user_id=$2", [req.params.id, req.session.userId]);
+    if (existing.length && existing[0].r2_instruction_key && isR2Configured()) {
+      try { await deleteFromR2(existing[0].r2_instruction_key); } catch {}
+    }
     const { rows } = await pool.query(
-      "UPDATE custom_agents SET instruction_file=NULL, instruction_filename=NULL, instruction_text=NULL, updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING *",
+      "UPDATE custom_agents SET instruction_file=NULL, r2_instruction_key=NULL, instruction_filename=NULL, instruction_text=NULL, updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING *",
       [req.params.id, req.session.userId]
     );
     if (!rows.length) return res.status(404).json({ error: "Not found" });
