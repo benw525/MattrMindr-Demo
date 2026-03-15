@@ -24,9 +24,16 @@ async function importTableData(client, tableName, rows) {
   if (!rows || rows.length === 0) return;
   const byteaCols = BYTEA_COLUMNS[tableName] || [];
 
+  const { rows: colInfo } = await client.query(
+    "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1",
+    [tableName]
+  );
+  const dbCols = new Set(colInfo.map(r => r.column_name));
+  const arrayCols = new Set(colInfo.filter(r => r.data_type === "ARRAY").map(r => r.column_name));
+
   const sampleRow = { ...rows[0] };
   const cols = Object.keys(sampleRow).filter(
-    (k) => !k.startsWith("__base64__")
+    (k) => !k.startsWith("__base64__") && dbCols.has(k)
   );
 
   const idCol = cols.includes("id") ? "id" : null;
@@ -38,11 +45,10 @@ async function importTableData(client, tableName, rows) {
       let val = row[col];
       if (row[`__base64__${col}`] && typeof val === "string") {
         val = Buffer.from(val, "base64");
+      } else if (arrayCols.has(col) && Array.isArray(val)) {
+        // leave native arrays for pg driver to handle
       } else if (val !== null && typeof val === "object" && !Buffer.isBuffer(val) && !(val instanceof Date)) {
-        if (Array.isArray(val) && (val.length === 0 || typeof val[0] !== "object")) {
-        } else {
-          val = JSON.stringify(val);
-        }
+        val = JSON.stringify(val);
       }
       return val;
     });
@@ -51,6 +57,7 @@ async function importTableData(client, tableName, rows) {
     const colList = cols.map((c) => `"${c}"`).join(", ");
 
     try {
+      await client.query("SAVEPOINT row_insert");
       if (idCol) {
         await client.query(
           `INSERT INTO ${tableName} (${colList}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`,
@@ -62,8 +69,10 @@ async function importTableData(client, tableName, rows) {
           values
         );
       }
+      await client.query("RELEASE SAVEPOINT row_insert");
       inserted++;
     } catch (err) {
+      await client.query("ROLLBACK TO SAVEPOINT row_insert");
       if (err.code === "23505") continue;
       if (err.code === "23503") { skipped++; continue; }
       throw err;
@@ -223,17 +232,30 @@ async function seed() {
       console.log("Importing additional table data from seed-data.json...");
       const seedData = JSON.parse(fs.readFileSync(seedDataPath, "utf8"));
       const importOrder = [
-        "cases",
+        "users", "contacts", "integration_configs", "permissions", "calendar_feeds",
+        "cases", "document_folders", "trial_sessions",
         "tasks", "deadlines", "case_notes", "case_activity",
         "case_links", "case_correspondence",
         "case_parties", "case_experts", "case_misc_contacts",
         "case_insurance_policies", "case_medical_treatments", "case_liens", "case_damages", "case_negotiations",
+        "case_expenses",
         "contact_notes", "contact_staff", "time_entries",
-        "case_documents", "case_filings", "doc_templates", "ai_training",
+        "case_documents", "case_filings", "case_transcripts", "doc_templates",
+        "medical_records", "ai_training",
+        "sms_messages", "sms_watch_numbers",
+        "unmatched_filings_emails",
+        "client_portal_settings", "client_users", "user_sessions",
       ];
       for (const tableName of importOrder) {
         if (seedData[tableName]) {
-          await importTableData(client, tableName, seedData[tableName]);
+          try {
+            await client.query("SAVEPOINT table_import");
+            await importTableData(client, tableName, seedData[tableName]);
+            await client.query("RELEASE SAVEPOINT table_import");
+          } catch (tableErr) {
+            await client.query("ROLLBACK TO SAVEPOINT table_import");
+            console.warn(`  ${tableName}: SKIPPED (${tableErr.message})`);
+          }
         }
       }
       console.log("Additional data import complete.");
