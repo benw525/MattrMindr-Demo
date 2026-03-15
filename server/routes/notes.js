@@ -92,7 +92,12 @@ router.put("/:id", requireAuth, async (req, res) => {
 
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
+    const { rows: noteRows } = await pool.query("SELECT case_id FROM case_notes WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
     await pool.query("UPDATE case_notes SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    if (noteRows.length && noteRows[0].case_id) {
+      const { removeCaseEmbeddings } = require("../utils/embeddings");
+      removeCaseEmbeddings(noteRows[0].case_id, "note", parseInt(req.params.id)).catch(e => console.error("Embedding cleanup error:", e.message));
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("Note delete error:", err);

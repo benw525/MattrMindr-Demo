@@ -1,4 +1,13 @@
 exports.up = (pgm) => {
+  pgm.sql(`
+    DO $$
+    BEGIN
+      IF current_setting('server_version_num')::integer < 150000 THEN
+        RAISE EXCEPTION 'pgvector migration requires PostgreSQL 15+. Current version: %', current_setting('server_version');
+      END IF;
+    END $$;
+  `);
+
   pgm.sql(`CREATE EXTENSION IF NOT EXISTS vector;`);
 
   pgm.sql(`

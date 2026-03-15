@@ -590,8 +590,13 @@ router.delete("/:id", requireAuth, async (req, res) => {
     const access = await verifyTranscriptAccess(req, req.params.id);
     if (access === null) return res.status(404).json({ error: "Transcript not found" });
     if (access === false) return res.status(403).json({ error: "Access denied" });
+    const { rows: tDelRows } = await pool.query("SELECT case_id FROM case_transcripts WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
     const { rowCount } = await pool.query("UPDATE case_transcripts SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
     if (rowCount === 0) return res.status(404).json({ error: "Transcript not found" });
+    if (tDelRows.length && tDelRows[0].case_id) {
+      const { removeCaseEmbeddings } = require("../utils/embeddings");
+      removeCaseEmbeddings(tDelRows[0].case_id, "transcript", parseInt(req.params.id)).catch(e => console.error("Embedding cleanup error:", e.message));
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error("Delete transcript error:", err.message);

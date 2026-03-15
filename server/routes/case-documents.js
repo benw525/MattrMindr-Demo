@@ -541,6 +541,8 @@ router.delete("/:id", requireAuth, validateParams(idParamSchema), async (req, re
     if (rows.length === 0) return res.status(404).json({ error: "Not found" });
     if (!(await verifyCaseAccess(req, rows[0].case_id))) return res.status(403).json({ error: "Access denied" });
     await pool.query("UPDATE case_documents SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    const { removeCaseEmbeddings } = require("../utils/embeddings");
+    removeCaseEmbeddings(rows[0].case_id, "document", parseInt(req.params.id)).catch(e => console.error("Embedding cleanup error:", e.message));
     return res.json({ ok: true });
   } catch (err) {
     console.error("Document delete error:", err);
