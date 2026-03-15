@@ -16,9 +16,13 @@ router.post("/", requireAuth, async (req, res) => {
 
   try {
     if (USE_VECTOR_SEARCH) {
-      const hasEmbeddings = await pool.query("SELECT EXISTS(SELECT 1 FROM case_embeddings LIMIT 1)");
-      if (hasEmbeddings.rows[0].exists) {
-        return await vectorSearchHandler(query, res);
+      try {
+        const hasEmbeddings = await pool.query("SELECT EXISTS(SELECT 1 FROM case_embeddings LIMIT 1)");
+        if (hasEmbeddings.rows[0].exists) {
+          return await vectorSearchHandler(query, res);
+        }
+      } catch (vectorErr) {
+        console.warn("Vector search unavailable, falling back to brute-force:", vectorErr.message);
       }
     }
     return await bruteForceSearchHandler(query, res);

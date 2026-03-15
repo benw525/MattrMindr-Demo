@@ -527,6 +527,7 @@ router.put("/:id", requireAuth, validateParams(idParamSchema), async (req, res) 
       `UPDATE case_documents SET ${sets.join(", ")} WHERE id = $${idx} RETURNING id, case_id, filename, content_type, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at`,
       vals
     );
+    queueEmbeddingUpdate(rows[0].case_id, "document", rows[0].id);
     return res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Document update error:", err);
@@ -748,6 +749,9 @@ router.post("/upload/complete", requireAuth, express.json(), async (req, res) =>
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, case_id, filename, content_type, extracted_text, summary, doc_type, uploaded_by, uploaded_by_name, file_size, created_at, folder_id, sort_order, ocr_status`,
       [pending.caseId, pending.filename, pending.contentType, fileDataForDb, r2FileKey, extractedText, pending.docType, pending.userId, uploaderName, fullBuffer.length, ocrStatus, pending.folderId || null]
     );
+    if (ocrStatus === "complete") {
+      queueEmbeddingUpdate(parseInt(pending.caseId), "document", rows[0].id);
+    }
     res.json(toFrontend(rows[0]));
   } catch (err) {
     console.error("Doc chunk complete error:", err.message);

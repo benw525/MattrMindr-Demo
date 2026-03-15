@@ -16,6 +16,7 @@ async function embedText(text) {
     const response = await openai.embeddings.create({
       model: EMBEDDING_MODEL,
       input: truncated,
+      store: false,
     });
     return response.data[0].embedding;
   } catch (err) {
